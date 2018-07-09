@@ -1,0 +1,8 @@
+module rmw {
+  module cyclonedds {
+    struct topic {
+      boolean dummy;
+    };
+#pragma keylist rmw::cyclonedds::topic
+  };
+};
