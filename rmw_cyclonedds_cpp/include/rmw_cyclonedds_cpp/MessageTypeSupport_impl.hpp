@@ -15,9 +15,6 @@
 #ifndef RMW_CYCLONEDDS_CPP__MESSAGETYPESUPPORT_IMPL_HPP_
 #define RMW_CYCLONEDDS_CPP__MESSAGETYPESUPPORT_IMPL_HPP_
 
-#include <fastcdr/FastBuffer.h>
-#include <fastcdr/Cdr.h>
-
 #include <cassert>
 #include <memory>
 #include <string>
@@ -37,14 +34,6 @@ MessageTypeSupport<MembersType>::MessageTypeSupport(const MembersType * members)
   std::string name = std::string(members->package_name_) + "::msg::dds_::" +
     members->message_name_ + "_";
   this->setName(name.c_str());
-
-  // TODO(wjwwood): this could be more intelligent, setting m_typeSize to the
-  // maximum serialized size of the message, when the message is a bounded one.
-  if (members->member_count_ != 0) {
-    this->m_typeSize = static_cast<uint32_t>(this->calculateMaxSerializedSize(members, 0));
-  } else {
-    this->m_typeSize = 4;
-  }
 }
 
 }  // namespace rmw_cyclonedds_cpp

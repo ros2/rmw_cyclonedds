@@ -32,7 +32,6 @@ find_package(ament_cmake_ros REQUIRED)
 find_package(rcutils REQUIRED)
 
 find_package(cyclonedds_cmake_module REQUIRED)
-find_package(fastcdr REQUIRED CONFIG)
 find_package(CycloneDDS REQUIRED CONFIG)
 
 find_package(rmw REQUIRED)
@@ -53,11 +52,12 @@ include_directories(include)
 add_library(rmw_cyclonedds_cpp
   src/namespace_prefix.cpp
   src/rmw_node.cpp
+  src/serdes.cpp
 )
 
 idlc_generate(rmw_cyclonedds_topic_lib src/rmw_cyclonedds_topic.idl)
 target_link_libraries(rmw_cyclonedds_cpp
-  fastcdr rmw_cyclonedds_topic_lib CycloneDDS::ddsc)
+  rmw_cyclonedds_topic_lib CycloneDDS::ddsc)
 
 ament_target_dependencies(rmw_cyclonedds_cpp
   "rcutils"

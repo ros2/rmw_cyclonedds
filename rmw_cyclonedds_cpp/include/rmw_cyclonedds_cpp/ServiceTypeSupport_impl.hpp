@@ -15,8 +15,6 @@
 #ifndef RMW_CYCLONEDDS_CPP__SERVICETYPESUPPORT_IMPL_HPP_
 #define RMW_CYCLONEDDS_CPP__SERVICETYPESUPPORT_IMPL_HPP_
 
-#include <fastcdr/FastBuffer.h>
-#include <fastcdr/Cdr.h>
 #include <cassert>
 #include <string>
 
@@ -41,14 +39,6 @@ RequestTypeSupport<ServiceMembersType, MessageMembersType>::RequestTypeSupport(
   std::string name = std::string(members->package_name_) + "::srv::dds_::" +
     members->service_name_ + "_Request_";
   this->setName(name.c_str());
-
-  // TODO(wjwwood): this could be more intelligent, setting m_typeSize to the
-  // maximum serialized size of the message, when the message is a bounded one.
-  if (this->members_->member_count_ != 0) {
-    this->m_typeSize = static_cast<uint32_t>(this->calculateMaxSerializedSize(this->members_, 0));
-  } else {
-    this->m_typeSize = 4;
-  }
 }
 
 template<typename ServiceMembersType, typename MessageMembersType>
@@ -61,14 +51,6 @@ ResponseTypeSupport<ServiceMembersType, MessageMembersType>::ResponseTypeSupport
   std::string name = std::string(members->package_name_) + "::srv::dds_::" +
     members->service_name_ + "_Response_";
   this->setName(name.c_str());
-
-  // TODO(wjwwood): this could be more intelligent, setting m_typeSize to the
-  // maximum serialized size of the message, when the message is a bounded one.
-  if (this->members_->member_count_ != 0) {
-    this->m_typeSize = static_cast<uint32_t>(this->calculateMaxSerializedSize(this->members_, 0));
-  } else {
-    this->m_typeSize = 4;
-  }
 }
 
 }  // namespace rmw_cyclonedds_cpp

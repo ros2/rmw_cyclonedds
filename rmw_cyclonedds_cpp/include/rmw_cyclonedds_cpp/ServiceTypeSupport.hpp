@@ -15,8 +15,6 @@
 #ifndef RMW_CYCLONEDDS_CPP__SERVICETYPESUPPORT_HPP_
 #define RMW_CYCLONEDDS_CPP__SERVICETYPESUPPORT_HPP_
 
-#include <fastcdr/FastBuffer.h>
-#include <fastcdr/Cdr.h>
 #include <cassert>
 
 #include "TypeSupport.hpp"

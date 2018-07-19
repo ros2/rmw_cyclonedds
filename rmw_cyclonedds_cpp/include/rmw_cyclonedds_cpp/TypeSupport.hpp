@@ -1,4 +1,5 @@
 // Copyright 2016 Proyectos y Sistemas de Mantenimiento SL (eProsima).
+// Copyright 2018 ADLINK Technology
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +19,6 @@
 #include <rosidl_generator_c/string.h>
 #include <rosidl_generator_c/string_functions.h>
 
-#include <fastcdr/FastBuffer.h>
-#include <fastcdr/Cdr.h>
 #include <cassert>
 #include <string>
 
@@ -37,16 +36,18 @@
 #include "rosidl_typesupport_introspection_c/service_introspection.h"
 #include "rosidl_typesupport_introspection_c/visibility_control.h"
 
+#include "serdes.hpp"
+
 namespace rmw_cyclonedds_cpp
 {
 
 // Helper class that uses template specialization to read/write string types to/from a
-// eprosima::fastcdr::Cdr
+// cycser/cycdeser
 template<typename MembersType>
 struct StringHelper;
 
 // For C introspection typesupport we create intermediate instances of std::string so that
-// eprosima::fastcdr::Cdr can handle the string properly.
+// cycser/cycdeser can handle the string properly.
 template<>
 struct StringHelper<rosidl_typesupport_introspection_c__MessageMembers>
 {
@@ -75,7 +76,7 @@ struct StringHelper<rosidl_typesupport_introspection_c__MessageMembers>
     return std::string(data.data);
   }
 
-  static void assign(eprosima::fastcdr::Cdr & deser, void * field, bool)
+  static void assign(cycdeser & deser, void * field, bool)
   {
     std::string str;
     deser >> str;
@@ -95,7 +96,7 @@ struct StringHelper<rosidl_typesupport_introspection_cpp::MessageMembers>
     return *(static_cast<std::string *>(data));
   }
 
-  static void assign(eprosima::fastcdr::Cdr & deser, void * field, bool call_new)
+  static void assign(cycdeser & deser, void * field, bool call_new)
   {
     std::string & str = *(std::string *)field;
     if (call_new) {
@@ -109,29 +110,20 @@ template<typename MembersType>
 class TypeSupport
 {
 public:
-  bool serializeROSmessage(const void * ros_message, eprosima::fastcdr::Cdr & ser, std::function<void(eprosima::fastcdr::Cdr&)> prefix = nullptr);
-
-  bool deserializeROSmessage(eprosima::fastcdr::FastBuffer * data, void * ros_message);
-
-  bool deserializeROSmessage(eprosima::fastcdr::Cdr & deser, void * ros_message, std::function<void(eprosima::fastcdr::Cdr&)> prefix = nullptr);
+  bool serializeROSmessage(const void * ros_message, cycser & ser, std::function<void(cycser&)> prefix = nullptr);
+  bool deserializeROSmessage(cycdeser & deser, void * ros_message, std::function<void(cycdeser&)> prefix = nullptr);
 
 protected:
   TypeSupport();
 
-  size_t calculateMaxSerializedSize(const MembersType * members, size_t current_alignment);
   void setName(const std::string& name);
 
   const MembersType * members_;
   std::string name;
-  size_t m_typeSize;
 
 private:
-  bool serializeROSmessage(
-    eprosima::fastcdr::Cdr & ser, const MembersType * members, const void * ros_message);
-
-  bool deserializeROSmessage(
-    eprosima::fastcdr::Cdr & deser, const MembersType * members, void * ros_message,
-    bool call_new);
+  bool serializeROSmessage(cycser & ser, const MembersType * members, const void * ros_message);
+  bool deserializeROSmessage(cycdeser & deser, const MembersType * members, void * ros_message, bool call_new);
 };
 
 }  // namespace rmw_cyclonedds_cpp

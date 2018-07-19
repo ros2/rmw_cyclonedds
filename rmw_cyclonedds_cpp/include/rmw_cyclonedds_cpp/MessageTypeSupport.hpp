@@ -15,9 +15,6 @@
 #ifndef RMW_CYCLONEDDS_CPP__MESSAGETYPESUPPORT_HPP_
 #define RMW_CYCLONEDDS_CPP__MESSAGETYPESUPPORT_HPP_
 
-#include <fastcdr/FastBuffer.h>
-#include <fastcdr/Cdr.h>
-
 #include <cassert>
 #include <memory>
 

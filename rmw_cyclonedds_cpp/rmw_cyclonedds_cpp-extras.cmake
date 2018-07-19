@@ -12,8 +12,3 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# copied from rmw_fastrtps_cpp/rmw_fastrtps_cpp-extras.cmake
-
-find_package(fastcdr REQUIRED CONFIG)
-
-list(APPEND rmw_fastrtps_cpp_LIBRARIES fastcdr)
