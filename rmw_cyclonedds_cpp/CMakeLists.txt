@@ -52,12 +52,11 @@ include_directories(include)
 add_library(rmw_cyclonedds_cpp
   src/namespace_prefix.cpp
   src/rmw_node.cpp
+  src/serdata.cpp
   src/serdes.cpp
 )
 
-idlc_generate(rmw_cyclonedds_topic_lib src/rmw_cyclonedds_topic.idl)
-target_link_libraries(rmw_cyclonedds_cpp
-  rmw_cyclonedds_topic_lib CycloneDDS::ddsc)
+target_link_libraries(rmw_cyclonedds_cpp CycloneDDS::ddsc)
 
 ament_target_dependencies(rmw_cyclonedds_cpp
   "rcutils"
@@ -72,7 +71,7 @@ configure_rmw_library(rmw_cyclonedds_cpp)
 # Causes the visibility macros to use dllexport rather than dllimport,
 # which is appropriate when building the dll but not consuming it.
 target_compile_definitions(${PROJECT_NAME}
-PRIVATE "RMW_CYCLONEDDS_CPP_BUILDING_LIBRARY")
+  PRIVATE "RMW_CYCLONEDDS_CPP_BUILDING_LIBRARY")
 
 ament_export_include_directories(include)
 ament_export_libraries(rmw_cyclonedds_cpp)

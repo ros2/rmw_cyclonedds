@@ -1,53 +1,22 @@
 #include "rmw_cyclonedds_cpp/serdes.hpp"
 
-cycser::cycser(struct sertopic *topic)
+cycser::cycser (std::vector<unsigned char>& dst_)
+  : dst (dst_)
+  , off (0)
 {
-    st = ddsi_serstate_new(topic);
-    sd = nullptr;
+  dst.reserve (4);
+  unsigned char *magic = dst.data ();
+  /* FIXME: hard code to little endian ... and ignoring endianness in deser */
+  magic[0] = 0;
+  magic[1] = 3;
+  /* options: */
+  magic[2] = 0;
+  magic[3] = 0;
 }
 
-cycser::~cycser()
-{
-    if (sd == nullptr) {
-        ddsi_serstate_release(st);
-    } else {
-        ddsi_serdata_unref(sd);
-    }
-}
-
-cycser& cycser::ref()
-{
-    assert(sd != nullptr);
-    ddsi_serdata_ref(sd);
-    return *this;
-}
-
-void cycser::unref()
-{
-    assert(sd != nullptr);
-    ddsi_serdata_unref(sd);
-}
-
-cycser& cycser::fix()
-{
-    assert(sd == nullptr);
-    sd = ddsi_serstate_fix(st);
-    return *this;
-}
-
-struct serdata *cycser::data()
-{
-    assert(sd != nullptr);
-    return sd;
-}
-
-cycdeser::cycdeser(const void *data_, size_t size_)
-{
-    data = static_cast<const char *>(data_);
-    lim = size_;
-    pos = 0;
-}
-
-cycdeser::~cycdeser()
+cycdeser::cycdeser (const void *data_, size_t size_)
+  : data (static_cast<const char *> (data_) + 4)
+  , pos (0)
+  , lim (size_ - 4)
 {
 }

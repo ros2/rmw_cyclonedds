@@ -59,13 +59,13 @@ struct StringHelper<rosidl_typesupport_introspection_c__MessageMembers>
     if (!c_string) {
       RCUTILS_LOG_ERROR_NAMED(
         "rmw_cyclonedds_cpp",
-        "Failed to cast data as rosidl_generator_c__String")
+        "Failed to cast data as rosidl_generator_c__String");
       return "";
     }
     if (!c_string->data) {
       RCUTILS_LOG_ERROR_NAMED(
         "rmw_cyclonedds_cpp",
-        "rosidl_generator_c_String had invalid data")
+        "rosidl_generator_c_String had invalid data");
       return "";
     }
     return std::string(c_string->data);
