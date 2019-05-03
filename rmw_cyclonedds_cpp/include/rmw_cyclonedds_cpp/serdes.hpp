@@ -18,6 +18,7 @@
 #include <array>
 #include <string>
 #include <vector>
+#include <string.h>
 #include <type_traits>
 
 class cycser {
@@ -60,7 +61,7 @@ public:
     SIMPLE (float);
     SIMPLE (double);
 #undef SIMPLE
-  
+
     inline void serialize (bool x) {
         serialize (static_cast<unsigned char> (x));
     }
@@ -103,7 +104,7 @@ public:
     template<class T> inline void serializeA (const T *x, size_t cnt) {
         for (size_t i = 0; i < cnt; i++) serialize (x[i]);
     }
-  
+
     template<class T> inline void serialize (const std::vector<T>& x)
     {
         serialize (static_cast<uint32_t> (x.size ()));
@@ -123,7 +124,7 @@ public:
 private:
     inline void resize (size_t n) { dst.resize (n + 4); }
     inline unsigned char *data () { return dst.data () + 4; }
-    
+
     std::vector<unsigned char>& dst;
     size_t off;
 };
@@ -166,7 +167,7 @@ public:
     SIMPLE (float);
     SIMPLE (double);
 #undef SIMPLE
-  
+
     inline void deserialize (bool& x) {
         unsigned char z; deserialize (z); x = (z != 0);
     }
@@ -204,7 +205,7 @@ public:
     template<class T> inline void deserializeA (T *x, size_t cnt) {
         for (size_t i = 0; i < cnt; i++) deserialize (x[i]);
     }
-  
+
     template<class T> inline void deserialize (std::vector<T>& x) {
         const uint32_t sz = deserialize32 ();
         x.resize (sz);
@@ -219,7 +220,7 @@ public:
     template<class T, size_t S> inline void deserialize (std::array<T, S>& x) {
         deserializeA (x.data (), x.size ());
     }
-  
+
 private:
     inline void align (size_t a)
     {

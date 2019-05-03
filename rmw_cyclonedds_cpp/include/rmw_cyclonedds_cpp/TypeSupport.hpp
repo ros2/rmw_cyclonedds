@@ -21,6 +21,7 @@
 
 #include <cassert>
 #include <string>
+#include <functional>
 
 #include "rcutils/logging_macros.h"
 
