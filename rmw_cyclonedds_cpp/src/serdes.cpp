@@ -5,13 +5,12 @@ cycser::cycser (std::vector<unsigned char>& dst_)
   , off (0)
 {
   dst.reserve (4);
-  unsigned char *magic = dst.data ();
   /* FIXME: hard code to little endian ... and ignoring endianness in deser */
-  magic[0] = 0;
-  magic[1] = 3;
+  dst.push_back (0);
+  dst.push_back (3);
   /* options: */
-  magic[2] = 0;
-  magic[3] = 0;
+  dst.push_back (0);
+  dst.push_back (0);
 }
 
 cycdeser::cycdeser (const void *data_, size_t size_)

@@ -45,7 +45,7 @@ public:
         if ((off % sizeof (T)) != 0) {                  \
             off += sizeof (T) - (off % sizeof (T));     \
         }                                               \
-        reserve (off + sizeof (T));                     \
+        resize (off + sizeof (T));                      \
         *(T *) (data () + off) = x;                     \
         off += sizeof (T);                              \
     }
@@ -68,7 +68,7 @@ public:
     {
         size_t sz = strlen (x) + 1;
         serialize (static_cast<uint32_t> (sz));
-        reserve (off + sz);
+        resize (off + sz);
         memcpy (data () + off, x, sz);
         off += sz;
     }
@@ -76,7 +76,7 @@ public:
     {
         size_t sz = x.size () + 1;
         serialize (static_cast<uint32_t> (sz));
-        reserve (off + sz);
+        resize (off + sz);
         memcpy (data () + off, x.data (), sz - 1);
         *(data () + off + sz - 1) = 0;
     }
@@ -85,7 +85,7 @@ public:
         if ((off % sizeof (T)) != 0) {                                  \
             off += sizeof (T) - (off % sizeof (T));                     \
         }                                                               \
-        reserve (off + cnt * sizeof (T));                               \
+        resize (off + cnt * sizeof (T));                                \
         memcpy (data () + off, (void *) x, cnt * sizeof (T));           \
         off += cnt * sizeof (T);                                        \
     }
@@ -121,7 +121,7 @@ public:
     }
 
 private:
-    inline void reserve (size_t n) { dst.reserve (n + 4); }
+    inline void resize (size_t n) { dst.resize (n + 4); }
     inline unsigned char *data () { return dst.data () + 4; }
     
     std::vector<unsigned char>& dst;

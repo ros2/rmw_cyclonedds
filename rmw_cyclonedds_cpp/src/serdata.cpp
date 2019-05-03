@@ -157,6 +157,11 @@ static struct ddsi_serdata *serdata_rmw_from_sample (const struct ddsi_sertopic 
             (void) typed_typesupport->serializeROSmessage (wrap->data, sd, prefix);
         }
     }
+    /* FIXME: CDR padding in DDSI makes me do this to avoid reading beyond the bounds of the vector
+       when copying data to network.  Should fix Cyclone to handle that more elegantly.  */
+    while (d->data.size () % 4) {
+        d->data.push_back (0);
+    }
     return d;
 }
 
@@ -295,6 +300,8 @@ struct sertopic_rmw *create_sertopic (const char *topicname, const char *type_su
     st->name = const_cast<char *> (st->cpp_name.c_str ());
     st->type_name = const_cast<char *> (st->cpp_type_name.c_str ());
     st->iid = ddsi_iid_gen ();
+    st->status_cb = nullptr;
+    st->status_cb_entity = nullptr; /* set by dds_create_topic_arbitrary */
     ddsrt_atomic_st32 (&st->refc, 1);
 
     st->type_support.typesupport_identifier_ = type_support_identifier;
