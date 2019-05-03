@@ -36,6 +36,8 @@
 
 #include <mutex>
 #include <unordered_set>
+#include <algorithm>
+#include <atomic>
 
 #include "rcutils/logging_macros.h"
 
@@ -260,7 +262,7 @@ static void unref_ppant ()
 ///////////    NODES                                                          ///////////
 ///////////                                                                   ///////////
 /////////////////////////////////////////////////////////////////////////////////////////
-  
+
 extern "C" rmw_node_t *rmw_create_node (rmw_context_t *context __attribute__ ((unused)), const char *name, const char *namespace_, size_t domain_id, const rmw_node_security_options_t *security_options)
 {
     RET_NULL_X (name, return nullptr);
@@ -285,11 +287,11 @@ extern "C" rmw_node_t *rmw_create_node (rmw_context_t *context __attribute__ ((u
     RET_ALLOC_X (node_handle, goto fail_node_handle);
     node_handle->implementation_identifier = eclipse_cyclonedds_identifier;
     node_handle->data = node_impl;
-    
+
     node_handle->name = static_cast<const char *> (rmw_allocate (sizeof (char) * strlen (name) + 1));
     RET_ALLOC_X (node_handle->name, goto fail_node_handle_name);
     memcpy (const_cast<char *> (node_handle->name), name, strlen (name) + 1);
-    
+
     node_handle->namespace_ = static_cast<const char *> (rmw_allocate (sizeof (char) * strlen (namespace_) + 1));
     RET_ALLOC_X (node_handle->namespace_, goto fail_node_handle_namespace);
     memcpy (const_cast<char *> (node_handle->namespace_), namespace_, strlen (namespace_) + 1);
@@ -345,7 +347,7 @@ extern "C" const rmw_guard_condition_t *rmw_node_get_graph_guard_condition (cons
 ///////////    (DE)SERIALIZATION                                              ///////////
 ///////////                                                                   ///////////
 /////////////////////////////////////////////////////////////////////////////////////////
-  
+
 extern "C" rmw_ret_t rmw_serialize (const void *ros_message, const rosidl_message_type_support_t *type_support, rmw_serialized_message_t *serialized_message)
 {
     (void) ros_message; (void) type_support; (void) serialized_message;
@@ -365,7 +367,7 @@ extern "C" rmw_ret_t rmw_deserialize (const rmw_serialized_message_t *serialized
 ///////////    PUBLICATIONS                                                   ///////////
 ///////////                                                                   ///////////
 /////////////////////////////////////////////////////////////////////////////////////////
-  
+
 extern "C" rmw_ret_t rmw_publish (const rmw_publisher_t *publisher, const void *ros_message)
 {
     RET_WRONG_IMPLID (publisher);
@@ -455,8 +457,8 @@ static dds_qos_t *create_readwrite_qos (const rmw_qos_profile_t *qos_policies, b
         dds_qset_ignorelocal (qos, DDS_IGNORELOCAL_PARTICIPANT);
     }
     return qos;
-}        
-    
+}
+
 static CddsPublisher *create_cdds_publisher (const rmw_node_t *node, const rosidl_message_type_support_t *type_supports, const char *topic_name, const rmw_qos_profile_t *qos_policies)
 {
     RET_WRONG_IMPLID_X (node, return nullptr);
@@ -758,7 +760,7 @@ extern "C" rmw_guard_condition_t *rmw_create_guard_condition (rmw_context_t *con
     guard_condition_handle->implementation_identifier = eclipse_cyclonedds_identifier;
     guard_condition_handle->data = gcond_impl;
     return guard_condition_handle;
-    
+
  fail_guardcond:
     unref_ppant ();
  fail_ppant:
@@ -812,8 +814,8 @@ extern "C" rmw_wait_set_t *rmw_create_wait_set (size_t max_conditions)
         gcdds.waitsets.insert (ws);
     }
     return wait_set;
-    
- fail_waitset:    
+
+ fail_waitset:
  fail_ws:
     RMW_TRY_DESTRUCTOR_FROM_WITHIN_FAILURE (ws->~CddsWaitset (), ws);
  fail_placement_new:
@@ -894,7 +896,7 @@ extern "C" rmw_ret_t rmw_wait (rmw_subscriptions_t *subs, rmw_guard_conditions_t
         }
         ws->inuse = true;
     }
-    
+
     if (require_reattach (ws->subs, subs ? subs->subscriber_count : 0,     subs ? subs->subscribers : nullptr) ||
         require_reattach (ws->gcs,  gcs  ? gcs->guard_condition_count : 0, gcs  ? gcs->guard_conditions : nullptr) ||
         require_reattach (ws->srvs, srvs ? srvs->service_count : 0,        srvs ? srvs->services : nullptr) ||
@@ -920,7 +922,7 @@ extern "C" rmw_ret_t rmw_wait (rmw_subscriptions_t *subs, rmw_guard_conditions_t
 #undef ATTACH
         ws->trigs.reserve (nelems + 1);
     }
-    
+
     const dds_duration_t timeout =
         (wait_timeout == NULL) ? DDS_NEVER : (dds_duration_t) wait_timeout->sec * 1000000000 + wait_timeout->nsec;
     const dds_return_t ntrig = dds_waitset_wait (ws->waitseth, ws->trigs.data (), ws->trigs.capacity (), timeout);
@@ -953,12 +955,12 @@ extern "C" rmw_ret_t rmw_wait (rmw_subscriptions_t *subs, rmw_guard_conditions_t
         DETACH (CddsClient, cls, client, client.sub->rdcondh, (void) x);
 #undef DETACH
     }
-    
+
     {
         std::lock_guard<std::mutex> lock (ws->lock);
         ws->inuse = false;
     }
-    
+
     return (ws->trigs.size () == 0) ? RMW_RET_TIMEOUT : RMW_RET_OK;
 }
 
@@ -992,14 +994,14 @@ static rmw_ret_t rmw_take_response_request (CddsCS *cs, rmw_request_id_t *reques
     *taken = false;
     return RMW_RET_OK;
 }
-    
+
 extern "C" rmw_ret_t rmw_take_response (const rmw_client_t *client, rmw_request_id_t *request_header, void *ros_response, bool *taken)
 {
     RET_WRONG_IMPLID (client);
     auto info = static_cast<CddsClient *> (client->data);
     return rmw_take_response_request (&info->client, request_header, ros_response, taken, info->client.pub->pubiid);
 }
-    
+
 extern "C" rmw_ret_t rmw_take_request (const rmw_service_t *service, rmw_request_id_t *request_header, void *ros_request, bool *taken)
 {
     RET_WRONG_IMPLID (service);
@@ -1057,7 +1059,7 @@ static const rosidl_service_type_support_t *get_service_typesupport (const rosid
         return nullptr;
     }
 }
-    
+
 static rmw_ret_t rmw_init_cs (CddsCS *cs, const rmw_node_t *node, const rosidl_service_type_support_t *type_supports, const char *service_name, const rmw_qos_profile_t *qos_policies, bool is_service)
 {
     RET_WRONG_IMPLID (node);
@@ -1093,7 +1095,7 @@ static rmw_ret_t rmw_init_cs (CddsCS *cs, const rmw_node_t *node, const rosidl_s
 
     auto pub_st = create_sertopic (pubtopic_name.c_str (), type_support->typesupport_identifier, pub_type_support, true);
     auto sub_st = create_sertopic (subtopic_name.c_str (), type_support->typesupport_identifier, sub_type_support, true);
-    
+
     dds_qos_t *qos;
     if ((pubtopic = dds_create_topic_arbitrary (gcdds.ppant, pub_st, pubtopic_name.c_str (), nullptr, nullptr, nullptr)) < 0) {
         RMW_SET_ERROR_MSG ("failed to create topic");
@@ -1226,7 +1228,7 @@ extern "C" rmw_ret_t rmw_destroy_service (rmw_node_t *node, rmw_service_t *servi
 ///////////    INTROSPECTION                                                  ///////////
 ///////////                                                                   ///////////
 /////////////////////////////////////////////////////////////////////////////////////////
-  
+
 extern "C" rmw_ret_t rmw_get_node_names (const rmw_node_t *node, rcutils_string_array_t *node_names, rcutils_string_array_t *node_namespaces)
 {
 #if 0 // NIY
@@ -1605,7 +1607,7 @@ extern "C" rmw_ret_t rmw_service_server_is_available (const rmw_node_t * node, c
     return RMW_RET_TIMEOUT;
 #endif
 }
-    
+
 extern "C" rmw_ret_t rmw_count_publishers (const rmw_node_t *node, const char *topic_name, size_t *count)
 {
 #if 0
