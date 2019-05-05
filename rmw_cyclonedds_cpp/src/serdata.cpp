@@ -165,6 +165,20 @@ static struct ddsi_serdata *serdata_rmw_from_sample (const struct ddsi_sertopic 
     return d;
 }
 
+struct ddsi_serdata *serdata_rmw_from_serialized_message (const struct ddsi_sertopic *topiccmn, const void *raw, size_t size)
+{
+    const struct sertopic_rmw *topic = static_cast<const struct sertopic_rmw *> (topiccmn);
+    struct serdata_rmw *d = rmw_serdata_new (topic, SDK_DATA);
+    /* FIXME: CDR padding in DDSI makes me do this to avoid reading beyond the bounds of the vector
+       when copying data to network.  Should fix Cyclone to handle that more elegantly. */
+    d->data.resize (size);
+    memcpy (d->data.data (), raw, size);
+    while (d->data.size () % 4) {
+        d->data.push_back (0);
+    }
+    return d;
+}
+
 static struct ddsi_serdata *serdata_rmw_to_topicless (const struct ddsi_serdata *dcmn)
 {
     const struct serdata_rmw *d = static_cast<const struct serdata_rmw *> (dcmn);

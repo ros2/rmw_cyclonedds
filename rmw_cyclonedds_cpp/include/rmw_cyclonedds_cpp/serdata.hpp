@@ -52,4 +52,6 @@ void *create_response_type_support (const void *untyped_members, const char *typ
 
 struct sertopic_rmw *create_sertopic (const char *topicname, const char *type_support_identifier, void *type_support, bool is_request_header);
 
+struct ddsi_serdata *serdata_rmw_from_serialized_message (const struct ddsi_sertopic *topiccmn, const void *raw, size_t size);
+
 #endif
