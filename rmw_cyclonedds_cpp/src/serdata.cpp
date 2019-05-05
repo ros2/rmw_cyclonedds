@@ -80,9 +80,6 @@ void *create_response_type_support (const void *untyped_members, const char *typ
     return nullptr;
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wc99-extensions"
-
 static uint32_t serdata_rmw_size (const struct ddsi_serdata *dcmn)
 {
     const struct serdata_rmw *d = static_cast<const struct serdata_rmw *> (dcmn);
@@ -255,18 +252,18 @@ static bool serdata_rmw_eqkey (const struct ddsi_serdata *a __attribute__ ((unus
 }
 
 static const struct ddsi_serdata_ops serdata_rmw_ops = {
-    .eqkey = serdata_rmw_eqkey,
-    .get_size = serdata_rmw_size,
-    .from_ser = serdata_rmw_from_ser,
-    .from_keyhash = serdata_rmw_from_keyhash,
-    .from_sample = serdata_rmw_from_sample,
-    .to_ser = serdata_rmw_to_ser,
-    .to_ser_ref = serdata_rmw_to_ser_ref,
-    .to_ser_unref = serdata_rmw_to_ser_unref,
-    .to_sample = serdata_rmw_to_sample,
-    .to_topicless = serdata_rmw_to_topicless,
-    .topicless_to_sample = serdata_rmw_topicless_to_sample,
-    .free = serdata_rmw_free
+    serdata_rmw_eqkey,
+    serdata_rmw_size,
+    serdata_rmw_from_ser,
+    serdata_rmw_from_keyhash,
+    serdata_rmw_from_sample,
+    serdata_rmw_to_ser,
+    serdata_rmw_to_ser_ref,
+    serdata_rmw_to_ser_unref,
+    serdata_rmw_to_sample,
+    serdata_rmw_to_topicless,
+    serdata_rmw_topicless_to_sample,
+    serdata_rmw_free
 };
 
 static void sertopic_rmw_free (struct ddsi_sertopic *tpcmn)
@@ -296,10 +293,10 @@ static void sertopic_rmw_free_samples (const struct ddsi_sertopic *d __attribute
 }
 
 static const struct ddsi_sertopic_ops sertopic_rmw_ops = {
-    .free = sertopic_rmw_free,
-    .zero_samples = sertopic_rmw_zero_samples,
-    .realloc_samples = sertopic_rmw_realloc_samples,
-    .free_samples = sertopic_rmw_free_samples
+    sertopic_rmw_free,
+    sertopic_rmw_zero_samples,
+    sertopic_rmw_realloc_samples,
+    sertopic_rmw_free_samples
 };
 
 struct sertopic_rmw *create_sertopic (const char *topicname, const char *type_support_identifier, void *type_support, bool is_request_header)
@@ -324,5 +321,3 @@ struct sertopic_rmw *create_sertopic (const char *topicname, const char *type_su
     st->is_request_header = is_request_header;
     return st;
 }
-
-#pragma GCC diagnostic pop
