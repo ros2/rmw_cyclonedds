@@ -603,9 +603,15 @@ extern "C" rmw_ret_t rmw_compare_gids_equal (const rmw_gid_t *gid1, const rmw_gi
 
 extern "C" rmw_ret_t rmw_publisher_count_matched_subscriptions (const rmw_publisher_t *publisher, size_t *subscription_count)
 {
-    (void) publisher;
-    *subscription_count = 0;
-    return RMW_RET_OK;
+    RET_WRONG_IMPLID (publisher);
+    auto pub = static_cast<CddsPublisher *> (publisher->data);
+    dds_publication_matched_status_t status;
+    if (dds_get_publication_matched_status (pub->pubh, &status) < 0) {
+        return RMW_RET_ERROR;
+    } else {
+        *subscription_count = status.current_count;
+        return RMW_RET_OK;
+    }
 }
 
 extern "C" rmw_ret_t rmw_destroy_publisher (rmw_node_t *node, rmw_publisher_t *publisher)
@@ -713,9 +719,15 @@ extern "C" rmw_subscription_t *rmw_create_subscription (const rmw_node_t *node, 
 
 extern "C" rmw_ret_t rmw_subscription_count_matched_publishers (const rmw_subscription_t *subscription, size_t *publisher_count)
 {
-    (void) subscription;
-    *publisher_count = 0;
-    return RMW_RET_OK;
+    RET_WRONG_IMPLID (subscription);
+    auto sub = static_cast<CddsSubscription *> (subscription->data);
+    dds_subscription_matched_status_t status;
+    if (dds_get_subscription_matched_status (sub->subh, &status) < 0) {
+        return RMW_RET_ERROR;
+    } else {
+        *publisher_count = status.current_count;
+        return RMW_RET_OK;
+    }
 }
 
 extern "C" rmw_ret_t rmw_destroy_subscription (rmw_node_t *node, rmw_subscription_t *subscription)
@@ -1602,101 +1614,21 @@ extern "C" rmw_ret_t rmw_get_service_names_and_types (const rmw_node_t *node, rc
 #endif
 }
 
-extern "C" rmw_ret_t rmw_service_server_is_available (const rmw_node_t * node, const rmw_client_t * client, bool * is_available)
+extern "C" rmw_ret_t rmw_service_server_is_available (const rmw_node_t *node, const rmw_client_t *client, bool *is_available)
 {
-#if 0 // NIY
-    if (!node) {
-        RMW_SET_ERROR_MSG ("node handle is null");
+    RET_WRONG_IMPLID (node);
+    RET_WRONG_IMPLID (client);
+    RET_NULL (is_available);
+    auto info = static_cast<CddsClient *> (client->data);
+    dds_publication_matched_status_t ps;
+    dds_subscription_matched_status_t cs;
+    if (dds_get_publication_matched_status (info->client.pub->pubh, &ps) < 0 ||
+        dds_get_subscription_matched_status (info->client.sub->subh, &cs) < 0) {
+        RMW_SET_ERROR_MSG ("rmw_service_server_is_available: get_..._matched_status failed");
         return RMW_RET_ERROR;
     }
-
-    RMW_CHECK_TYPE_IDENTIFIERS_MATCH (
-            node handle,
-            node->implementation_identifier, eclipse_cyclonedds_identifier,
-            return RMW_RET_ERROR);
-
-    if (!client) {
-        RMW_SET_ERROR_MSG ("client handle is null");
-        return RMW_RET_ERROR;
-    }
-
-    if (!is_available) {
-        RMW_SET_ERROR_MSG ("is_available is null");
-        return RMW_RET_ERROR;
-    }
-
-    auto client_info = static_cast<CustomClientInfo *> (client->data);
-    if (!client_info) {
-        RMW_SET_ERROR_MSG ("client info handle is null");
-        return RMW_RET_ERROR;
-    }
-
-    auto pub_topic_name =
-        client_info->request_publisher_->getAttributes ().topic.getTopicName ();
-    auto pub_partitions =
-        client_info->request_publisher_->getAttributes ().qos.m_partition.getNames ();
-    // every rostopic has exactly 1 partition field set
-    if (pub_partitions.size () != 1) {
-        RCUTILS_LOG_ERROR_NAMED (
-                "rmw_cyclonedds_cpp",
-                "Topic %s is not a ros topic", pub_topic_name.c_str ())
-            RMW_SET_ERROR_MSG ((std::string (pub_topic_name) + " is a non-ros topic\n").c_str ());
-        return RMW_RET_ERROR;
-    }
-    auto pub_fqdn = pub_partitions[0] + "/" + pub_topic_name;
-    pub_fqdn = _demangle_if_ros_topic (pub_fqdn);
-
-    auto sub_topic_name =
-        client_info->response_subscriber_->getAttributes ().topic.getTopicName ();
-    auto sub_partitions =
-        client_info->response_subscriber_->getAttributes ().qos.m_partition.getNames ();
-    // every rostopic has exactly 1 partition field set
-    if (sub_partitions.size () != 1) {
-        RCUTILS_LOG_ERROR_NAMED (
-                "rmw_cyclonedds_cpp",
-                "Topic %s is not a ros topic", pub_topic_name.c_str ())
-            RMW_SET_ERROR_MSG ((std::string (sub_topic_name) + " is a non-ros topic\n").c_str ());
-        return RMW_RET_ERROR;
-    }
-    auto sub_fqdn = sub_partitions[0] + "/" + sub_topic_name;
-    sub_fqdn = _demangle_if_ros_topic (sub_fqdn);
-
-    *is_available = false;
-    size_t number_of_request_subscribers = 0;
-    rmw_ret_t ret = rmw_count_subscribers (
-            node,
-            pub_fqdn.c_str (),
-            &number_of_request_subscribers);
-    if (ret != RMW_RET_OK) {
-        // error string already set
-        return ret;
-    }
-    if (number_of_request_subscribers == 0) {
-        // not ready
-        return RMW_RET_OK;
-    }
-
-    size_t number_of_response_publishers = 0;
-    ret = rmw_count_publishers (
-            node,
-            sub_fqdn.c_str (),
-            &number_of_response_publishers);
-    if (ret != RMW_RET_OK) {
-        // error string already set
-        return ret;
-    }
-    if (number_of_response_publishers == 0) {
-        // not ready
-        return RMW_RET_OK;
-    }
-
-    // all conditions met, there is a service server available
-    *is_available = true;
+    *is_available = ps.current_count > 0 && cs.current_count > 0;
     return RMW_RET_OK;
-#else
-    (void) node; (void) client; (void) is_available;
-    return RMW_RET_TIMEOUT;
-#endif
 }
 
 extern "C" rmw_ret_t rmw_count_publishers (const rmw_node_t *node, const char *topic_name, size_t *count)
