@@ -14,7 +14,7 @@
 
 ###############################################################################
 #
-# CMake module for finding ADLINK CycloneDDS.
+# CMake module for finding Eclipse Cyclone DDS.
 #
 # Output variables:
 #
@@ -33,34 +33,7 @@
 
 set(CycloneDDS_FOUND FALSE)
 
-find_package(fastcdr REQUIRED CONFIG)
 find_package(CycloneDDS REQUIRED CONFIG)
-
-string(REGEX MATCH "^[0-9]+\\.[0-9]+" fastcdr_MAJOR_MINOR_VERSION "${fastcdr_VERSION}")
-#string(REGEX MATCH "^[0-9]+\\.[0-9]+" cyclonedds_MAJOR_MINOR_VERSION "${cyclonedds_VERSION}")
-
-find_library(FastCDR_LIBRARY_RELEASE
-  NAMES fastcdr-${fastcdr_MAJOR_MINOR_VERSION} fastcdr)
-
-find_library(FastCDR_LIBRARY_DEBUG
-  NAMES fastcdrd-${fastcdr_MAJOR_MINOR_VERSION})
-
-if(FastCDR_LIBRARY_RELEASE AND FastCDR_LIBRARY_DEBUG)
-  set(FastCDR_LIBRARIES
-    optimized ${FastCDR_LIBRARY_RELEASE}
-    debug ${FastCDR_LIBRARY_DEBUG}
-  )
-elseif(FastCDR_LIBRARY_RELEASE)
-  set(FastCDR_LIBRARIES
-    ${FastCDR_LIBRARY_RELEASE}
-  )
-elseif(FastCDR_LIBRARY_DEBUG)
-  set(FastCDR_LIBRARIES
-    ${FastCDR_LIBRARY_DEBUG}
-  )
-else()
-  set(FastCDR_LIBRARIES "")
-endif()
 
 #find_library(CycloneDDS_LIBRARY_RELEASE
 #  NAMES cyclonedds-${cyclonedds_MAJOR_MINOR_VERSION} cyclonedds)
@@ -75,17 +48,14 @@ if(CycloneDDS_LIBRARY_RELEASE AND CycloneDDS_LIBRARY_DEBUG)
   set(CycloneDDS_LIBRARIES
     optimized ${CycloneDDS_LIBRARY_RELEASE}
     debug ${CycloneDDS_LIBRARY_DEBUG}
-    ${FastCDR_LIBRARIES}
   )
 elseif(CycloneDDS_LIBRARY_RELEASE)
   set(CycloneDDS_LIBRARIES
     ${CycloneDDS_LIBRARY_RELEASE}
-    ${FastCDR_LIBRARIES}
   )
 elseif(CycloneDDS_LIBRARY_DEBUG)
   set(CycloneDDS_LIBRARIES
     ${CycloneDDS_LIBRARY_DEBUG}
-    ${FastCDR_LIBRARIES}
   )
 else()
   set(CycloneDDS_LIBRARIES "")
