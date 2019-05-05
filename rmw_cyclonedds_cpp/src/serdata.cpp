@@ -95,7 +95,7 @@ static void serdata_rmw_free (struct ddsi_serdata *dcmn)
     delete d;
 }
 
-static struct serdata_rmw *new_serdata_rmw (const struct ddsi_sertopic *topic, enum ddsi_serdata_kind kind)
+static struct serdata_rmw *rmw_serdata_new (const struct ddsi_sertopic *topic, enum ddsi_serdata_kind kind)
 {
     struct serdata_rmw *sd = new serdata_rmw;
     ddsi_serdata_init (sd, topic, kind);
@@ -104,7 +104,7 @@ static struct serdata_rmw *new_serdata_rmw (const struct ddsi_sertopic *topic, e
 
 static struct ddsi_serdata *serdata_rmw_from_ser (const struct ddsi_sertopic *topic, enum ddsi_serdata_kind kind, const struct nn_rdata *fragchain, size_t size)
 {
-    struct serdata_rmw *d = new_serdata_rmw (topic, kind);
+    struct serdata_rmw *d = rmw_serdata_new (topic, kind);
     uint32_t off = 0;
     assert (fragchain->min == 0);
     assert (fragchain->maxp1 >= off); /* CDR header must be in first fragment */
@@ -124,13 +124,13 @@ static struct ddsi_serdata *serdata_rmw_from_ser (const struct ddsi_sertopic *to
 static struct ddsi_serdata *serdata_rmw_from_keyhash (const struct ddsi_sertopic *topic, const struct nn_keyhash *keyhash __attribute__ ((unused)))
 {
     /* there is no key field, so from_keyhash is trivial */
-    return new_serdata_rmw (topic, SDK_KEY);
+    return rmw_serdata_new (topic, SDK_KEY);
 }
 
 static struct ddsi_serdata *serdata_rmw_from_sample (const struct ddsi_sertopic *topiccmn, enum ddsi_serdata_kind kind, const void *sample)
 {
     const struct sertopic_rmw *topic = static_cast<const struct sertopic_rmw *> (topiccmn);
-    struct serdata_rmw *d = new_serdata_rmw (topic, kind);
+    struct serdata_rmw *d = rmw_serdata_new (topic, kind);
     if (kind != SDK_DATA) {
         /* ROS2 doesn't do keys, so SDK_KEY is trivial */
     } else if (!topic->is_request_header) {
@@ -168,7 +168,7 @@ static struct ddsi_serdata *serdata_rmw_from_sample (const struct ddsi_sertopic 
 static struct ddsi_serdata *serdata_rmw_to_topicless (const struct ddsi_serdata *dcmn)
 {
     const struct serdata_rmw *d = static_cast<const struct serdata_rmw *> (dcmn);
-    struct serdata_rmw *d1 = new_serdata_rmw (d->topic, SDK_KEY);
+    struct serdata_rmw *d1 = rmw_serdata_new (d->topic, SDK_KEY);
     d1->topic = nullptr;
     return d1;
 }
@@ -255,7 +255,7 @@ static const struct ddsi_serdata_ops serdata_rmw_ops = {
     .free = serdata_rmw_free
 };
 
-static void sertopic_rmw_deinit (struct ddsi_sertopic *tpcmn)
+static void sertopic_rmw_free (struct ddsi_sertopic *tpcmn)
 {
     struct sertopic_rmw *tp = static_cast<struct sertopic_rmw *> (tpcmn);
     delete tp;
@@ -278,10 +278,11 @@ static void sertopic_rmw_free_samples (const struct ddsi_sertopic *d __attribute
     /* Not using code paths that rely on this (dispose, unregister with instance handle, content
        filters) */
     assert (!(op & DDS_FREE_ALL_BIT));
+    (void) op;
 }
 
 static const struct ddsi_sertopic_ops sertopic_rmw_ops = {
-    .deinit = sertopic_rmw_deinit,
+    .free = sertopic_rmw_free,
     .zero_samples = sertopic_rmw_zero_samples,
     .realloc_samples = sertopic_rmw_realloc_samples,
     .free_samples = sertopic_rmw_free_samples
