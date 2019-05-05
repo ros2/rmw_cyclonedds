@@ -37,9 +37,12 @@
 #include <mutex>
 #include <unordered_set>
 #include <algorithm>
+#include <map>
+#include <set>
 #include <atomic>
 
 #include "rcutils/logging_macros.h"
+#include "rcutils/strdup.h"
 
 #include "rmw/allocators.h"
 #include "rmw/convert_rcutils_ret_to_rmw_ret.h"
@@ -1371,120 +1374,80 @@ extern "C" rmw_ret_t rmw_get_node_names (const rmw_node_t *node, rcutils_string_
 #endif
 }
 
-extern "C" rmw_ret_t rmw_get_topic_names_and_types (const rmw_node_t *node, rcutils_allocator_t *allocator, bool no_demangle, rmw_names_and_types_t *topic_names_and_types)
+static rmw_ret_t rmw_collect_tptyp_for_kind (std::map<std::string, std::set<std::string>>& tt, dds_entity_t builtin_topic)
 {
-#if 0 // NIY
+    assert (builtin_topic == DDS_BUILTIN_TOPIC_DCPSSUBSCRIPTION || builtin_topic == DDS_BUILTIN_TOPIC_DCPSPUBLICATION);
+    dds_entity_t rd;
+    if ((rd = dds_create_reader (ref_ppant (), builtin_topic, NULL, NULL)) < 0) {
+        unref_ppant ();
+        RMW_SET_ERROR_MSG ("rmw_collect_tptyp_for_kind failed to create reader");
+        return RMW_RET_ERROR;
+    }
+    dds_sample_info_t info;
+    void *msg = NULL;
+    int32_t n;
+    while ((n = dds_take (rd, &msg, &info, 1, 1)) == 1) {
+        if (info.valid_data && info.instance_state == DDS_IST_ALIVE) {
+            auto sample = static_cast<const dds_builtintopic_endpoint_t *> (msg);
+            tt[std::string (sample->topic_name)].insert (std::string (sample->type_name));
+        }
+        dds_return_loan (rd, &msg, n);
+    }
+    dds_delete (rd);
+    unref_ppant ();
+    if (n == 0) {
+        return RMW_RET_OK;
+    } else {
+        RMW_SET_ERROR_MSG ("rmw_collect_tptyp_for_kind dds_take failed");
+        return RMW_RET_ERROR;
+    }
+}
+
+extern "C" rmw_ret_t rmw_get_topic_names_and_types (const rmw_node_t *node, rcutils_allocator_t *allocator, bool no_demangle, rmw_names_and_types_t *tptyp)
+{
     RET_NULL (allocator);
     RET_WRONG_IMPLID (node);
-    rmw_ret_t ret = rmw_names_and_types_check_zero (topic_names_and_types);
+    rmw_ret_t ret = rmw_names_and_types_check_zero (tptyp);
     if (ret != RMW_RET_OK) {
         return ret;
     }
-
-    auto impl = static_cast<CustomParticipantInfo *> (node->data);
-
-    // Access the slave Listeners, which are the ones that have the topicnamesandtypes member
-    // Get info from publisher and subscriber
-    // Combined results from the two lists
-    std::map<std::string, std::set<std::string>> topics;
-    {
-        ReaderInfo * slave_target = impl->secondarySubListener;
-        slave_target->mapmutex.lock ();
-        for (auto it : slave_target->topicNtypes) {
-            if (!no_demangle && _get_ros_prefix_if_exists (it.first) != ros_topic_prefix) {
-                // if we are demangling and this is not prefixed with rt/, skip it
-                continue;
-            }
-            for (auto & itt : it.second) {
-                topics[it.first].insert (itt);
-            }
-        }
-        slave_target->mapmutex.unlock ();
+    std::map<std::string, std::set<std::string>> tt;
+    if ((ret = rmw_collect_tptyp_for_kind (tt, DDS_BUILTIN_TOPIC_DCPSSUBSCRIPTION)) != RMW_RET_OK ||
+        (ret = rmw_collect_tptyp_for_kind (tt, DDS_BUILTIN_TOPIC_DCPSPUBLICATION)) != RMW_RET_OK) {
+        return ret;
     }
-    {
-        WriterInfo * slave_target = impl->secondaryPubListener;
-        slave_target->mapmutex.lock ();
-        for (auto it : slave_target->topicNtypes) {
-            if (!no_demangle && _get_ros_prefix_if_exists (it.first) != ros_topic_prefix) {
-                // if we are demangling and this is not prefixed with rt/, skip it
-                continue;
-            }
-            for (auto & itt : it.second) {
-                topics[it.first].insert (itt);
-            }
-        }
-        slave_target->mapmutex.unlock ();
+    if (tt.size () == 0) {
+        return RMW_RET_OK;
     }
 
-    // Copy data to results handle
-    if (topics.size () > 0) {
-        // Setup string array to store names
-        rmw_ret_t rmw_ret = rmw_names_and_types_init (topic_names_and_types, topics.size (), allocator);
-        if (rmw_ret != RMW_RET_OK) {
-            return rmw_ret;
+    /* FIXME: demangling */
+    (void) no_demangle;
+    
+    if ((ret = rmw_names_and_types_init (tptyp, tt.size (), allocator)) != RMW_RET_OK) {
+        return ret;
+    }
+    size_t index = 0;
+    for (const auto& tp : tt) {
+        if ((tptyp->names.data[index] = rcutils_strdup (tp.first.c_str (), *allocator)) == NULL) {
+            goto fail_mem;
         }
-        // Setup cleanup function, in case of failure below
-        auto fail_cleanup = [&topic_names_and_types]() {
-                                rmw_ret_t rmw_ret = rmw_names_and_types_fini (topic_names_and_types);
-                                if (rmw_ret != RMW_RET_OK) {
-                                    RCUTILS_LOG_ERROR_NAMED (
-                                            "rmw_cyclonedds_cpp",
-                                            "error during report of error: %s", rmw_get_error_string_safe ());
-                                }
-                            };
-        // Setup demangling functions based on no_demangle option
-        auto demangle_topic = _demangle_if_ros_topic;
-        auto demangle_type = _demangle_if_ros_type;
-        if (no_demangle) {
-            auto noop = [](const std::string & in) {
-                            return in;
-                        };
-            demangle_topic = noop;
-            demangle_type = noop;
+        if (rcutils_string_array_init (&tptyp->types[index], tp.second.size (), allocator) != RCUTILS_RET_OK) {
+            goto fail_mem;
         }
-        // For each topic, store the name, initialize the string array for types, and store all types
-        size_t index = 0;
-        for (const auto & topic_n_types : topics) {
-            // Duplicate and store the topic_name
-            char * topic_name = rcutils_strdup (demangle_topic (topic_n_types.first).c_str (), *allocator);
-            if (!topic_name) {
-                RMW_SET_ERROR_MSG_ALLOC ("failed to allocate memory for topic name", *allocator);
-                fail_cleanup ();
-                return RMW_RET_BAD_ALLOC;
+        size_t type_index = 0;
+        for (const auto& type : tp.second) {
+            if ((tptyp->types[index].data[type_index] = rcutils_strdup (type.c_str (), *allocator)) == NULL) {
+                goto fail_mem;
             }
-            topic_names_and_types->names.data[index] = topic_name;
-            // Setup storage for types
-            {
-                rcutils_ret_t rcutils_ret = rcutils_string_array_init (
-                        &topic_names_and_types->types[index],
-                        topic_n_types.second.size (),
-                        allocator);
-                if (rcutils_ret != RCUTILS_RET_OK) {
-                    RMW_SET_ERROR_MSG (rcutils_get_error_string_safe ())
-                        fail_cleanup ();
-                    return rmw_convert_rcutils_ret_to_rmw_ret (rcutils_ret);
-                }
-            }
-            // Duplicate and store each type for the topic
-            size_t type_index = 0;
-            for (const auto & type : topic_n_types.second) {
-                char * type_name = rcutils_strdup (demangle_type (type).c_str (), *allocator);
-                if (!type_name) {
-                    RMW_SET_ERROR_MSG_ALLOC ("failed to allocate memory for type name", *allocator)
-                        fail_cleanup ();
-                    return RMW_RET_BAD_ALLOC;
-                }
-                topic_names_and_types->types[index].data[type_index] = type_name;
-                ++type_index;
-            }  // for each type
-            ++index;
-        }  // for each topic
+            type_index++;
+        }
+        index++;
     }
     return RMW_RET_OK;
-#else
-    (void) node; (void) allocator; (void) no_demangle; (void) topic_names_and_types;
-    return RMW_RET_TIMEOUT;
-#endif
+
+fail_mem:
+    (void) rmw_names_and_types_fini (tptyp);
+    return RMW_RET_BAD_ALLOC;
 }
 
 extern "C" rmw_ret_t rmw_get_service_names_and_types (const rmw_node_t *node, rcutils_allocator_t *allocator, rmw_names_and_types_t *service_names_and_types)
