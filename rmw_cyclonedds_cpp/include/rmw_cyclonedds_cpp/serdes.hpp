@@ -28,6 +28,7 @@ public:
 
     inline cycser& operator<< (bool x) { serialize (x); return *this; }
     inline cycser& operator<< (char x) { serialize (x); return *this; }
+    inline cycser& operator<< (int8_t x) { serialize (x); return *this; }
     inline cycser& operator<< (uint8_t x) { serialize (x); return *this; }
     inline cycser& operator<< (int16_t x) { serialize (x); return *this; }
     inline cycser& operator<< (uint16_t x) { serialize (x); return *this; }
@@ -51,7 +52,8 @@ public:
         off += sizeof (T);                              \
     }
     SIMPLE (char);
-    SIMPLE (unsigned char);
+    SIMPLE (int8_t);
+    SIMPLE (uint8_t);
     SIMPLE (int16_t);
     SIMPLE (uint16_t);
     SIMPLE (int32_t);
@@ -78,8 +80,8 @@ public:
         size_t sz = x.size () + 1;
         serialize (static_cast<uint32_t> (sz));
         resize (off + sz);
-        memcpy (data () + off, x.data (), sz - 1);
-        *(data () + off + sz - 1) = 0;
+        memcpy (data () + off, x.c_str (), sz);
+        off += sz;
     }
 
 #define SIMPLEA(T) inline void serializeA (const T *x, size_t cnt) {    \
@@ -91,7 +93,8 @@ public:
         off += cnt * sizeof (T);                                        \
     }
     SIMPLEA (char);
-    SIMPLEA (unsigned char);
+    SIMPLEA (int8_t);
+    SIMPLEA (uint8_t);
     SIMPLEA (int16_t);
     SIMPLEA (uint16_t);
     SIMPLEA (int32_t);
@@ -137,6 +140,7 @@ public:
 
     inline cycdeser& operator>> (bool& x) { deserialize (x); return *this; }
     inline cycdeser& operator>> (char& x) { deserialize (x); return *this; }
+    inline cycdeser& operator>> (int8_t& x) { deserialize (x); return *this; }
     inline cycdeser& operator>> (uint8_t& x) { deserialize (x); return *this; }
     inline cycdeser& operator>> (int16_t& x) { deserialize (x); return *this; }
     inline cycdeser& operator>> (uint16_t& x) { deserialize (x); return *this; }
@@ -157,7 +161,8 @@ public:
         pos += sizeof (x);                              \
     }
     SIMPLE (char);
-    SIMPLE (unsigned char);
+    SIMPLE (int8_t);
+    SIMPLE (uint8_t);
     SIMPLE (int16_t);
     SIMPLE (uint16_t);
     SIMPLE (int32_t);
@@ -192,7 +197,8 @@ public:
         pos += (cnt) * sizeof (T);                                      \
     }
     SIMPLEA (char);
-    SIMPLEA (unsigned char);
+    SIMPLEA (int8_t);
+    SIMPLEA (uint8_t);
     SIMPLEA (int16_t);
     SIMPLEA (uint16_t);
     SIMPLEA (int32_t);
@@ -209,7 +215,7 @@ public:
     template<class T> inline void deserialize (std::vector<T>& x) {
         const uint32_t sz = deserialize32 ();
         x.resize (sz);
-        deserializeA (x.data (), sz);
+        if (sz > 0) deserializeA (x.data (), sz);
     }
     inline void deserialize (std::vector<bool>& x) {
         const uint32_t sz = deserialize32 ();
