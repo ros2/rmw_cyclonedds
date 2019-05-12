@@ -85,12 +85,14 @@ public:
     }
 
 #define SIMPLEA(T) inline void serializeA (const T *x, size_t cnt) {    \
-        if ((off % sizeof (T)) != 0) {                                  \
-            off += sizeof (T) - (off % sizeof (T));                     \
+        if (cnt > 0) {                                                  \
+            if ((off % sizeof (T)) != 0) {                              \
+                off += sizeof (T) - (off % sizeof (T));                 \
+            }                                                           \
+            resize (off + cnt * sizeof (T));                            \
+            memcpy (data () + off, (void *) x, cnt * sizeof (T));       \
+            off += cnt * sizeof (T);                                    \
         }                                                               \
-        resize (off + cnt * sizeof (T));                                \
-        memcpy (data () + off, (void *) x, cnt * sizeof (T));           \
-        off += cnt * sizeof (T);                                        \
     }
     SIMPLEA (char);
     SIMPLEA (int8_t);
@@ -111,7 +113,7 @@ public:
     template<class T> inline void serialize (const std::vector<T>& x)
     {
         serialize (static_cast<uint32_t> (x.size ()));
-        if (x.size () > 0) serializeA (x.data (), x.size ());
+        serializeA (x.data (), x.size ());
     }
     inline void serialize (const std::vector<bool>& x) {
         serialize (static_cast<uint32_t> (x.size ()));
@@ -121,7 +123,7 @@ public:
     template<class T> inline void serializeS (const T *x, size_t cnt)
     {
         serialize (static_cast<uint32_t> (cnt));
-        if (cnt > 0) serializeA (x, cnt);
+        serializeA (x, cnt);
     }
 
 private:
@@ -192,9 +194,11 @@ public:
     }
 
 #define SIMPLEA(T) inline void deserializeA (T *x, size_t cnt) {        \
-        align (sizeof (T));                                             \
-        memcpy ((void *) x, (void *) (data + pos), (cnt) * sizeof (T)); \
-        pos += (cnt) * sizeof (T);                                      \
+        if (cnt > 0) {                                                  \
+            align (sizeof (T));                                         \
+            memcpy ((void *) x, (void *) (data + pos), (cnt) * sizeof (T)); \
+            pos += (cnt) * sizeof (T);                                  \
+        }                                                               \
     }
     SIMPLEA (char);
     SIMPLEA (int8_t);
@@ -215,7 +219,7 @@ public:
     template<class T> inline void deserialize (std::vector<T>& x) {
         const uint32_t sz = deserialize32 ();
         x.resize (sz);
-        if (sz > 0) deserializeA (x.data (), sz);
+        deserializeA (x.data (), sz);
     }
     inline void deserialize (std::vector<bool>& x) {
         const uint32_t sz = deserialize32 ();
