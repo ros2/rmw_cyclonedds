@@ -113,6 +113,7 @@ class TypeSupport
 public:
   bool serializeROSmessage(const void * ros_message, cycser & ser, std::function<void(cycser&)> prefix = nullptr);
   bool deserializeROSmessage(cycdeser & deser, void * ros_message, std::function<void(cycdeser&)> prefix = nullptr);
+  std::string getName ();
 
 protected:
   TypeSupport();

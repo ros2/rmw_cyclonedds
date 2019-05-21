@@ -656,6 +656,12 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
   return true;
 }
 
+template<typename MembersType>
+std::string TypeSupport<MembersType>::getName ()
+{
+  return name;
+}
+
 }  // namespace rmw_cyclonedds_cpp
 
 #endif  // RMW_CYCLONEDDS_CPP__TYPESUPPORT_IMPL_HPP_

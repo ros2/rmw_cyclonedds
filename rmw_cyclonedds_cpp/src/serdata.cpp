@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <vector>
+#include <regex>
+#include <sstream>
 
 #include "rmw/error_handling.h"
 
@@ -299,11 +301,46 @@ static const struct ddsi_sertopic_ops sertopic_rmw_ops = {
     sertopic_rmw_free_samples
 };
 
+template<typename MembersType>
+ROSIDL_TYPESUPPORT_INTROSPECTION_CPP_LOCAL
+inline std::string create_type_name (const void * untyped_members)
+{
+  auto members = static_cast<const MembersType *> (untyped_members);
+  if (!members) {
+    RMW_SET_ERROR_MSG("members handle is null");
+    return "";
+  }
+
+  std::ostringstream ss;
+  std::string message_namespace (members->message_namespace_);
+  // Find and replace C namespace separator with C++, in case this is using C typesupport
+  message_namespace = std::regex_replace (message_namespace, std::regex("__"), "::");
+  std::string message_name (members->message_name_);
+  if (!message_namespace.empty ()) {
+    ss << message_namespace << "::";
+  }
+  ss << "dds_::" << message_name << "_";
+  return ss.str ();
+}
+
+static std::string get_type_name (const char *type_support_identifier, void *type_support)
+{
+    if (using_introspection_c_typesupport (type_support_identifier)) {
+        auto typed_typesupport = static_cast<MessageTypeSupport_c *> (type_support);
+        return typed_typesupport->getName ();
+    } else if (using_introspection_cpp_typesupport (type_support_identifier)) {
+        auto typed_typesupport = static_cast<MessageTypeSupport_cpp *> (type_support);
+        return typed_typesupport->getName ();
+    } else {
+        return "absent";
+    }
+}
+
 struct sertopic_rmw *create_sertopic (const char *topicname, const char *type_support_identifier, void *type_support, bool is_request_header)
 {
     struct sertopic_rmw *st = new struct sertopic_rmw;
     st->cpp_name = std::string (topicname);
-    st->cpp_type_name = std::string ("absent"); // FIXME: obviously a hack
+    st->cpp_type_name = get_type_name (type_support_identifier, type_support);
     st->cpp_name_type_name = st->cpp_name + std::string (";") + std::string (st->cpp_type_name);
     st->ops = &sertopic_rmw_ops;
     st->serdata_ops = &serdata_rmw_ops;
