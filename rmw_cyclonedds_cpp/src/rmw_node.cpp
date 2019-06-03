@@ -1,4 +1,4 @@
-// Copyright 2018 ADLINK Technology Limited.
+// Copyright 2019 ADLINK Technology Limited.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,28 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-/* TODO:
-
-   - topic names (should use the same as other RMW layers)
-
-   - type names (make a copy of the generic type descriptor, modify the name and pass that)
-
-   - need to handle endianness differences in deserialization
-
-   - topic creation: shouldn't leak topics
-
-   - introspection stuff not done yet
-
-   - check / make sure a node remains valid while one of its subscriptions exists
-
-   - service/client simply use the instance handle of its publisher as its GUID -- yikes! but it is
-     actually only kinda wrong because the instance handles allocated by different instance of cdds
-     are actually taken from uncorrelated (close to uncorrelated anyway) permutations of 64-bit
-     unsigned integers
-
-   - ... and probably many more things ...
-*/
 
 #include <mutex>
 #include <unordered_set>
@@ -50,6 +28,9 @@
 #include "rmw/convert_rcutils_ret_to_rmw_ret.h"
 #include "rmw/error_handling.h"
 #include "rmw/names_and_types.h"
+#include "rmw/get_service_names_and_types.h"
+#include "rmw/get_topic_names_and_types.h"
+#include "rmw/get_node_info_and_types.h"
 #include "rmw/rmw.h"
 #include "rmw/sanity_checks.h"
 
@@ -309,13 +290,16 @@ static void ggcallback (dds_entity_t rd, void *varg)
     while (dds_take_mask (rd, &msg, &info, 1, 1, DDS_ANY_SAMPLE_STATE | DDS_ANY_VIEW_STATE | DDS_NOT_ALIVE_DISPOSED_INSTANCE_STATE | DDS_NOT_ALIVE_NO_WRITERS_INSTANCE_STATE) > 0) {
         dds_return_loan (rd, &msg, 1);
     }
-    (void) rmw_trigger_guard_condition (node_impl->graph_guard_condition);
+    if (rmw_trigger_guard_condition (node_impl->graph_guard_condition) != RMW_RET_OK) {
+        RCUTILS_LOG_ERROR_NAMED ("rmw_cyclonedds_cpp", "failed to trigger graph guard condition");
+    }
 }
 
 static std::string get_node_user_data (const char *node_name, const char *node_namespace)
 {
-    return (std::string ("ros2_name=") + std::string (node_name) +
-            std::string (";ros2_namespace=") + std::string (node_namespace));
+    return (std::string ("name=") + std::string (node_name) +
+            std::string (";namespace=") + std::string (node_namespace) +
+	    std::string (";"));
 }
 
 extern "C" rmw_node_t *rmw_create_node (rmw_context_t *context __attribute__ ((unused)), const char *name, const char *namespace_, size_t domain_id, const rmw_node_security_options_t *security_options)
@@ -527,7 +511,7 @@ static std::string make_fqtopic (const char *prefix, const char *topic_name, con
     if (avoid_ros_namespace_conventions) {
         return std::string (topic_name) + "__" + std::string (suffix);
     } else {
-        return std::string (prefix) + "/" + make_fqtopic (prefix, topic_name, suffix, true);
+        return std::string (prefix) + std::string (topic_name) + std::string (suffix);
     }
 }
 
@@ -674,7 +658,7 @@ static CddsPublisher *create_cdds_publisher (const rmw_node_t *node, const rosid
     if ((qos = create_readwrite_qos (qos_policies, false)) == nullptr) {
         goto fail_qos;
     }
-    if ((pub->pubh = dds_create_writer (gcdds.ppant, topic, qos, nullptr)) < 0) {
+    if ((pub->pubh = dds_create_writer (node_impl->pp, topic, qos, nullptr)) < 0) {
         RMW_SET_ERROR_MSG ("failed to create writer");
         goto fail_writer;
     }
@@ -842,7 +826,7 @@ static CddsSubscription *create_cdds_subscription (const rmw_node_t *node, const
     if ((qos = create_readwrite_qos (qos_policies, ignore_local_publications)) == nullptr) {
         goto fail_qos;
     }
-    if ((sub->subh = dds_create_reader (gcdds.ppant, topic, qos, nullptr)) < 0) {
+    if ((sub->subh = dds_create_reader (node_impl->pp, topic, qos, nullptr)) < 0) {
         RMW_SET_ERROR_MSG ("failed to create reader");
         goto fail_reader;
     }
@@ -1368,13 +1352,13 @@ static rmw_ret_t rmw_init_cs (CddsCS *cs, const rmw_node_t *node, const rosidl_s
     if (is_service) {
         sub_type_support = create_request_type_support (type_support->data, type_support->typesupport_identifier);
         pub_type_support = create_response_type_support (type_support->data, type_support->typesupport_identifier);
-        subtopic_name = make_fqtopic (ros_service_requester_prefix, service_name, "_request", qos_policies);
-        pubtopic_name = make_fqtopic (ros_service_response_prefix, service_name, "_reply", qos_policies);
+        subtopic_name = make_fqtopic (ros_service_requester_prefix, service_name, "Request", qos_policies);
+        pubtopic_name = make_fqtopic (ros_service_response_prefix, service_name, "Reply", qos_policies);
     } else {
         pub_type_support = create_request_type_support (type_support->data, type_support->typesupport_identifier);
         sub_type_support = create_response_type_support (type_support->data, type_support->typesupport_identifier);
-        pubtopic_name = make_fqtopic (ros_service_requester_prefix, service_name, "_request", qos_policies);
-        subtopic_name = make_fqtopic (ros_service_response_prefix, service_name, "_reply", qos_policies);
+        pubtopic_name = make_fqtopic (ros_service_requester_prefix, service_name, "Request", qos_policies);
+        subtopic_name = make_fqtopic (ros_service_response_prefix, service_name, "Reply", qos_policies);
     }
 
     RCUTILS_LOG_DEBUG_NAMED ("rmw_cyclonedds_cpp", "************ %s Details *********", is_service ? "Service" : "Client");
@@ -1401,14 +1385,14 @@ static rmw_ret_t rmw_init_cs (CddsCS *cs, const rmw_node_t *node, const rosidl_s
     }
     dds_qset_reliability (qos, DDS_RELIABILITY_RELIABLE, DDS_SECS (1));
     dds_qset_history (qos, DDS_HISTORY_KEEP_ALL, DDS_LENGTH_UNLIMITED);
-    if ((pub->pubh = dds_create_writer (gcdds.ppant, pubtopic, qos, nullptr)) < 0) {
+    if ((pub->pubh = dds_create_writer (node_impl->pp, pubtopic, qos, nullptr)) < 0) {
         RMW_SET_ERROR_MSG ("failed to create writer");
         goto fail_writer;
     }
     /* FIXME: not guaranteed that "topic" will refer to "sertopic" because topic might have been
        created earlier, but the two are equivalent, so this'll do */
     pub->sertopic = pub_st;
-    if ((sub->subh = dds_create_reader (gcdds.ppant, subtopic, qos, nullptr)) < 0) {
+    if ((sub->subh = dds_create_reader (node_impl->pp, subtopic, qos, nullptr)) < 0) {
         RMW_SET_ERROR_MSG ("failed to create reader");
         goto fail_reader;
     }
@@ -1586,11 +1570,11 @@ extern "C" rmw_ret_t rmw_get_node_names (const rmw_node_t *node, rcutils_string_
     }
 
     std::set< std::pair<std::string, std::string> > ns;
-    const auto re = std::regex ("^ros2_name=(.*);ros2_namespace=(.*)$");
+    const auto re = std::regex ("^name=(.*);namespace=(.*);$", std::regex::extended);
     auto oper =
         [&ns, re](const dds_builtintopic_participant_t& sample __attribute__ ((unused)), const char *ud) -> bool {
             std::cmatch cm;
-            if (std::regex_match (ud, cm, re)) {
+            if (std::regex_search (ud, cm, re)) {
                 ns.insert (std::make_pair (std::string (cm[1]), std::string (cm[2])));
             }
             return true;
@@ -1673,6 +1657,9 @@ static rmw_ret_t rmw_collect_tptyp_for_kind (std::map<std::string, std::set<std:
 
 static rmw_ret_t make_names_and_types (rmw_names_and_types_t *tptyp, const std::map<std::string, std::set<std::string>>& source, rcutils_allocator_t *allocator)
 {
+    if (source.size () == 0) {
+        return RMW_RET_OK;
+    }
     rmw_ret_t ret;
     if ((ret = rmw_names_and_types_init (tptyp, source.size (), allocator)) != RMW_RET_OK) {
         return ret;
@@ -1697,7 +1684,9 @@ static rmw_ret_t make_names_and_types (rmw_names_and_types_t *tptyp, const std::
     return RMW_RET_OK;
 
 fail_mem:
-    (void) rmw_names_and_types_fini (tptyp);
+    if (rmw_names_and_types_fini (tptyp) != RMW_RET_OK) {
+        RMW_SET_ERROR_MSG ("rmw_collect_tptyp_for_kind: rmw_names_and_types_fini failed");
+    }
     return RMW_RET_BAD_ALLOC;
 }
 
@@ -1725,16 +1714,19 @@ static rmw_ret_t get_endpoint_names_and_types_by_node (const rmw_node_t *node, r
     if (node_name != nullptr && (ret = get_node_guids (node_name, node_namespace, guids)) != RMW_RET_OK) {
         return ret;
     }
-    const auto re = std::regex ("^" + std::string (ros_topic_prefix) + "/");
+    const auto re_tp = std::regex ("^" + std::string (ros_topic_prefix) + "(/.*)", std::regex::extended);
+    const auto re_typ = std::regex ("^(.*::)dds_::(.*)_$", std::regex::extended);
     const auto filter_and_map =
-        [re, guids, node_name](const dds_builtintopic_endpoint_t& sample, std::string& topic_name, std::string& type_name) -> bool {
+        [re_tp, re_typ, guids, node_name](const dds_builtintopic_endpoint_t& sample, std::string& topic_name, std::string& type_name) -> bool {
+            std::cmatch cm_tp, cm_typ;
             if (node_name != nullptr && guids.count (sample.participant_key) == 0) {
                 return false;
-            } else if (! std::regex_match (topic_name, re)) {
+            } else if (! std::regex_search (sample.topic_name, cm_tp, re_tp) || ! std::regex_search (sample.type_name, cm_typ, re_typ)) {
                 return false;
             } else {
-                topic_name = std::string (sample.topic_name);
-                type_name = std::string (sample.type_name);
+                std::string demangled_type = std::regex_replace (std::string (cm_typ[1]), std::regex ("::"), "/");
+                topic_name = std::string (cm_tp[1]);
+                type_name = std::string (demangled_type) + std::string (cm_typ[2]);
                 return true;
             }
         };
@@ -1748,7 +1740,7 @@ static rmw_ret_t get_endpoint_names_and_types_by_node (const rmw_node_t *node, r
     return make_names_and_types (tptyp, tt, allocator);
 }
 
-static rmw_ret_t get_service_names_and_types_by_node (const rmw_node_t *node, rcutils_allocator_t *allocator, const char *node_name, const char *node_namespace, bool no_demangle, rmw_names_and_types_t *sntyp)
+static rmw_ret_t get_service_names_and_types_by_node (const rmw_node_t *node, rcutils_allocator_t *allocator, const char *node_name, const char *node_namespace, rmw_names_and_types_t *sntyp)
 {
     RET_WRONG_IMPLID (node);
     RET_NULL (allocator);
@@ -1761,14 +1753,15 @@ static rmw_ret_t get_service_names_and_types_by_node (const rmw_node_t *node, rc
         return ret;
     }
     const auto re_tp = std::regex ("^(" + std::string (ros_service_requester_prefix) + "|" +
-                                   std::string (ros_service_response_prefix) + ")/(.*)___(request|reply)$");
-    const auto re_typ = std::regex ("^(.*::)dds_::(.*)_(Reponse|Request)_$");
+                                   std::string (ros_service_response_prefix) + ")(/.*)(Request|Reply)$",
+                                   std::regex::extended);
+    const auto re_typ = std::regex ("^(.*::)dds_::(.*)_(Reponse|Request)_$", std::regex::extended);
     const auto filter_and_map =
         [re_tp, re_typ, guids, node_name](const dds_builtintopic_endpoint_t& sample, std::string& topic_name, std::string& type_name) -> bool {
             std::cmatch cm_tp, cm_typ;
             if (node_name != nullptr && guids.count (sample.participant_key) == 0) {
                 return false;
-            } if (! std::regex_match (topic_name.c_str (), cm_tp, re_tp) || ! std::regex_match (type_name.c_str (), cm_typ, re_typ)) {
+            } if (! std::regex_search (sample.topic_name, cm_tp, re_tp) || ! std::regex_search (sample.type_name, cm_typ, re_typ)) {
                 return false;
             } else {
                 std::string demangled_type = std::regex_replace (std::string (cm_typ[1]), std::regex ("::"), "/");
@@ -1792,7 +1785,7 @@ extern "C" rmw_ret_t rmw_get_topic_names_and_types (const rmw_node_t *node, rcut
 
 extern "C" rmw_ret_t rmw_get_service_names_and_types (const rmw_node_t *node, rcutils_allocator_t *allocator, rmw_names_and_types_t *sntyp)
 {
-    return get_service_names_and_types_by_node (node, allocator, nullptr, nullptr, false, sntyp);
+    return get_service_names_and_types_by_node (node, allocator, nullptr, nullptr, sntyp);
 }
 
 extern "C" rmw_ret_t rmw_service_server_is_available (const rmw_node_t *node, const rmw_client_t *client, bool *is_available)
@@ -1864,7 +1857,7 @@ extern "C" rmw_ret_t rmw_get_publisher_names_and_types_by_node (const rmw_node_t
     return get_endpoint_names_and_types_by_node (node, allocator, node_name, node_namespace, no_demangle, tptyp, false, true);
 }
 
-extern "C" rmw_ret_t rmw_get_service_names_and_types_by_node (const rmw_node_t *node, rcutils_allocator_t *allocator, const char *node_name, const char *node_namespace, bool no_demangle, rmw_names_and_types_t *sntyp)
+extern "C" rmw_ret_t rmw_get_service_names_and_types_by_node (const rmw_node_t *node, rcutils_allocator_t *allocator, const char *node_name, const char *node_namespace, rmw_names_and_types_t *sntyp)
 {
-    return get_service_names_and_types_by_node (node, allocator, node_name, node_namespace, no_demangle, sntyp);
+    return get_service_names_and_types_by_node (node, allocator, node_name, node_namespace, sntyp);
 }
