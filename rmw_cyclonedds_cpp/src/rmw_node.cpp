@@ -83,8 +83,15 @@ bool operator< (dds_builtintopic_guid_t const& a, dds_builtintopic_guid_t const&
     return (memcmp (&a, &b, sizeof (dds_builtintopic_guid_t)) < 0);
 }
 
+static const dds_entity_t builtin_topics[] = {
+    DDS_BUILTIN_TOPIC_DCPSPARTICIPANT,
+    DDS_BUILTIN_TOPIC_DCPSSUBSCRIPTION,
+    DDS_BUILTIN_TOPIC_DCPSPUBLICATION
+};
+
 struct CddsNode {
     dds_entity_t pp;
+    dds_entity_t builtin_readers[sizeof (builtin_topics) / sizeof (builtin_topics[0])];
     rmw_guard_condition_t *graph_guard_condition;
 };
 
@@ -315,6 +322,7 @@ extern "C" rmw_node_t *rmw_create_node (rmw_context_t *context __attribute__ ((u
     dds_entity_t pp = dds_create_participant (DDS_DOMAIN_DEFAULT, qos, nullptr);
     dds_delete_qos (qos);
     if (pp < 0) {
+        RCUTILS_LOG_ERROR_NAMED ("rmw_cyclonedds_cpp", "rmw_create_node: failed to create DDS participant");
         return nullptr;
     }
     auto *node_impl = new CddsNode ();
@@ -329,15 +337,19 @@ extern "C" rmw_node_t *rmw_create_node (rmw_context_t *context __attribute__ ((u
     node_impl->graph_guard_condition = graph_guard_condition;
 
     //
-    static const dds_entity_t bts[] = {
-      DDS_BUILTIN_TOPIC_DCPSPARTICIPANT,
-      DDS_BUILTIN_TOPIC_DCPSSUBSCRIPTION,
-      DDS_BUILTIN_TOPIC_DCPSPUBLICATION
-    };
+    static_assert (sizeof (node_impl->builtin_readers) / sizeof (node_impl->builtin_readers[0]) == sizeof (builtin_topics) / sizeof (builtin_topics[0]), "mismatch between array of built-in topics and array of built-in readers");
     gglistener = dds_create_listener (node_impl);
     dds_lset_data_available (gglistener, ggcallback);
-    for (size_t i = 0; i < sizeof (bts) / sizeof (bts[0]); i++) {
-      dds_create_reader (pp, bts[i], NULL, gglistener);
+    for (size_t i = 0; i < sizeof (builtin_topics) / sizeof (builtin_topics[0]); i++) {
+        dds_entity_t rd = dds_create_reader (pp, builtin_topics[i], NULL, gglistener);
+        if (rd  < 0) {
+            RCUTILS_LOG_ERROR_NAMED ("rmw_cyclonedds_cpp", "rmw_create_node: failed to create DDS built-in reader");
+            while (i--) {
+                dds_delete (node_impl->builtin_readers[i]);
+            }
+            goto fail_builtin_reader;
+        }
+        node_impl->builtin_readers[i] = rd;
     }
     dds_delete_listener (gglistener);
     //
@@ -368,6 +380,12 @@ extern "C" rmw_node_t *rmw_create_node (rmw_context_t *context __attribute__ ((u
     if (RMW_RET_OK != rmw_destroy_guard_condition (graph_guard_condition)) {
         RCUTILS_LOG_ERROR_NAMED ("rmw_cyclonedds_cpp", "failed to destroy guard condition during error handling");
     }
+    for (size_t i = 0; i < sizeof (node_impl->builtin_readers) / sizeof (node_impl->builtin_readers[0]); i++) {
+        if (dds_delete (node_impl->builtin_readers[i]) < 0) {
+            RCUTILS_LOG_ERROR_NAMED ("rmw_cyclonedds_cpp", "failed to destroy DDS builtin-reader");
+        }
+    }
+ fail_builtin_reader:
  fail_ggc:
     delete node_impl;
  fail_node_impl:
@@ -384,11 +402,19 @@ extern "C" rmw_ret_t rmw_destroy_node (rmw_node_t *node)
     rmw_free (const_cast<char *> (node->name));
     rmw_free (const_cast<char *> (node->namespace_));
     rmw_node_free (node);
+    for (size_t i = 0; i < sizeof (node_impl->builtin_readers) / sizeof (node_impl->builtin_readers[0]); i++) {
+        if (dds_delete (node_impl->builtin_readers[i]) < 0) {
+            RCUTILS_LOG_ERROR_NAMED ("rmw_cyclonedds_cpp", "failed to destroy DDS builtin-reader");
+        }
+    }
     if (RMW_RET_OK != rmw_destroy_guard_condition (node_impl->graph_guard_condition)) {
         RMW_SET_ERROR_MSG ("failed to destroy graph guard condition");
         result_ret = RMW_RET_ERROR;
     }
-    dds_delete (node_impl->pp);
+    if (dds_delete (node_impl->pp) < 0) {
+        RMW_SET_ERROR_MSG ("failed to destroy DDS participant");
+        result_ret = RMW_RET_ERROR;
+    }
     delete node_impl;
     return result_ret;
 }
