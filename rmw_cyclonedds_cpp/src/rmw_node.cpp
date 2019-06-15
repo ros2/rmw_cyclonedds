@@ -933,6 +933,18 @@ extern "C" rmw_ret_t rmw_subscription_count_matched_publishers (const rmw_subscr
     }
 }
 
+extern "C" rmw_ret_t rmw_subscription_get_actual_qos(const rmw_subscription_t *subscription, rmw_qos_profile_t *qos)
+{
+    RET_NULL (qos);
+    RET_WRONG_IMPLID (subscription);
+    auto sub = static_cast<CddsSubscription *> (subscription->data);
+    if (get_readwrite_qos (sub->subh, qos)) {
+        return RMW_RET_OK;
+    } else {
+        return RMW_RET_ERROR;
+    }
+}
+
 extern "C" rmw_ret_t rmw_destroy_subscription (rmw_node_t *node, rmw_subscription_t *subscription)
 {
     RET_WRONG_IMPLID (node);
