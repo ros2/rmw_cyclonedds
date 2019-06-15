@@ -1585,7 +1585,7 @@ static rmw_ret_t do_for_node_user_data (std::function<bool (const dds_builtintop
     auto f = [oper](const dds_builtintopic_participant_t& sample) -> bool {
                  void *ud;
                  size_t udsz;
-                 if (dds_qget_userdata (sample.qos, &ud, &udsz)) {
+                 if (dds_qget_userdata (sample.qos, &ud, &udsz) && ud != nullptr) {
                      /* CycloneDDS guarantees a null-terminated user data so we pretend it's a
                         string */
                      bool ret = oper (sample, static_cast<char *> (ud));
