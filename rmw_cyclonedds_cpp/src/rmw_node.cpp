@@ -149,7 +149,10 @@ static Cdds gcdds;
 
 static void clean_waitset_caches ();
 
+#ifndef WIN32
+/* TODO(allenh1): check for Clang */
 #pragma GCC visibility push (default)
+#endif
 
 extern "C" const char *rmw_get_implementation_identifier ()
 {
@@ -161,8 +164,9 @@ extern "C" const char *rmw_get_serialization_format()
     return eclipse_cyclonedds_serialization_format;
 }
 
-extern "C" rmw_ret_t rmw_set_log_severity (rmw_log_severity_t severity __attribute__ ((unused)))
+extern "C" rmw_ret_t rmw_set_log_severity (rmw_log_severity_t severity)
 {
+    static_cast<void>(severity);
     RMW_SET_ERROR_MSG ("unimplemented");
     return RMW_RET_ERROR;
 }
@@ -226,8 +230,10 @@ extern "C" rmw_ret_t rmw_init_options_fini (rmw_init_options_t *init_options)
     return RMW_RET_OK;
 }
 
-extern "C" rmw_ret_t rmw_init (const rmw_init_options_t *options __attribute__ ((unused)), rmw_context_t *context __attribute__ ((unused)))
+extern "C" rmw_ret_t rmw_init (const rmw_init_options_t *options, rmw_context_t *context)
 {
+    static_cast<void>(options);
+    static_cast<void>(context);
     RCUTILS_CHECK_ARGUMENT_FOR_NULL (options, RMW_RET_INVALID_ARGUMENT);
     RCUTILS_CHECK_ARGUMENT_FOR_NULL (context, RMW_RET_INVALID_ARGUMENT);
     RMW_CHECK_TYPE_IDENTIFIERS_MATCH (
@@ -309,8 +315,9 @@ static std::string get_node_user_data (const char *node_name, const char *node_n
 	    std::string (";"));
 }
 
-extern "C" rmw_node_t *rmw_create_node (rmw_context_t *context __attribute__ ((unused)), const char *name, const char *namespace_, size_t domain_id, const rmw_node_security_options_t *security_options)
+extern "C" rmw_node_t *rmw_create_node (rmw_context_t *context, const char *name, const char *namespace_, size_t domain_id, const rmw_node_security_options_t *security_options)
 {
+    static_cast<void>(context);
     RET_NULL_X (name, return nullptr);
     RET_NULL_X (namespace_, return nullptr);
     (void) domain_id;
@@ -436,8 +443,11 @@ extern "C" const rmw_guard_condition_t *rmw_node_get_graph_guard_condition (cons
 using MessageTypeSupport_c = rmw_cyclonedds_cpp::MessageTypeSupport<rosidl_typesupport_introspection_c__MessageMembers>;
 using MessageTypeSupport_cpp = rmw_cyclonedds_cpp::MessageTypeSupport<rosidl_typesupport_introspection_cpp::MessageMembers>;
 
-extern "C" rmw_ret_t rmw_get_serialized_message_size (const rosidl_message_type_support_t *type_support __attribute__ ((unused)), const rosidl_message_bounds_t *message_bounds __attribute__ ((unused)), size_t *size __attribute__ ((unused)))
+extern "C" rmw_ret_t rmw_get_serialized_message_size (const rosidl_message_type_support_t *type_support, const rosidl_message_bounds_t *message_bounds, size_t *size)
 {
+    static_cast<void>(type_support);
+    static_cast<void>(message_bounds);
+    static_cast<void>(size);
     RMW_SET_ERROR_MSG ("rmw_get_serialized_message_size: unimplemented");
     return RMW_RET_ERROR;
 }
@@ -495,8 +505,9 @@ extern "C" rmw_ret_t rmw_deserialize (const rmw_serialized_message_t *serialized
 ///////////                                                                   ///////////
 /////////////////////////////////////////////////////////////////////////////////////////
 
-extern "C" rmw_ret_t rmw_publish (const rmw_publisher_t *publisher, const void *ros_message, rmw_publisher_allocation_t *allocation __attribute__ ((unused)))
+extern "C" rmw_ret_t rmw_publish (const rmw_publisher_t *publisher, const void *ros_message, rmw_publisher_allocation_t *allocation)
 {
+    static_cast<void>(allocation);  // unused
     RET_WRONG_IMPLID (publisher);
     RET_NULL (ros_message);
     auto pub = static_cast<CddsPublisher *> (publisher->data);
@@ -509,8 +520,9 @@ extern "C" rmw_ret_t rmw_publish (const rmw_publisher_t *publisher, const void *
     }
 }
 
-extern "C" rmw_ret_t rmw_publish_serialized_message (const rmw_publisher_t *publisher, const rmw_serialized_message_t *serialized_message, rmw_publisher_allocation_t *allocation __attribute__ ((unused)))
+extern "C" rmw_ret_t rmw_publish_serialized_message (const rmw_publisher_t *publisher, const rmw_serialized_message_t *serialized_message, rmw_publisher_allocation_t *allocation)
 {
+    static_cast<void>(allocation);  // unused
     RET_WRONG_IMPLID (publisher);
     RET_NULL (serialized_message);
     auto pub = static_cast<CddsPublisher *> (publisher->data);
@@ -712,14 +724,18 @@ static CddsPublisher *create_cdds_publisher (const rmw_node_t *node, const rosid
     return nullptr;
 }
 
-extern "C" rmw_ret_t rmw_init_publisher_allocation (const rosidl_message_type_support_t *type_support __attribute__ ((unused)), const rosidl_message_bounds_t *message_bounds __attribute__ ((unused)), rmw_publisher_allocation_t *allocation __attribute__ ((unused)))
+extern "C" rmw_ret_t rmw_init_publisher_allocation (const rosidl_message_type_support_t * type_support, const rosidl_message_bounds_t * message_bounds , rmw_publisher_allocation_t * allocation)
 {
+  static_cast<void>(type_support);
+  static_cast<void>(message_bounds);
+  static_cast<void>(allocation);
   RMW_SET_ERROR_MSG ("rmw_init_publisher_allocation: unimplemented");
   return RMW_RET_ERROR;
 }
 
-extern "C" rmw_ret_t rmw_fini_publisher_allocation (rmw_publisher_allocation_t *allocation __attribute__ ((unused)))
+extern "C" rmw_ret_t rmw_fini_publisher_allocation (rmw_publisher_allocation_t *allocation)
 {
+  static_cast<void>(allocation);
   RMW_SET_ERROR_MSG ("rmw_fini_publisher_allocation: unimplemented");
   return RMW_RET_ERROR;
 }
@@ -879,14 +895,18 @@ static CddsSubscription *create_cdds_subscription (const rmw_node_t *node, const
     return nullptr;
 }
 
-extern "C" rmw_ret_t rmw_init_subscription_allocation (const rosidl_message_type_support_t *type_support __attribute__ ((unused)), const rosidl_message_bounds_t *message_bounds __attribute__ ((unused)), rmw_subscription_allocation_t *allocation __attribute__ ((unused)))
+extern "C" rmw_ret_t rmw_init_subscription_allocation (const rosidl_message_type_support_t *type_support, const rosidl_message_bounds_t *message_bounds, rmw_subscription_allocation_t *allocation)
 {
+  static_cast<void>(type_support);
+  static_cast<void>(message_bounds);
+  static_cast<void>(allocation);
   RMW_SET_ERROR_MSG ("rmw_init_subscription_allocation: unimplemented");
   return RMW_RET_ERROR;
 }
 
-extern "C" rmw_ret_t rmw_fini_subscription_allocation (rmw_subscription_allocation_t *allocation __attribute__ ((unused)))
+extern "C" rmw_ret_t rmw_fini_subscription_allocation (rmw_subscription_allocation_t *allocation)
 {
+    static_cast<void>(allocation);
   RMW_SET_ERROR_MSG ("rmw_fini_subscription_allocation: unimplemented");
   return RMW_RET_ERROR;
 }
@@ -1027,28 +1047,34 @@ static rmw_ret_t rmw_take_ser_int (const rmw_subscription_t *subscription, rmw_s
     return RMW_RET_OK;
 }
 
-extern "C" rmw_ret_t rmw_take (const rmw_subscription_t *subscription, void *ros_message, bool *taken, rmw_subscription_allocation_t *allocation __attribute__ ((unused)))
+extern "C" rmw_ret_t rmw_take (const rmw_subscription_t *subscription, void *ros_message, bool *taken, rmw_subscription_allocation_t *allocation)
 {
+    static_cast<void>(allocation);
     return rmw_take_int (subscription, ros_message, taken, nullptr);
 }
 
-extern "C" rmw_ret_t rmw_take_with_info (const rmw_subscription_t *subscription, void *ros_message, bool *taken, rmw_message_info_t *message_info, rmw_subscription_allocation_t *allocation __attribute__ ((unused)))
+extern "C" rmw_ret_t rmw_take_with_info (const rmw_subscription_t *subscription, void *ros_message, bool *taken, rmw_message_info_t *message_info, rmw_subscription_allocation_t *allocation)
 {
+    static_cast<void>(allocation);
     return rmw_take_int (subscription, ros_message, taken, message_info);
 }
 
-extern "C" rmw_ret_t rmw_take_serialized_message (const rmw_subscription_t *subscription, rmw_serialized_message_t *serialized_message, bool *taken, rmw_subscription_allocation_t *allocation __attribute__ ((unused)))
+extern "C" rmw_ret_t rmw_take_serialized_message (const rmw_subscription_t *subscription, rmw_serialized_message_t *serialized_message, bool *taken, rmw_subscription_allocation_t *allocation)
 {
+    static_cast<void>(allocation);
     return rmw_take_ser_int (subscription, serialized_message, taken, nullptr);
 }
 
-extern "C" rmw_ret_t rmw_take_serialized_message_with_info (const rmw_subscription_t *subscription, rmw_serialized_message_t *serialized_message, bool *taken, rmw_message_info_t *message_info, rmw_subscription_allocation_t *allocation __attribute__ ((unused)))
+extern "C" rmw_ret_t rmw_take_serialized_message_with_info (const rmw_subscription_t *subscription, rmw_serialized_message_t *serialized_message, bool *taken, rmw_message_info_t *message_info, rmw_subscription_allocation_t *allocation)
 {
+    static_cast<void>(allocation);
     return rmw_take_ser_int (subscription, serialized_message, taken, message_info);
 }
 
-extern "C" rmw_ret_t rmw_take_event (const rmw_events_t *event_handle __attribute__ ((unused)), void *event_info __attribute__ ((unused)), bool *taken)
+extern "C" rmw_ret_t rmw_take_event (const rmw_events_t *event_handle, void *event_info, bool *taken)
 {
+    static_cast<void>(event_info);
+    static_cast<void>(event_handle);
     RET_NULL (taken);
     *taken = false;
     return RMW_RET_OK;
@@ -1060,8 +1086,9 @@ extern "C" rmw_ret_t rmw_take_event (const rmw_events_t *event_handle __attribut
 ///////////                                                                   ///////////
 /////////////////////////////////////////////////////////////////////////////////////////
 
-extern "C" rmw_guard_condition_t *rmw_create_guard_condition (rmw_context_t *context __attribute__ ((unused)))
+extern "C" rmw_guard_condition_t *rmw_create_guard_condition (rmw_context_t *context)
 {
+    static_cast<void>(context);
     rmw_guard_condition_t *guard_condition_handle;
     auto *gcond_impl = new CddsGuardCondition ();
     if (ref_ppant () < 0) {
@@ -1103,8 +1130,9 @@ extern "C" rmw_ret_t rmw_trigger_guard_condition (const rmw_guard_condition_t *g
     return RMW_RET_OK;
 }
 
-extern "C" rmw_wait_set_t *rmw_create_wait_set (rmw_context_t *context __attribute__ ((unused)), size_t max_conditions)
+extern "C" rmw_wait_set_t *rmw_create_wait_set (rmw_context_t *context, size_t max_conditions)
 {
+    static_cast<void>(context);
     (void) max_conditions;
     rmw_wait_set_t *wait_set = rmw_wait_set_allocate ();
     CddsWaitset *ws = nullptr;
@@ -1197,8 +1225,9 @@ static void clean_waitset_caches ()
     }
 }
 
-extern "C" rmw_ret_t rmw_wait (rmw_subscriptions_t *subs, rmw_guard_conditions_t *gcs, rmw_services_t *srvs, rmw_clients_t *cls, rmw_events_t *evs __attribute__ ((unused)), rmw_wait_set_t *wait_set, const rmw_time_t *wait_timeout)
+extern "C" rmw_ret_t rmw_wait (rmw_subscriptions_t *subs, rmw_guard_conditions_t *gcs, rmw_services_t *srvs, rmw_clients_t *cls, rmw_events_t *evs, rmw_wait_set_t *wait_set, const rmw_time_t *wait_timeout)
 {
+    static_cast<void>(evs);
     RET_NULL (wait_set);
     CddsWaitset *ws = static_cast<CddsWaitset *> (wait_set->data);
     RET_NULL (ws);
@@ -1610,8 +1639,9 @@ extern "C" rmw_ret_t rmw_get_node_names (const rmw_node_t *node, rcutils_string_
     std::set< std::pair<std::string, std::string> > ns;
     const auto re = std::regex ("^name=(.*);namespace=(.*);$", std::regex::extended);
     auto oper =
-        [&ns, re](const dds_builtintopic_participant_t& sample __attribute__ ((unused)), const char *ud) -> bool {
+        [&ns, re](const dds_builtintopic_participant_t& sample, const char *ud) -> bool {
             std::cmatch cm;
+            static_cast<void>(sample);
             if (std::regex_search (ud, cm, re)) {
                 ns.insert (std::make_pair (std::string (cm[1]), std::string (cm[2])));
             }
