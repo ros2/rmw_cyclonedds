@@ -1264,7 +1264,7 @@ extern "C" rmw_ret_t rmw_wait (rmw_subscriptions_t *subs, rmw_guard_conditions_t
         ATTACH (CddsService, srvs, service, service.sub->rdcondh);
         ATTACH (CddsClient, cls, client, client.sub->rdcondh);
 #undef ATTACH
-        ws->trigs.reserve (nelems + 1);
+        ws->trigs.resize (nelems + 1);
     }
 
     const dds_duration_t timeout =
@@ -1305,7 +1305,7 @@ extern "C" rmw_ret_t rmw_wait (rmw_subscriptions_t *subs, rmw_guard_conditions_t
         ws->inuse = false;
     }
 
-    return (ws->trigs.size () == 0) ? RMW_RET_TIMEOUT : RMW_RET_OK;
+    return (ws->trigs.size () == 1) ? RMW_RET_TIMEOUT : RMW_RET_OK;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
