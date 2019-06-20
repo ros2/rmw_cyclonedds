@@ -361,6 +361,7 @@ static std::string get_type_name (const char *type_support_identifier, void *typ
 struct sertopic_rmw *create_sertopic (const char *topicname, const char *type_support_identifier, void *type_support, bool is_request_header)
 {
     struct sertopic_rmw *st = new struct sertopic_rmw;
+    memset (st, 0, sizeof (struct ddsi_sertopic));
     st->cpp_name = std::string (topicname);
     st->cpp_type_name = get_type_name (type_support_identifier, type_support);
     st->cpp_name_type_name = st->cpp_name + std::string (";") + std::string (st->cpp_type_name);
@@ -371,8 +372,6 @@ struct sertopic_rmw *create_sertopic (const char *topicname, const char *type_su
     st->name = const_cast<char *> (st->cpp_name.c_str ());
     st->type_name = const_cast<char *> (st->cpp_type_name.c_str ());
     st->iid = ddsi_iid_gen ();
-    st->status_cb = nullptr;
-    st->status_cb_entity = nullptr; /* set by dds_create_topic_arbitrary */
     ddsrt_atomic_st32 (&st->refc, 1);
 
     st->type_support.typesupport_identifier_ = type_support_identifier;
