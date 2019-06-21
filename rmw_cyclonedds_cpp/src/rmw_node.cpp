@@ -300,7 +300,7 @@ static void ggcallback (dds_entity_t rd, void *varg)
     auto node_impl = static_cast<CddsNode *> (varg);
     void *msg = 0;
     dds_sample_info_t info;
-    while (dds_take_mask (rd, &msg, &info, 1, 1, DDS_ANY_SAMPLE_STATE | DDS_ANY_VIEW_STATE | DDS_NOT_ALIVE_DISPOSED_INSTANCE_STATE | DDS_NOT_ALIVE_NO_WRITERS_INSTANCE_STATE) > 0) {
+    while (dds_take (rd, &msg, &info, 1, 1) > 0) {
         dds_return_loan (rd, &msg, 1);
     }
     if (rmw_trigger_guard_condition (node_impl->graph_guard_condition) != RMW_RET_OK) {
