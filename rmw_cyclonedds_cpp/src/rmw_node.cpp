@@ -91,6 +91,8 @@ static const dds_entity_t builtin_topics[] = {
 
 struct CddsNode {
     dds_entity_t pp;
+    dds_entity_t pub;
+    dds_entity_t sub;
     rmw_guard_condition_t *graph_guard_condition;
 };
 
@@ -367,6 +369,17 @@ extern "C" rmw_node_t *rmw_create_node (rmw_context_t *context, const char *name
         RCUTILS_LOG_ERROR_NAMED ("rmw_cyclonedds_cpp", "rmw_create_node: failed to create DDS participant");
         return nullptr;
     }
+    dds_entity_t pub, sub;
+    if ((pub = dds_create_publisher (pp, nullptr, nullptr)) < 0) {
+        RCUTILS_LOG_ERROR_NAMED ("rmw_cyclonedds_cpp", "rmw_create_node: failed to create DDS publisher");
+        dds_delete (pp);
+        return nullptr;
+    }
+    if ((sub = dds_create_subscriber (pp, nullptr, nullptr)) < 0) {
+        RCUTILS_LOG_ERROR_NAMED ("rmw_cyclonedds_cpp", "rmw_create_node: failed to create DDS subscriber");
+        dds_delete (pp);
+        return nullptr;
+    }
     auto *node_impl = new CddsNode ();
     rmw_node_t *node_handle = nullptr;
     RET_ALLOC_X (node_impl, goto fail_node_impl);
@@ -375,6 +388,8 @@ extern "C" rmw_node_t *rmw_create_node (rmw_context_t *context, const char *name
         goto fail_ggc;
     }
     node_impl->pp = pp;
+    node_impl->pub = pub;
+    node_impl->sub = sub;
     node_impl->graph_guard_condition = graph_guard_condition;
 
     {
@@ -716,7 +731,7 @@ static CddsPublisher *create_cdds_publisher (const rmw_node_t *node, const rosid
     if ((qos = create_readwrite_qos (qos_policies, false)) == nullptr) {
         goto fail_qos;
     }
-    if ((pub->pubh = dds_create_writer (node_impl->pp, topic, qos, nullptr)) < 0) {
+    if ((pub->pubh = dds_create_writer (node_impl->pub, topic, qos, nullptr)) < 0) {
         RMW_SET_ERROR_MSG ("failed to create writer");
         goto fail_writer;
     }
@@ -888,7 +903,7 @@ static CddsSubscription *create_cdds_subscription (const rmw_node_t *node, const
     if ((qos = create_readwrite_qos (qos_policies, ignore_local_publications)) == nullptr) {
         goto fail_qos;
     }
-    if ((sub->subh = dds_create_reader (node_impl->pp, topic, qos, nullptr)) < 0) {
+    if ((sub->subh = dds_create_reader (node_impl->sub, topic, qos, nullptr)) < 0) {
         RMW_SET_ERROR_MSG ("failed to create reader");
         goto fail_reader;
     }
@@ -1472,14 +1487,14 @@ static rmw_ret_t rmw_init_cs (CddsCS *cs, const rmw_node_t *node, const rosidl_s
     }
     dds_qset_reliability (qos, DDS_RELIABILITY_RELIABLE, DDS_SECS (1));
     dds_qset_history (qos, DDS_HISTORY_KEEP_ALL, DDS_LENGTH_UNLIMITED);
-    if ((pub->pubh = dds_create_writer (node_impl->pp, pubtopic, qos, nullptr)) < 0) {
+    if ((pub->pubh = dds_create_writer (node_impl->pub, pubtopic, qos, nullptr)) < 0) {
         RMW_SET_ERROR_MSG ("failed to create writer");
         goto fail_writer;
     }
     /* FIXME: not guaranteed that "topic" will refer to "sertopic" because topic might have been
        created earlier, but the two are equivalent, so this'll do */
     pub->sertopic = pub_st;
-    if ((sub->subh = dds_create_reader (node_impl->pp, subtopic, qos, nullptr)) < 0) {
+    if ((sub->subh = dds_create_reader (node_impl->sub, subtopic, qos, nullptr)) < 0) {
         RMW_SET_ERROR_MSG ("failed to create reader");
         goto fail_reader;
     }
