@@ -785,7 +785,7 @@ static CddsPublisher *create_cdds_publisher (const rmw_node_t *node, const rosid
     std::string fqtopic_name = make_fqtopic (ros_topic_prefix, topic_name, "", qos_policies);
 
     auto sertopic = create_sertopic (fqtopic_name.c_str (), type_support->typesupport_identifier, create_message_type_support (type_support->data, type_support->typesupport_identifier), false);
-    if ((topic = dds_create_topic_arbitrary (gcdds.ppant, sertopic, nullptr, nullptr, nullptr)) < 0) {
+    if ((topic = dds_create_topic_arbitrary (node_impl->pp, sertopic, nullptr, nullptr, nullptr)) < 0) {
         RMW_SET_ERROR_MSG ("failed to create topic");
         goto fail_topic;
     }
@@ -957,7 +957,7 @@ static CddsSubscription *create_cdds_subscription (const rmw_node_t *node, const
     std::string fqtopic_name = make_fqtopic (ros_topic_prefix, topic_name, "", qos_policies);
 
     auto sertopic = create_sertopic (fqtopic_name.c_str (), type_support->typesupport_identifier, create_message_type_support (type_support->data, type_support->typesupport_identifier), false);
-    if ((topic = dds_create_topic_arbitrary (gcdds.ppant, sertopic, nullptr, nullptr, nullptr)) < 0) {
+    if ((topic = dds_create_topic_arbitrary (node_impl->pp, sertopic, nullptr, nullptr, nullptr)) < 0) {
         RMW_SET_ERROR_MSG ("failed to create topic");
         goto fail_topic;
     }
@@ -1535,11 +1535,11 @@ static rmw_ret_t rmw_init_cs (CddsCS *cs, const rmw_node_t *node, const rosidl_s
     auto sub_st = create_sertopic (subtopic_name.c_str (), type_support->typesupport_identifier, sub_type_support, true);
 
     dds_qos_t *qos;
-    if ((pubtopic = dds_create_topic_arbitrary (gcdds.ppant, pub_st, nullptr, nullptr, nullptr)) < 0) {
+    if ((pubtopic = dds_create_topic_arbitrary (node_impl->pp, pub_st, nullptr, nullptr, nullptr)) < 0) {
         RMW_SET_ERROR_MSG ("failed to create topic");
         goto fail_pubtopic;
     }
-    if ((subtopic = dds_create_topic_arbitrary (gcdds.ppant, sub_st, nullptr, nullptr, nullptr)) < 0) {
+    if ((subtopic = dds_create_topic_arbitrary (node_impl->pp, sub_st, nullptr, nullptr, nullptr)) < 0) {
         RMW_SET_ERROR_MSG ("failed to create topic");
         goto fail_subtopic;
     }
