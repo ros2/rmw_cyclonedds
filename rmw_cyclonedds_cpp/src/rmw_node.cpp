@@ -637,6 +637,7 @@ static dds_qos_t *create_readwrite_qos (const rmw_qos_profile_t *qos_policies, b
             dds_qset_durability (qos, DDS_DURABILITY_TRANSIENT_LOCAL);
             break;
     }
+    /* deadline, lifespan, liveliness are not yet supported */
     if (ignore_local_publications) {
         dds_qset_ignorelocal (qos, DDS_IGNORELOCAL_PARTICIPANT);
     }
@@ -665,7 +666,7 @@ static bool get_readwrite_qos (dds_entity_t handle, rmw_qos_profile_t *qos_polic
                 break;
             case DDS_HISTORY_KEEP_ALL:
                 qos_policies->history = RMW_QOS_POLICY_HISTORY_KEEP_ALL;
-                qos_policies->depth = 0;
+                qos_policies->depth = (uint32_t) depth;
                 break;
         }
     }
@@ -707,6 +708,60 @@ static bool get_readwrite_qos (dds_entity_t handle, rmw_qos_profile_t *qos_polic
                 break;
         }
     }
+
+    {
+        dds_duration_t deadline;
+        if (!dds_qget_deadline (qos, &deadline)) {
+            RMW_SET_ERROR_MSG ("get_readwrite_qos: deadline not set");
+            goto error;
+        }
+        if (deadline == DDS_INFINITY)
+            qos_policies->deadline.sec = qos_policies->deadline.nsec = 0;
+        else {
+            qos_policies->deadline.sec = (uint64_t) deadline / 1000000000;
+            qos_policies->deadline.nsec = (uint64_t) deadline % 1000000000;
+        }
+    }
+
+    {
+        dds_duration_t lifespan;
+        if (!dds_qget_lifespan (qos, &lifespan)) {
+            lifespan = DDS_INFINITY;
+        }
+        if (lifespan == DDS_INFINITY)
+            qos_policies->lifespan.sec = qos_policies->lifespan.nsec = 0;
+        else {
+            qos_policies->lifespan.sec = (uint64_t) lifespan / 1000000000;
+            qos_policies->lifespan.nsec = (uint64_t) lifespan % 1000000000;
+        }
+    }
+    
+    {
+        dds_liveliness_kind_t kind;
+        dds_duration_t lease_duration;
+        if (!dds_qget_liveliness (qos, &kind, &lease_duration)) {
+            RMW_SET_ERROR_MSG ("get_readwrite_qos: liveliness not set");
+            goto error;
+        }
+        switch (kind) {
+            case DDS_LIVELINESS_AUTOMATIC:
+                qos_policies->liveliness = RMW_QOS_POLICY_LIVELINESS_AUTOMATIC;
+                break;
+            case DDS_LIVELINESS_MANUAL_BY_PARTICIPANT:
+                qos_policies->liveliness = RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_NODE;
+                break;
+            case DDS_LIVELINESS_MANUAL_BY_TOPIC:
+                qos_policies->liveliness = RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC;
+                break;
+        }
+        if (lease_duration == DDS_INFINITY)
+            qos_policies->liveliness_lease_duration.sec = qos_policies->liveliness_lease_duration.nsec = 0;
+        else {
+            qos_policies->liveliness_lease_duration.sec = (uint64_t) lease_duration / 1000000000;
+            qos_policies->liveliness_lease_duration.nsec = (uint64_t) lease_duration % 1000000000;
+        }
+    }
+
     dds_delete_qos (qos);
     return true;
  error:
