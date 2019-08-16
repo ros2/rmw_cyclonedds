@@ -31,6 +31,7 @@
 #include "rmw/get_service_names_and_types.h"
 #include "rmw/get_topic_names_and_types.h"
 #include "rmw/get_node_info_and_types.h"
+#include "rmw/validate_node_name.h"
 #include "rmw/rmw.h"
 #include "rmw/sanity_checks.h"
 
@@ -359,7 +360,12 @@ extern "C" rmw_node_t *rmw_create_node (rmw_context_t *context, const char *name
     RET_NULL_X (namespace_, return nullptr);
     (void) domain_id;
     (void) security_options;
-
+    rmw_ret_t ret;
+    int dummy_validation_result;
+    size_t dummy_invalid_index;
+    if ((ret = rmw_validate_node_name (name, &dummy_validation_result, &dummy_invalid_index)) != RMW_RET_OK) {
+        return nullptr;
+    }
     dds_qos_t *qos = dds_create_qos ();
     std::string user_data = get_node_user_data (name, namespace_);
     dds_qset_userdata (qos, user_data.c_str (), user_data.size ());
@@ -1813,6 +1819,13 @@ static rmw_ret_t get_endpoint_names_and_types_by_node (const rmw_node_t *node, r
     if (ret != RMW_RET_OK) {
         return ret;
     }
+    if (node_name) {
+        int dummy_validation_result;
+        size_t dummy_invalid_index;
+        if ((ret = rmw_validate_node_name (node_name, &dummy_validation_result, &dummy_invalid_index)) != RMW_RET_OK) {
+            return ret;
+        }
+    }
     std::set<dds_builtintopic_guid_t> guids;
     if (node_name != nullptr && (ret = get_node_guids (node_name, node_namespace, guids)) != RMW_RET_OK) {
         return ret;
@@ -1850,6 +1863,13 @@ static rmw_ret_t get_service_names_and_types_by_node (const rmw_node_t *node, rc
     rmw_ret_t ret = rmw_names_and_types_check_zero (sntyp);
     if (ret != RMW_RET_OK) {
         return ret;
+    }
+    if (node_name) {
+        int dummy_validation_result;
+        size_t dummy_invalid_index;
+        if ((ret = rmw_validate_node_name (node_name, &dummy_validation_result, &dummy_invalid_index)) != RMW_RET_OK) {
+            return ret;
+        }
     }
     std::set<dds_builtintopic_guid_t> guids;
     if (node_name != nullptr && (ret = get_node_guids (node_name, node_namespace, guids)) != RMW_RET_OK) {
