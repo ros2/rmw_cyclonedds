@@ -1863,7 +1863,15 @@ static rmw_ret_t get_node_guids (const char *node_name, const char *node_namespa
                     }
                     return true; /* do keep looking - what if there are many? */
                 };
-    return do_for_node_user_data (oper);
+    rmw_ret_t ret = do_for_node_user_data (oper);
+    if (ret != RMW_RET_OK) {
+        return ret;
+    } else if (guids.size () == 0) {
+        /* It appears the get_..._by_node operations are supposed to return ERROR if no such node exists */
+        return RMW_RET_ERROR;
+    } else {
+        return RMW_RET_OK;
+    }
 }
 
 static rmw_ret_t get_endpoint_names_and_types_by_node (const rmw_node_t *node, rcutils_allocator_t *allocator, const char *node_name, const char *node_namespace, bool no_demangle, rmw_names_and_types_t *tptyp, bool subs, bool pubs)
