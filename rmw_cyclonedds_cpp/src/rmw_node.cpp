@@ -1481,7 +1481,7 @@ extern "C" rmw_ret_t rmw_send_request (const rmw_client_t *client, const void *r
     auto info = static_cast<CddsClient *> (client->data);
     cdds_request_header_t header;
     header.guid = info->client.pub->pubiid;
-    header.seq = *sequence_id = next_request_id++;
+    header.seq = *sequence_id = ++next_request_id;
     return rmw_send_response_request (&info->client, header, ros_request);
 }
 
