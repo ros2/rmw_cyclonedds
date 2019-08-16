@@ -224,7 +224,9 @@ public:
     inline void deserialize (std::vector<bool>& x) {
         const uint32_t sz = deserialize32 ();
         x.resize (sz);
-        for (auto&& i : x) i = ((data + pos)[i] != 0);
+        for (size_t i = 0; i < sz; i++) {
+            x[i] = ((data + pos)[i] != 0);
+        }
         pos += sz;
     }
     template<class T, size_t S> inline void deserialize (std::array<T, S>& x) {
