@@ -1919,6 +1919,21 @@ static rmw_ret_t get_endpoint_names_and_types_by_node (const rmw_node_t *node, r
     return make_names_and_types (tptyp, tt, allocator);
 }
 
+static bool endpoint_is_from_service (bool is_request, const dds_builtintopic_guid_t& guid)
+{
+    /* Final byte of GUID is entity type, application writers use 0x02 (write with key) and 0x03
+       (writer without key); readers use 0x04 and 0x07.  See DDSI specification, table 9.1.
+
+       A service has a reader for a request and a writer for the reply; a client has it the other
+       way round.  Therefore, it is a service iff is_request is set and the GUID indicates it is a
+       writer. */
+    if (is_request) {
+        return (guid.v[15] == 0x04 || guid.v[15] == 0x07);
+    } else {
+        return (guid.v[15] == 0x02 || guid.v[15] == 0x03);
+    }
+}
+
 static rmw_ret_t get_cs_names_and_types_by_node (const rmw_node_t *node, rcutils_allocator_t *allocator, const char *node_name, const char *node_namespace, rmw_names_and_types_t *sntyp, bool looking_for_services)
 {
     RET_WRONG_IMPLID (node);
@@ -1941,13 +1956,15 @@ static rmw_ret_t get_cs_names_and_types_by_node (const rmw_node_t *node, rcutils
     const auto re_tp = std::regex ("^(" + std::string (ros_service_requester_prefix) + "|" +
                                    std::string (ros_service_response_prefix) + ")(/.*)(Request|Reply)$",
                                    std::regex::extended);
-    const auto re_typ = std::regex ("^(.*::)dds_::(.*)_(Reponse|Request)_$", std::regex::extended);
+    const auto re_typ = std::regex ("^(.*::)dds_::(.*)_(Response|Request)_$", std::regex::extended);
     const auto filter_and_map =
-        [re_tp, re_typ, guids, node_name](const dds_builtintopic_endpoint_t& sample, std::string& topic_name, std::string& type_name) -> bool {
+        [re_tp, re_typ, guids, node_name, looking_for_services](const dds_builtintopic_endpoint_t& sample, std::string& topic_name, std::string& type_name) -> bool {
             std::cmatch cm_tp, cm_typ;
             if (node_name != nullptr && guids.count (sample.participant_key) == 0) {
                 return false;
             } if (! std::regex_search (sample.topic_name, cm_tp, re_tp) || ! std::regex_search (sample.type_name, cm_typ, re_typ)) {
+                return false;
+            } else if (looking_for_services != endpoint_is_from_service (std::string (cm_tp[3]) == "Request", sample.key)) {
                 return false;
             } else {
                 std::string demangled_type = std::regex_replace (std::string (cm_typ[1]), std::regex ("::"), "/");
