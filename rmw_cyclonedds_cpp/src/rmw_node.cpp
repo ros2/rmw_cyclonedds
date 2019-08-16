@@ -1911,7 +1911,7 @@ static rmw_ret_t get_endpoint_names_and_types_by_node (const rmw_node_t *node, r
     return make_names_and_types (tptyp, tt, allocator);
 }
 
-static rmw_ret_t get_service_names_and_types_by_node (const rmw_node_t *node, rcutils_allocator_t *allocator, const char *node_name, const char *node_namespace, rmw_names_and_types_t *sntyp)
+static rmw_ret_t get_cs_names_and_types_by_node (const rmw_node_t *node, rcutils_allocator_t *allocator, const char *node_name, const char *node_namespace, rmw_names_and_types_t *sntyp, bool looking_for_services)
 {
     RET_WRONG_IMPLID (node);
     RET_NULL (allocator);
@@ -1963,7 +1963,7 @@ extern "C" rmw_ret_t rmw_get_topic_names_and_types (const rmw_node_t *node, rcut
 
 extern "C" rmw_ret_t rmw_get_service_names_and_types (const rmw_node_t *node, rcutils_allocator_t *allocator, rmw_names_and_types_t *sntyp)
 {
-    return get_service_names_and_types_by_node (node, allocator, nullptr, nullptr, sntyp);
+    return get_cs_names_and_types_by_node (node, allocator, nullptr, nullptr, sntyp, true);
 }
 
 extern "C" rmw_ret_t rmw_service_server_is_available (const rmw_node_t *node, const rmw_client_t *client, bool *is_available)
@@ -2037,5 +2037,10 @@ extern "C" rmw_ret_t rmw_get_publisher_names_and_types_by_node (const rmw_node_t
 
 extern "C" rmw_ret_t rmw_get_service_names_and_types_by_node (const rmw_node_t *node, rcutils_allocator_t *allocator, const char *node_name, const char *node_namespace, rmw_names_and_types_t *sntyp)
 {
-    return get_service_names_and_types_by_node (node, allocator, node_name, node_namespace, sntyp);
+    return get_cs_names_and_types_by_node (node, allocator, node_name, node_namespace, sntyp, true);
+}
+
+extern "C" rmw_ret_t rmw_get_client_names_and_types_by_node (const rmw_node_t *node, rcutils_allocator_t *allocator, const char *node_name, const char *node_namespace, rmw_names_and_types_t *sntyp)
+{
+    return get_cs_names_and_types_by_node (node, allocator, node_name, node_namespace, sntyp, false);
 }
