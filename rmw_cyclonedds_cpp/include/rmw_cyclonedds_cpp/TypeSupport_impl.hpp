@@ -109,13 +109,13 @@ rosidl_generator_c__void__Sequence__fini(rosidl_generator_c__void__Sequence * se
 template<typename MembersType>
 TypeSupport<MembersType>::TypeSupport()
 {
-    name = "";
+  name = "";
 }
 
 template<typename MembersType>
-void TypeSupport<MembersType>::setName(const std::string& name)
+void TypeSupport<MembersType>::setName(const std::string & name)
 {
-    this->name = std::string(name);
+  this->name = std::string(name);
 }
 
 static inline void *
@@ -502,7 +502,9 @@ inline void deserialize_field<std::string>(
       deser >> cpp_string_vector;
 
       auto & string_array_field = *reinterpret_cast<rosidl_generator_c__String__Sequence *>(field);
-      if (!rosidl_generator_c__String__Sequence__init(&string_array_field, cpp_string_vector.size())) {
+      if (!rosidl_generator_c__String__Sequence__init(&string_array_field,
+        cpp_string_vector.size()))
+      {
         throw std::runtime_error("unable to initialize rosidl_generator_c__String array");
       }
 
@@ -649,7 +651,7 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
 template<typename MembersType>
 bool TypeSupport<MembersType>::serializeROSmessage(
   const void * ros_message, cycser & ser,
-  std::function<void(cycser&)> prefix)
+  std::function<void(cycser &)> prefix)
 {
   assert(ros_message);
 
@@ -669,7 +671,7 @@ bool TypeSupport<MembersType>::serializeROSmessage(
 template<typename MembersType>
 bool TypeSupport<MembersType>::deserializeROSmessage(
   cycdeser & deser, void * ros_message,
-  std::function<void(cycdeser&)> prefix)
+  std::function<void(cycdeser &)> prefix)
 {
   assert(ros_message);
 
@@ -689,7 +691,7 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
 }
 
 template<typename MembersType>
-std::string TypeSupport<MembersType>::getName ()
+std::string TypeSupport<MembersType>::getName()
 {
   return name;
 }
