@@ -1384,7 +1384,7 @@ extern "C" rmw_wait_set_t * rmw_create_wait_set(rmw_context_t * context, size_t 
     goto fail_ws;
   }
   ws->inuse = false;
-  if ((ws->waitseth = dds_create_waitset(gcdds.ppant)) < 0) {
+  if ((ws->waitseth = dds_create_waitset(ref_ppant())) < 0) {
     RMW_SET_ERROR_MSG("failed to create waitset");
     goto fail_waitset;
   }
@@ -1395,6 +1395,7 @@ extern "C" rmw_wait_set_t * rmw_create_wait_set(rmw_context_t * context, size_t 
   return wait_set;
 
 fail_waitset:
+  unref_ppant();
 fail_ws:
   RMW_TRY_DESTRUCTOR_FROM_WITHIN_FAILURE(ws->~CddsWaitset(), ws);
 fail_placement_new:
@@ -1416,6 +1417,7 @@ extern "C" rmw_ret_t rmw_destroy_wait_set(rmw_wait_set_t * wait_set)
     std::lock_guard<std::mutex> lock(gcdds.lock);
     gcdds.waitsets.erase(ws);
   }
+  unref_ppant();
   RMW_TRY_DESTRUCTOR(ws->~CddsWaitset(), ws, result = RMW_RET_ERROR);
   rmw_free(wait_set->data);
   rmw_wait_set_free(wait_set);
