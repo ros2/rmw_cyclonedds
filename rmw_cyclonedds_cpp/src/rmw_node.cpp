@@ -687,12 +687,16 @@ static dds_qos_t * create_readwrite_qos(
     case RMW_QOS_POLICY_HISTORY_SYSTEM_DEFAULT:
     case RMW_QOS_POLICY_HISTORY_UNKNOWN:
     case RMW_QOS_POLICY_HISTORY_KEEP_LAST:
-      if (qos_policies->depth > INT32_MAX) {
-        RMW_SET_ERROR_MSG("unsupported history depth");
-        dds_delete_qos(qos);
-        return nullptr;
+      if (qos_policies->depth == RMW_QOS_POLICY_DEPTH_SYSTEM_DEFAULT) {
+        dds_qset_history(qos, DDS_HISTORY_KEEP_LAST, 1);
+      } else {
+        if (qos_policies->depth < 1 || qos_policies->depth > INT32_MAX) {
+          RMW_SET_ERROR_MSG("unsupported history depth");
+          dds_delete_qos(qos);
+          return nullptr;
+        }
+        dds_qset_history(qos, DDS_HISTORY_KEEP_LAST, static_cast<uint32_t>(qos_policies->depth));
       }
-      dds_qset_history(qos, DDS_HISTORY_KEEP_LAST, static_cast<uint32_t>(qos_policies->depth));
       break;
     case RMW_QOS_POLICY_HISTORY_KEEP_ALL:
       dds_qset_history(qos, DDS_HISTORY_KEEP_ALL, DDS_LENGTH_UNLIMITED);
