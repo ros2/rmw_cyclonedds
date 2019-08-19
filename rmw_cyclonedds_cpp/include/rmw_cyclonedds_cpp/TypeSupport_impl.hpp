@@ -31,8 +31,10 @@
 #include "rosidl_typesupport_introspection_c/service_introspection.h"
 
 #include "rosidl_generator_c/primitives_sequence_functions.h"
+#include "rosidl_generator_c/u16string_functions.h"
 
 #include "serdes.hpp"
+#include "u16string.hpp"
 
 namespace rmw_cyclonedds_cpp
 {
@@ -219,6 +221,35 @@ void serialize_field(
   }
 }
 
+template<>
+inline
+void serialize_field<std::wstring>(
+  const rosidl_typesupport_introspection_cpp::MessageMember * member,
+  void * field,
+  cycser & ser)
+{
+  std::wstring wstr;
+  if (!member->is_array_) {
+    auto u16str = static_cast<std::u16string *>(field);
+    u16string_to_wstring(*u16str, wstr);
+    ser << wstr;
+  } else {
+    size_t size;
+    if (member->array_size_ && !member->is_upper_bound_) {
+      size = member->array_size_;
+    } else {
+      size = member->size_function(field);
+      ser << static_cast<uint32_t>(size);
+    }
+    for (size_t i = 0; i < size; ++i) {
+      const void * element = member->get_const_function(field, i);
+      auto u16str = static_cast<const std::u16string *>(element);
+      u16string_to_wstring(*u16str, wstr);
+      ser << wstr;
+    }
+  }
+}
+
 // C specialization
 template<typename T>
 void serialize_field(
@@ -271,6 +302,34 @@ void serialize_field<std::string>(
           CStringHelper::convert_to_std_string(string_array_field.data[i]));
       }
       ser << cpp_string_vector;
+    }
+  }
+}
+
+template<>
+inline
+void serialize_field<std::wstring>(
+  const rosidl_typesupport_introspection_c__MessageMember * member,
+  void * field,
+  cycser & ser)
+{
+  std::wstring wstr;
+  if (!member->is_array_) {
+    auto u16str = static_cast<rosidl_generator_c__U16String *>(field);
+    u16string_to_wstring(*u16str, wstr);
+    ser << wstr;
+  } else if (member->array_size_ && !member->is_upper_bound_) {
+    auto array = static_cast<rosidl_generator_c__U16String *>(field);
+    for (size_t i = 0; i < member->array_size_; ++i) {
+      u16string_to_wstring(array[i], wstr);
+      ser << wstr;
+    }
+  } else {
+    auto sequence = static_cast<rosidl_generator_c__U16String__Sequence *>(field);
+    ser << static_cast<uint32_t>(sequence->size);
+    for (size_t i = 0; i < sequence->size; ++i) {
+      u16string_to_wstring(sequence->data[i], wstr);
+      ser << wstr;
     }
   }
 }
@@ -363,6 +422,9 @@ bool TypeSupport<MembersType>::serializeROSmessage(
       case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING:
         serialize_field<std::string>(member, field, ser);
         break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_WSTRING:
+        serialize_field<std::wstring>(member, field, ser);
+        break;
       case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE:
         {
           auto sub_members = static_cast<const MembersType *>(member->members_->data);
@@ -453,6 +515,36 @@ inline void deserialize_field<std::string>(
   }
 }
 
+template<>
+inline void deserialize_field<std::wstring>(
+  const rosidl_typesupport_introspection_cpp::MessageMember * member,
+  void * field,
+  cycdeser & deser,
+  bool call_new)
+{
+  (void)call_new;
+  std::wstring wstr;
+  if (!member->is_array_) {
+    deser >> wstr;
+    wstring_to_u16string(
+      wstr, *static_cast<std::u16string *>(field));
+  } else {
+    uint32_t size;
+    if (member->array_size_ && !member->is_upper_bound_) {
+      size = static_cast<uint32_t>(member->array_size_);
+    } else {
+      deser >> size;
+      member->resize_function(field, size);
+    }
+    for (size_t i = 0; i < size; ++i) {
+      void * element = member->get_function(field, i);
+      auto u16str = static_cast<std::u16string *>(element);
+      deser >> wstr;
+      wstring_to_u16string(wstr, *u16str);
+    }
+  }
+}
+
 template<typename T>
 void deserialize_field(
   const rosidl_typesupport_introspection_c__MessageMember * member,
@@ -515,6 +607,39 @@ inline void deserialize_field<std::string>(
           throw std::runtime_error("unable to assign rosidl_generator_c__String");
         }
       }
+    }
+  }
+}
+
+template<>
+inline void deserialize_field<std::wstring>(
+  const rosidl_typesupport_introspection_c__MessageMember * member,
+  void * field,
+  cycdeser & deser,
+  bool call_new)
+{
+  (void)call_new;
+  std::wstring wstr;
+  if (!member->is_array_) {
+    deser >> wstr;
+    wstring_to_u16string(
+      wstr, *static_cast<rosidl_generator_c__U16String *>(field));
+  } else if (member->array_size_ && !member->is_upper_bound_) {
+    auto array = static_cast<rosidl_generator_c__U16String *>(field);
+    for (size_t i = 0; i < member->array_size_; ++i) {
+      deser >> wstr;
+      wstring_to_u16string(wstr, array[i]);
+    }
+  } else {
+    uint32_t size;
+    deser >> size;
+    auto sequence = static_cast<rosidl_generator_c__U16String__Sequence *>(field);
+    if (!rosidl_generator_c__U16String__Sequence__init(sequence, size)) {
+      throw std::runtime_error("unable to initialize rosidl_generator_c__U16String sequence");
+    }
+    for (size_t i = 0; i < sequence->size; ++i) {
+      deser >> wstr;
+      wstring_to_u16string(wstr, sequence->data[i]);
     }
   }
 }
@@ -609,6 +734,9 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
         break;
       case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING:
         deserialize_field<std::string>(member, field, deser, call_new);
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_WSTRING:
+        deserialize_field<std::wstring>(member, field, deser, call_new);
         break;
       case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE:
         {

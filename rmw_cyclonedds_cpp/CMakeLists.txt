@@ -54,6 +54,7 @@ add_library(rmw_cyclonedds_cpp
   src/rmw_node.cpp
   src/serdata.cpp
   src/serdes.cpp
+  src/u16string.cpp
 )
 
 target_link_libraries(rmw_cyclonedds_cpp CycloneDDS::ddsc)
