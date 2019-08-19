@@ -42,6 +42,7 @@ public:
   inline cycser & operator<<(double x) {serialize(x); return *this;}
   inline cycser & operator<<(const char * x) {serialize(x); return *this;}
   inline cycser & operator<<(const std::string & x) {serialize(x); return *this;}
+  inline cycser & operator<<(const std::wstring & x) {serialize(x); return *this;}
   template<class T>
   inline cycser & operator<<(const std::vector<T> & x) {serialize(x); return *this;}
   template<class T, size_t S>
@@ -87,6 +88,14 @@ public:
     resize(off + sz);
     memcpy(data() + off, x.c_str(), sz);
     off += sz;
+  }
+  inline void serialize(const std::wstring & x)
+  {
+    size_t sz = x.size() + 1;
+    serialize(static_cast<uint32_t>(sz));
+    resize(off + sz * sizeof(wchar_t));
+    memcpy(data() + off, reinterpret_cast<const char *>(x.c_str()), sz * sizeof(wchar_t));
+    off += sz * sizeof(wchar_t);
   }
 
 #define SIMPLEA(T) inline void serializeA(const T * x, size_t cnt) { \
@@ -165,6 +174,7 @@ public:
   inline cycdeser & operator>>(double & x) {deserialize(x); return *this;}
   inline cycdeser & operator>>(char * & x) {deserialize(x); return *this;}
   inline cycdeser & operator>>(std::string & x) {deserialize(x); return *this;}
+  inline cycdeser & operator>>(std::wstring & x) {deserialize(x); return *this;}
   template<class T>
   inline cycdeser & operator>>(std::vector<T> & x) {deserialize(x); return *this;}
   template<class T, size_t S>
@@ -208,6 +218,12 @@ public:
     const uint32_t sz = deserialize32();
     x = std::string(data + pos, sz - 1);
     pos += sz;
+  }
+  inline void deserialize(std::wstring & x)
+  {
+    const uint32_t sz = deserialize32();
+    x = std::wstring(reinterpret_cast<const wchar_t *>(data + pos), sz - 1);
+    pos += sz * sizeof(wchar_t);
   }
 
 #define SIMPLEA(T) inline void deserializeA(T * x, size_t cnt) { \
