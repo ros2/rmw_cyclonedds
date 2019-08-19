@@ -161,6 +161,11 @@ struct Cdds
   dds_entity_t ppant;
   dds_entity_t builtin_readers[sizeof(builtin_topics) / sizeof(builtin_topics[0])];
 
+  /* special guard condition that gets attached to every waitset but that is never triggered:
+     this way, we can avoid Cyclone's behaviour of always returning immediately when no
+     entities are attached to a waitset */
+  dds_entity_t gc_for_empty_waitset;
+
   /* set of waitsets protected by lock, used to invalidate all waitsets caches when an entity is
      deleted */
   std::unordered_set<CddsWaitset *> waitsets;
@@ -324,6 +329,13 @@ static dds_entity_t ref_ppant()
     if ((gcdds.ppant = dds_create_participant(DDS_DOMAIN_DEFAULT, nullptr, nullptr)) < 0) {
       RMW_SET_ERROR_MSG("failed to create participant");
       return gcdds.ppant;
+    }
+
+    if ((gcdds.gc_for_empty_waitset = dds_create_guardcondition(gcdds.ppant)) < 0) {
+      RMW_SET_ERROR_MSG("failed to create guardcondition for handling empty waitsets");
+      dds_delete(gcdds.ppant);
+      gcdds.ppant = 0;
+      return 0;
     }
 
     static_assert(sizeof(gcdds.builtin_readers) / sizeof(gcdds.builtin_readers[0]) ==
@@ -1392,12 +1404,20 @@ extern "C" rmw_wait_set_t * rmw_create_wait_set(rmw_context_t * context, size_t 
     RMW_SET_ERROR_MSG("failed to create waitset");
     goto fail_waitset;
   }
+  // Attach never-triggered guard condition.  As it will never be triggered, it will never be
+  // included in the result of dds_waitset_wait
+  if (dds_waitset_attach(ws->waitseth, gcdds.gc_for_empty_waitset, INTPTR_MAX) < 0) {
+    RMW_SET_ERROR_MSG("failed to attach dummy guard condition for blocking on empty waitset");
+    goto fail_attach_dummy;
+  }
   {
     std::lock_guard<std::mutex> lock(gcdds.lock);
     gcdds.waitsets.insert(ws);
   }
   return wait_set;
 
+fail_attach_dummy:
+  dds_delete(ws->waitseth);
 fail_waitset:
   unref_ppant();
 fail_ws:
