@@ -1330,70 +1330,70 @@ extern "C" rmw_ret_t rmw_take_event(
   RET_NULL(event_info);
   switch (event_handle->event_type) {
     case RMW_EVENT_LIVELINESS_CHANGED: {
-      auto ei = static_cast<rmw_liveliness_changed_status_t *>(event_info);
-      auto sub = static_cast<CddsSubscription *>(event_handle->data);
-      dds_liveliness_changed_status_t st;
-      if (dds_get_liveliness_changed_status (sub->subh, &st) < 0) {
-        *taken = false;
-        return RMW_RET_ERROR;
-      } else {
-        ei->alive_count = static_cast<int32_t>(st.alive_count);
-        ei->not_alive_count = static_cast<int32_t>(st.not_alive_count);
-        ei->alive_count_change = st.alive_count_change;
-        ei->not_alive_count_change = st.not_alive_count_change;
-        *taken = true;
-        return RMW_RET_OK;
+        auto ei = static_cast<rmw_liveliness_changed_status_t *>(event_info);
+        auto sub = static_cast<CddsSubscription *>(event_handle->data);
+        dds_liveliness_changed_status_t st;
+        if (dds_get_liveliness_changed_status(sub->subh, &st) < 0) {
+          *taken = false;
+          return RMW_RET_ERROR;
+        } else {
+          ei->alive_count = static_cast<int32_t>(st.alive_count);
+          ei->not_alive_count = static_cast<int32_t>(st.not_alive_count);
+          ei->alive_count_change = st.alive_count_change;
+          ei->not_alive_count_change = st.not_alive_count_change;
+          *taken = true;
+          return RMW_RET_OK;
+        }
       }
-    }
 
     case RMW_EVENT_REQUESTED_DEADLINE_MISSED: {
-      auto ei = static_cast<rmw_requested_deadline_missed_status_t *>(event_info);
-      auto sub = static_cast<CddsSubscription *>(event_handle->data);
-      dds_requested_deadline_missed_status_t st;
-      if (dds_get_requested_deadline_missed_status (sub->subh, &st) < 0) {
-        *taken = false;
-        return RMW_RET_ERROR;
-      } else {
-        ei->total_count = static_cast<int32_t>(st.total_count);
-        ei->total_count_change = st.total_count_change;
-        *taken = true;
-        return RMW_RET_OK;
+        auto ei = static_cast<rmw_requested_deadline_missed_status_t *>(event_info);
+        auto sub = static_cast<CddsSubscription *>(event_handle->data);
+        dds_requested_deadline_missed_status_t st;
+        if (dds_get_requested_deadline_missed_status(sub->subh, &st) < 0) {
+          *taken = false;
+          return RMW_RET_ERROR;
+        } else {
+          ei->total_count = static_cast<int32_t>(st.total_count);
+          ei->total_count_change = st.total_count_change;
+          *taken = true;
+          return RMW_RET_OK;
+        }
       }
-    }
 
     case RMW_EVENT_LIVELINESS_LOST: {
-      auto ei = static_cast<rmw_requested_deadline_missed_status_t *>(event_info);
-      auto pub = static_cast<CddsPublisher *>(event_handle->data);
-      dds_requested_deadline_missed_status_t st;
-      if (dds_get_requested_deadline_missed_status (pub->pubh, &st) < 0) {
-        *taken = false;
-        return RMW_RET_ERROR;
-      } else {
-        ei->total_count = static_cast<int32_t>(st.total_count);
-        ei->total_count_change = st.total_count_change;
-        *taken = true;
-        return RMW_RET_OK;
+        auto ei = static_cast<rmw_requested_deadline_missed_status_t *>(event_info);
+        auto pub = static_cast<CddsPublisher *>(event_handle->data);
+        dds_requested_deadline_missed_status_t st;
+        if (dds_get_requested_deadline_missed_status(pub->pubh, &st) < 0) {
+          *taken = false;
+          return RMW_RET_ERROR;
+        } else {
+          ei->total_count = static_cast<int32_t>(st.total_count);
+          ei->total_count_change = st.total_count_change;
+          *taken = true;
+          return RMW_RET_OK;
+        }
       }
-    }
 
     case RMW_EVENT_OFFERED_DEADLINE_MISSED: {
-      auto ei = static_cast<rmw_offered_deadline_missed_status_t *>(event_info);
-      auto pub = static_cast<CddsPublisher *>(event_handle->data);
-      dds_offered_deadline_missed_status_t st;
-      if (dds_get_offered_deadline_missed_status (pub->pubh, &st) < 0) {
-        *taken = false;
-        return RMW_RET_ERROR;
-      } else {
-        ei->total_count = static_cast<int32_t>(st.total_count);
-        ei->total_count_change = st.total_count_change;
-        *taken = true;
-        return RMW_RET_OK;
+        auto ei = static_cast<rmw_offered_deadline_missed_status_t *>(event_info);
+        auto pub = static_cast<CddsPublisher *>(event_handle->data);
+        dds_offered_deadline_missed_status_t st;
+        if (dds_get_offered_deadline_missed_status(pub->pubh, &st) < 0) {
+          *taken = false;
+          return RMW_RET_ERROR;
+        } else {
+          ei->total_count = static_cast<int32_t>(st.total_count);
+          ei->total_count_change = st.total_count_change;
+          *taken = true;
+          return RMW_RET_OK;
+        }
       }
-    }
 
     case RMW_EVENT_INVALID: {
-      break;
-    }
+        break;
+      }
   }
   *taken = false;
   return RMW_RET_ERROR;
