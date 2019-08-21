@@ -2242,7 +2242,7 @@ static rmw_ret_t get_endpoint_names_and_types_by_node(
     std::regex("^" + std::string(ros_topic_prefix) + "(/.*)", std::regex::extended);
   const auto re_typ = std::regex("^(.*::)dds_::(.*)_$", std::regex::extended);
   const auto filter_and_map =
-    [re_tp, re_typ, guids, node_name](const dds_builtintopic_endpoint_t & sample,
+    [re_tp, re_typ, guids, node_name, no_demangle](const dds_builtintopic_endpoint_t & sample,
       std::string & topic_name, std::string & type_name) -> bool {
       std::cmatch cm_tp, cm_typ;
       if (node_name != nullptr && guids.count(sample.participant_key) == 0) {
@@ -2253,10 +2253,14 @@ static rmw_ret_t get_endpoint_names_and_types_by_node(
         {
           return false;
         } else {
-          std::string demangled_type = std::regex_replace(std::string(cm_typ[1]), std::regex(
-                "::"), "/");
           topic_name = std::string(cm_tp[1]);
-          type_name = std::string(demangled_type) + std::string(cm_typ[2]);
+          if (no_demangle) {
+            type_name = std::string(type_name);
+          } else {
+            std::string demangled_type = std::regex_replace(std::string(cm_typ[1]), std::regex(
+                  "::"), "/");
+            type_name = std::string(demangled_type) + std::string(cm_typ[2]);
+          }
           return true;
         }
       }
