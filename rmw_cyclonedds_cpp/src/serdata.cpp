@@ -336,6 +336,9 @@ static const struct ddsi_serdata_ops serdata_rmw_ops = {
 static void sertopic_rmw_free(struct ddsi_sertopic * tpcmn)
 {
   struct sertopic_rmw * tp = static_cast<struct sertopic_rmw *>(tpcmn);
+#if DDSI_SERTOPIC_HAS_TOPICKIND_NO_KEY
+  ddsi_sertopic_fini(tpcmn);
+#endif
   delete tp;
 }
 
@@ -421,6 +424,11 @@ struct sertopic_rmw * create_sertopic(
   void * type_support, bool is_request_header)
 {
   struct sertopic_rmw * st = new struct sertopic_rmw;
+#if DDSI_SERTOPIC_HAS_TOPICKIND_NO_KEY
+  std::string type_name = get_type_name(type_support_identifier, type_support);
+  ddsi_sertopic_init(static_cast<struct ddsi_sertopic *>(st), topicname,
+    type_name.c_str(), &sertopic_rmw_ops, &serdata_rmw_ops, true);
+#else
   memset(st, 0, sizeof(struct ddsi_sertopic));
   st->cpp_name = std::string(topicname);
   st->cpp_type_name = get_type_name(type_support_identifier, type_support);
@@ -433,7 +441,7 @@ struct sertopic_rmw * create_sertopic(
   st->type_name = const_cast<char *>(st->cpp_type_name.c_str());
   st->iid = ddsi_iid_gen();
   ddsrt_atomic_st32(&st->refc, 1);
-
+#endif
   st->type_support.typesupport_identifier_ = type_support_identifier;
   st->type_support.type_support_ = type_support;
   st->is_request_header = is_request_header;
