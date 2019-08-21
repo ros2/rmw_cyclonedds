@@ -22,7 +22,7 @@ cycser::cycser(std::vector<unsigned char> & dst_)
   dst.reserve(4);
   /* FIXME: hard code to little endian ... and ignoring endianness in deser */
   dst.push_back(0);
-  dst.push_back(3);
+  dst.push_back(1);
   /* options: */
   dst.push_back(0);
   dst.push_back(0);
