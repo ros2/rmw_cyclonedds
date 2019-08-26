@@ -12,7 +12,7 @@
 
   <buildtool_export_depend>ament_cmake</buildtool_export_depend>
 
-  <build_depend>cyclonedds</build_depend>
+  <build_depend>CycloneDDS</build_depend>
   <build_depend>cyclonedds_cmake_module</build_depend>
   <build_depend>rcutils</build_depend>
   <build_depend>rmw</build_depend>
@@ -20,7 +20,7 @@
   <build_depend>rosidl_typesupport_introspection_c</build_depend>
   <build_depend>rosidl_typesupport_introspection_cpp</build_depend>
 
-  <build_export_depend>cyclonedds</build_export_depend>
+  <build_export_depend>CycloneDDS</build_export_depend>
   <build_export_depend>cyclonedds_cmake_module</build_export_depend>
   <build_export_depend>rcutils</build_export_depend>
   <build_export_depend>rmw</build_export_depend>
