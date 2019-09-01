@@ -54,6 +54,7 @@ add_library(rmw_cyclonedds_cpp
   src/rmw_node.cpp
   src/serdata.cpp
   src/serdes.cpp
+  src/graphrhc.cpp
   src/u16string.cpp
 )
 

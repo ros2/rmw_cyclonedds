@@ -38,29 +38,8 @@ There are a number of known limitations:
 * Cyclone DDS does not yet implement DDS Security.  Consequently, there is no support for security
   in this RMW implementation either.
 
-* Cyclone DDS does not allow creating a waitset or a guard condition outside a participant, and this
-  forces the creation of an additional participant.  It can be fixed in the RMW layer, or it can be
-  dealt with in Cyclone DDS, but the trouble with the latter is that there are solid reasons for not
-  allowing it, even if it is easy to support it today.  (E.g., a remote procedure call interface
-  ...)
-    
-* Cyclone DDS does not currently support multiple domains simultaneously (waiting in a PR for the
-  final polish), and so this RMW implementation ignores the domain\_id parameter in create\_node,
-  instead creating all nodes/participants (including the special participant mentioned above) in the
-  default domain, which can be controlled via CYCLONEDDS\_URI.
-    
 * Deserialization only handles native format (it doesn't do any byte swapping).  This is pure
   laziness, adding it is trivial.
     
 * Deserialization assumes the input is valid and will do terrible things if it isn't.  Again, pure
   laziness, it's just adding some bounds checks and other validation code.
-    
-* There are some "oddities" with the way service requests and replies are serialized and what it
-  uses as a "GUID".  (It actually uses an almost-certainly-unique 64-bit number, the Cyclone DDS
-  instance id, instead of a real GUID.)  I'm pretty sure the format is wildly different from that in
-  other RMW implementations, and so services presumably will not function cross-implementation.
-    
-* The name mangling seems to be compatibl-ish with the FastRTPS implementation and in some cases
-  using the ros2 CLI for querying the system works cross-implementation, but not always.  The one in
-  this implementation is reverse-engineered, so trouble may be lurking somewhere.  As a related
-  point: the "no_demangle" option is currently ignored ... it causes a compiler warning.
