@@ -118,6 +118,9 @@ public:
   bool deserializeROSmessage(
     cycdeser & deser, void * ros_message,
     std::function<void(cycdeser &)> prefix = nullptr);
+  bool printROSmessage(
+    cycprint & deser,
+    std::function<void(cycprint &)> prefix = nullptr);
   std::string getName();
 
 protected:
@@ -133,6 +136,8 @@ private:
   bool deserializeROSmessage(
     cycdeser & deser, const MembersType * members, void * ros_message,
     bool call_new);
+  bool printROSmessage(
+    cycprint & deser, const MembersType * members);
 };
 
 }  // namespace rmw_cyclonedds_cpp

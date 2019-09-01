@@ -776,6 +776,106 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
   return true;
 }
 
+template<typename M, typename T>
+void print_field(const M * member, cycprint & deser, T & dummy)
+{
+  if (!member->is_array_) {
+    deser >> dummy;
+  } else {
+    deser.print_constant("{");
+    if (member->array_size_ && !member->is_upper_bound_) {
+      deser.printA(&dummy, member->array_size_);
+    } else {
+      int32_t dsize = deser.get32();
+      deser.printA(&dummy, dsize);
+    }
+    deser.print_constant("}");
+  }
+}
+
+template<typename MembersType>
+bool TypeSupport<MembersType>::printROSmessage(
+  cycprint & deser, const MembersType * members)
+{
+  assert(members);
+
+  deser.print_constant("{");
+  for (uint32_t i = 0; i < members->member_count_; ++i) {
+    if (i != 0) {
+      deser.print_constant(",");
+    }
+    const auto * member = members->members_ + i;
+    switch (member->type_id_) {
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_BOOL:
+        {bool dummy; print_field(member, deser, dummy);}
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_BYTE:
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT8:
+        {uint8_t dummy; print_field(member, deser, dummy);}
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_CHAR:
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT8:
+        {char dummy; print_field(member, deser, dummy);}
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT32:
+        {float dummy; print_field(member, deser, dummy);}
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT64:
+        {double dummy; print_field(member, deser, dummy);}
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT16:
+        {int16_t dummy; print_field(member, deser, dummy);}
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT16:
+        {uint16_t dummy; print_field(member, deser, dummy);}
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT32:
+        {int32_t dummy; print_field(member, deser, dummy);}
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT32:
+        {uint32_t dummy; print_field(member, deser, dummy);}
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT64:
+        {int64_t dummy; print_field(member, deser, dummy);}
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT64:
+        {uint64_t dummy; print_field(member, deser, dummy);}
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING:
+        {std::string dummy; print_field(member, deser, dummy);}
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_WSTRING:
+        {std::wstring dummy; print_field(member, deser, dummy);}
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE:
+        {
+          auto sub_members = (const MembersType *)member->members_->data;
+          if (!member->is_array_) {
+            printROSmessage(deser, sub_members);
+          } else {
+            size_t array_size = 0;
+            if (member->array_size_ && !member->is_upper_bound_) {
+              array_size = member->array_size_;
+            } else {
+              array_size = deser.get32();
+            }
+            deser.print_constant("{");
+            for (size_t index = 0; index < array_size; ++index) {
+              printROSmessage(deser, sub_members);
+            }
+            deser.print_constant("}");
+          }
+        }
+        break;
+      default:
+        throw std::runtime_error("unknown type");
+    }
+  }
+  deser.print_constant("}");
+
+  return true;
+}
+
 template<typename MembersType>
 bool TypeSupport<MembersType>::serializeROSmessage(
   const void * ros_message, cycser & ser,
@@ -813,6 +913,32 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
     uint8_t dump = 0;
     deser >> dump;
     (void)dump;
+  }
+
+  return true;
+}
+
+template<typename MembersType>
+bool TypeSupport<MembersType>::printROSmessage(
+  cycprint & prt,
+  std::function<void(cycprint &)> prefix)
+{
+  if (prefix) {
+    prt.print_constant("{");
+    prefix(prt);
+    prt.print_constant(",");
+  }
+
+  if (members_->member_count_ != 0) {
+    TypeSupport::printROSmessage(prt, members_);
+  } else {
+    uint8_t dump = 0;
+    prt >> dump;
+    (void)dump;
+  }
+
+  if (prefix) {
+    prt.print_constant("}");
   }
 
   return true;
