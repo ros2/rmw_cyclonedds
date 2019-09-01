@@ -16,6 +16,8 @@
 #define RMW_CYCLONEDDS_CPP__SERDES_HPP_
 
 #include <string.h>
+#include <inttypes.h>
+#include <stdarg.h>
 
 #include <array>
 #include <string>
@@ -91,7 +93,7 @@ public:
   }
   inline void serialize(const std::wstring & x)
   {
-    size_t sz = x.size() + 1;
+    size_t sz = x.size();
     serialize(static_cast<uint32_t>(sz));
     resize(off + sz * sizeof(wchar_t));
     memcpy(data() + off, reinterpret_cast<const char *>(x.c_str()), sz * sizeof(wchar_t));
@@ -216,13 +218,17 @@ public:
   inline void deserialize(std::string & x)
   {
     const uint32_t sz = deserialize32();
-    x = std::string(data + pos, sz - 1);
+    if (sz == 0) {
+      x = std::string("");
+    } else {
+      x = std::string(data + pos, sz - 1);
+    }
     pos += sz;
   }
   inline void deserialize(std::wstring & x)
   {
     const uint32_t sz = deserialize32();
-    x = std::wstring(reinterpret_cast<const wchar_t *>(data + pos), sz - 1);
+    x = std::wstring(reinterpret_cast<const wchar_t *>(data + pos), sz);
     pos += sz * sizeof(wchar_t);
   }
 
@@ -285,6 +291,155 @@ private:
   const char * data;
   size_t pos;
   size_t lim;   // ignored for now ... better provide correct input
+};
+
+class cycprint
+{
+private:
+  static bool prtf(char * __restrict * buf, size_t * __restrict bufsize, const char * fmt, ...)
+  {
+    va_list ap;
+    if (*bufsize == 0) {
+      return false;
+    }
+    va_start(ap, fmt);
+    int n = vsnprintf(*buf, *bufsize, fmt, ap);
+    va_end(ap);
+    if (n < 0) {
+      **buf = 0;
+      return false;
+    } else if ((size_t) n <= *bufsize) {
+      *buf += (size_t) n;
+      *bufsize -= (size_t) n;
+      return *bufsize > 0;
+    } else {
+      *buf += *bufsize;
+      *bufsize = 0;
+      return false;
+    }
+  }
+
+public:
+  // FIXME: byteswapping
+  cycprint(char * buf, size_t bufsize, const void * data, size_t size);
+  cycprint() = delete;
+
+  void print_constant(const char * x)
+  {
+    prtf(&buf, &bufsize, "%s", x);
+  }
+
+  inline cycprint & operator>>(bool & x) {print(x); return *this;}
+  inline cycprint & operator>>(char & x) {print(x); return *this;}
+  inline cycprint & operator>>(int8_t & x) {print(x); return *this;}
+  inline cycprint & operator>>(uint8_t & x) {print(x); return *this;}
+  inline cycprint & operator>>(int16_t & x) {print(x); return *this;}
+  inline cycprint & operator>>(uint16_t & x) {print(x); return *this;}
+  inline cycprint & operator>>(int32_t & x) {print(x); return *this;}
+  inline cycprint & operator>>(uint32_t & x) {print(x); return *this;}
+  inline cycprint & operator>>(int64_t & x) {print(x); return *this;}
+  inline cycprint & operator>>(uint64_t & x) {print(x); return *this;}
+  inline cycprint & operator>>(float & x) {print(x); return *this;}
+  inline cycprint & operator>>(double & x) {print(x); return *this;}
+  inline cycprint & operator>>(char * & x) {print(x); return *this;}
+  inline cycprint & operator>>(std::string & x) {print(x); return *this;}
+  inline cycprint & operator>>(std::wstring & x) {print(x); return *this;}
+  template<class T>
+  inline cycprint & operator>>(std::vector<T> & x) {print(x); return *this;}
+  template<class T, size_t S>
+  inline cycprint & operator>>(std::array<T, S> & x) {print(x); return *this;}
+
+#define SIMPLE(T, F) inline void print(T & x) { \
+    align(sizeof(x)); \
+    x = *reinterpret_cast<const T *>(data + pos); \
+    prtf(&buf, &bufsize, F, x); \
+    pos += sizeof(x); \
+}
+  SIMPLE(char, "'%c'");
+  SIMPLE(int8_t, "%" PRId8);
+  SIMPLE(uint8_t, "%" PRIu8);
+  SIMPLE(int16_t, "%" PRId16);
+  SIMPLE(uint16_t, "%" PRIu16);
+  SIMPLE(int32_t, "%" PRId32);
+  SIMPLE(uint32_t, "%" PRIu32);
+  SIMPLE(int64_t, "%" PRId64);
+  SIMPLE(uint64_t, "%" PRIu64);
+  SIMPLE(float, "%f");
+  SIMPLE(double, "%f");
+#undef SIMPLE
+
+  inline void print(bool & x)
+  {
+    static_cast<void>(x);
+    unsigned char z; print(z);
+  }
+  inline uint32_t get32()
+  {
+    uint32_t sz;
+    align(sizeof(sz));
+    sz = *reinterpret_cast<const uint32_t *>(data + pos);
+    pos += sizeof(sz);
+    return sz;
+  }
+  inline void print(char * & x)
+  {
+    const uint32_t sz = get32();
+    const int len = (sz == 0) ? 0 : (sz > INT32_MAX) ? INT32_MAX : static_cast<int>(sz - 1);
+    static_cast<void>(x);
+    prtf(&buf, &bufsize, "\"%*.*s\"", len, len, static_cast<const char *>(data + pos));
+    pos += sz;
+  }
+  inline void print(std::string & x)
+  {
+    const uint32_t sz = get32();
+    const int len = (sz == 0) ? 0 : (sz > INT32_MAX) ? INT32_MAX : static_cast<int>(sz - 1);
+    static_cast<void>(x);
+    prtf(&buf, &bufsize, "\"%*.*s\"", len, len, static_cast<const char *>(data + pos));
+    pos += sz;
+  }
+  inline void print(std::wstring & x)
+  {
+    const uint32_t sz = get32();
+    x = std::wstring(reinterpret_cast<const wchar_t *>(data + pos), sz);
+    prtf(&buf, &bufsize, "\"%ls\"", x.c_str());
+    pos += sz * sizeof(wchar_t);
+  }
+
+  template<class T>
+  inline void printA(T * x, size_t cnt)
+  {
+    prtf(&buf, &bufsize, "{");
+    for (size_t i = 0; i < cnt; i++) {
+      if (i != 0) {prtf(&buf, &bufsize, ",");}
+      print(*x);
+    }
+    prtf(&buf, &bufsize, "}");
+  }
+
+  template<class T>
+  inline void print(std::vector<T> & x)
+  {
+    const uint32_t sz = get32();
+    printA(x.data(), sz);
+  }
+  template<class T, size_t S>
+  inline void print(std::array<T, S> & x)
+  {
+    printA(x.data(), x.size());
+  }
+
+private:
+  inline void align(size_t a)
+  {
+    if ((pos % a) != 0) {
+      pos += a - (pos % a);
+    }
+  }
+
+  const char * data;
+  size_t pos;
+  char * buf;
+  size_t bufsize;
 };
 
 #endif  // RMW_CYCLONEDDS_CPP__SERDES_HPP_

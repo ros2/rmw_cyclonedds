@@ -34,3 +34,12 @@ cycdeser::cycdeser(const void * data_, size_t size_)
   lim(size_ - 4)
 {
 }
+
+cycprint::cycprint(char * buf_, size_t bufsize_, const void * data_, size_t size_)
+: data(static_cast<const char *>(data_) + 4),
+  pos(0),
+  buf(buf_),
+  bufsize(bufsize_)
+{
+  static_cast<void>(size_);
+}

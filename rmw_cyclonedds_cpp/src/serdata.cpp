@@ -175,11 +175,11 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
     if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
       auto typed_typesupport =
         static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
-      (void) typed_typesupport->serializeROSmessage(sample, sd, nullptr);
+      (void) typed_typesupport->serializeROSmessage(sample, sd);
     } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
       auto typed_typesupport =
         static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
-      (void) typed_typesupport->serializeROSmessage(sample, sd, nullptr);
+      (void) typed_typesupport->serializeROSmessage(sample, sd);
     }
   } else {
     /* The "prefix" lambda is there to inject the service invocation header data into the CDR
@@ -270,11 +270,11 @@ static bool serdata_rmw_to_sample(
     if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
       auto typed_typesupport =
         static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
-      return typed_typesupport->deserializeROSmessage(sd, sample, nullptr);
+      return typed_typesupport->deserializeROSmessage(sd, sample);
     } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
       auto typed_typesupport =
         static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
-      return typed_typesupport->deserializeROSmessage(sd, sample, nullptr);
+      return typed_typesupport->deserializeROSmessage(sd, sample);
     }
   } else {
     /* The "prefix" lambda is there to inject the service invocation header data into the CDR
@@ -318,6 +318,49 @@ static bool serdata_rmw_eqkey(const struct ddsi_serdata * a, const struct ddsi_s
   return true;
 }
 
+#if DDSI_SERDATA_HAS_PRINT
+static size_t serdata_rmw_print(
+  const struct ddsi_sertopic * tpcmn, const struct ddsi_serdata * dcmn, char * buf, size_t bufsize)
+{
+  const struct serdata_rmw * d = static_cast<const struct serdata_rmw *>(dcmn);
+  const struct sertopic_rmw * topic = static_cast<const struct sertopic_rmw *>(tpcmn);
+  if (d->kind != SDK_DATA) {
+    /* ROS2 doesn't do keys in a meaningful way yet */
+    return static_cast<size_t>(snprintf(buf, bufsize, ":k:{}"));
+  } else if (!topic->is_request_header) {
+    cycprint sd(buf, bufsize, static_cast<const void *>(d->data.data()), d->data.size());
+    if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
+      auto typed_typesupport =
+        static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
+      return typed_typesupport->printROSmessage(sd);
+    } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
+      auto typed_typesupport =
+        static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
+      return typed_typesupport->printROSmessage(sd);
+    }
+  } else {
+    /* The "prefix" lambda is there to inject the service invocation header data into the CDR
+       stream -- I haven't checked how it is done in the official RMW implementations, so it is
+       probably incompatible. */
+    cdds_request_wrapper_t wrap;
+    auto prefix = [&wrap](cycprint & ser) {
+        ser >> wrap.header.guid; ser.print_constant(","); ser >> wrap.header.seq;
+      };
+    cycprint sd(buf, bufsize, static_cast<const void *>(d->data.data()), d->data.size());
+    if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
+      auto typed_typesupport =
+        static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
+      return typed_typesupport->printROSmessage(sd, prefix);
+    } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
+      auto typed_typesupport =
+        static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
+      return typed_typesupport->printROSmessage(sd, prefix);
+    }
+  }
+  return false;
+}
+#endif
+
 static const struct ddsi_serdata_ops serdata_rmw_ops = {
   serdata_rmw_eqkey,
   serdata_rmw_size,
@@ -331,6 +374,9 @@ static const struct ddsi_serdata_ops serdata_rmw_ops = {
   serdata_rmw_to_topicless,
   serdata_rmw_topicless_to_sample,
   serdata_rmw_free
+#if DDSI_SERDATA_HAS_PRINT
+  , serdata_rmw_print
+#endif
 };
 
 static void sertopic_rmw_free(struct ddsi_sertopic * tpcmn)
