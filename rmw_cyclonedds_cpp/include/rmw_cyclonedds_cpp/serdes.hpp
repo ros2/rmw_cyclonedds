@@ -24,6 +24,8 @@
 #include <vector>
 #include <type_traits>
 
+#include "dds/ddsi/q_bswap.h"
+
 class cycser
 {
 public:
@@ -50,7 +52,7 @@ public:
   template<class T, size_t S>
   inline cycser & operator<<(const std::array<T, S> & x) {serialize(x); return *this;}
 
-#define SIMPLE(T) inline void serialize(T x) { \
+#define SER(T) inline void serialize(T x) { \
     if ((off % sizeof(T)) != 0) { \
       off += sizeof(T) - (off % sizeof(T)); \
     } \
@@ -58,18 +60,18 @@ public:
     *(reinterpret_cast<T *>(data() + off)) = x; \
     off += sizeof(T); \
 }
-  SIMPLE(char);
-  SIMPLE(int8_t);
-  SIMPLE(uint8_t);
-  SIMPLE(int16_t);
-  SIMPLE(uint16_t);
-  SIMPLE(int32_t);
-  SIMPLE(uint32_t);
-  SIMPLE(int64_t);
-  SIMPLE(uint64_t);
-  SIMPLE(float);
-  SIMPLE(double);
-#undef SIMPLE
+  SER(char);
+  SER(int8_t);
+  SER(uint8_t);
+  SER(int16_t);
+  SER(uint16_t);
+  SER(int32_t);
+  SER(uint32_t);
+  SER(int64_t);
+  SER(uint64_t);
+  SER(float);
+  SER(double);
+#undef SER
 
   inline void serialize(bool x)
   {
@@ -100,7 +102,7 @@ public:
     off += sz * sizeof(wchar_t);
   }
 
-#define SIMPLEA(T) inline void serializeA(const T * x, size_t cnt) { \
+#define SER_A(T) inline void serializeA(const T * x, size_t cnt) { \
     if (cnt > 0) { \
       if ((off % sizeof(T)) != 0) { \
         off += sizeof(T) - (off % sizeof(T)); \
@@ -110,18 +112,19 @@ public:
       off += cnt * sizeof(T); \
     } \
 }
-  SIMPLEA(char);
-  SIMPLEA(int8_t);
-  SIMPLEA(uint8_t);
-  SIMPLEA(int16_t);
-  SIMPLEA(uint16_t);
-  SIMPLEA(int32_t);
-  SIMPLEA(uint32_t);
-  SIMPLEA(int64_t);
-  SIMPLEA(uint64_t);
-  SIMPLEA(float);
-  SIMPLEA(double);
-#undef SIMPLEA
+  SER_A(char);
+  SER_A(int8_t);
+  SER_A(uint8_t);
+  SER_A(int16_t);
+  SER_A(uint16_t);
+  SER_A(int32_t);
+  SER_A(uint32_t);
+  SER_A(int64_t);
+  SER_A(uint64_t);
+  SER_A(float);
+  SER_A(double);
+#undef SER_A
+
   template<class T>
   inline void serializeA(const T * x, size_t cnt)
   {
@@ -158,7 +161,6 @@ private:
 class cycdeser
 {
 public:
-  // FIXME: byteswapping
   cycdeser(const void * data, size_t size);
   cycdeser() = delete;
 
@@ -182,23 +184,40 @@ public:
   template<class T, size_t S>
   inline cycdeser & operator>>(std::array<T, S> & x) {deserialize(x); return *this;}
 
-#define SIMPLE(T) inline void deserialize(T & x) { \
+#define DESER8(T) DESER(T, )
+#define DESER(T, fn_swap) inline void deserialize(T & x) { \
     align(sizeof(x)); \
     x = *reinterpret_cast<const T *>(data + pos); \
+    if (swap_bytes) x = fn_swap (x); \
     pos += sizeof(x); \
 }
-  SIMPLE(char);
-  SIMPLE(int8_t);
-  SIMPLE(uint8_t);
-  SIMPLE(int16_t);
-  SIMPLE(uint16_t);
-  SIMPLE(int32_t);
-  SIMPLE(uint32_t);
-  SIMPLE(int64_t);
-  SIMPLE(uint64_t);
-  SIMPLE(float);
-  SIMPLE(double);
-#undef SIMPLE
+  DESER8(char);
+  DESER8(int8_t);
+  DESER8(uint8_t);
+  DESER(int16_t, bswap2);
+  DESER(uint16_t, bswap2u);
+  DESER(int32_t, bswap4);
+  DESER(uint32_t, bswap4u);
+  DESER(int64_t, bswap8);
+  DESER(uint64_t, bswap8u);
+#undef DESER
+
+#define DESER_FP(T) inline void deserialize(T & x) { \
+    align(sizeof(T)); \
+    if (swap_bytes) { \
+      char * dst = reinterpret_cast<char *>(&x); \
+      size_t n = sizeof(T); \
+      do { \
+        dst[--n] = data[pos++]; \
+      } while (n > 0); \
+    } else { \
+      x = *reinterpret_cast<const T *>(data + pos); \
+      pos += sizeof(T); \
+    } \
+}
+  DESER_FP(float);
+  DESER_FP(double);
+#undef DESER_FP
 
   inline void deserialize(bool & x)
   {
@@ -232,26 +251,55 @@ public:
     pos += sz * sizeof(wchar_t);
   }
 
-#define SIMPLEA(T) inline void deserializeA(T * x, size_t cnt) { \
+#define DESER8_A(T) DESER_A(T, )
+#define DESER_A(T, fn_swap) inline void deserializeA(T * x, size_t cnt) { \
     if (cnt > 0) { \
       align(sizeof(T)); \
-      memcpy(reinterpret_cast<void *>(x), reinterpret_cast<const void *>(data + pos), \
-        (cnt) * sizeof(T)); \
-      pos += (cnt) * sizeof(T); \
+      if (swap_bytes) { \
+        for (size_t i = 0; i < cnt; i++) { \
+          x[i] = fn_swap(*reinterpret_cast<const T *>(data + pos)); \
+          pos += sizeof(T); \
+        } \
+      } else { \
+        memcpy(reinterpret_cast<void *>(x), reinterpret_cast<const void *>(data + pos), \
+          (cnt) * sizeof(T)); \
+        pos += (cnt) * sizeof(T); \
+      } \
     } \
 }
-  SIMPLEA(char);
-  SIMPLEA(int8_t);
-  SIMPLEA(uint8_t);
-  SIMPLEA(int16_t);
-  SIMPLEA(uint16_t);
-  SIMPLEA(int32_t);
-  SIMPLEA(uint32_t);
-  SIMPLEA(int64_t);
-  SIMPLEA(uint64_t);
-  SIMPLEA(float);
-  SIMPLEA(double);
-#undef SIMPLEA
+  DESER8_A(char);
+  DESER8_A(int8_t);
+  DESER8_A(uint8_t);
+  DESER_A(int16_t, bswap2);
+  DESER_A(uint16_t, bswap2u);
+  DESER_A(int32_t, bswap4);
+  DESER_A(uint32_t, bswap4u);
+  DESER_A(int64_t, bswap8);
+  DESER_A(uint64_t, bswap8u);
+#undef DESER_A
+
+#define DESER_FP_A(T) inline void deserializeA(T * x, size_t cnt) { \
+    if (cnt > 0) { \
+      align(sizeof(T)); \
+      if (swap_bytes) { \
+        for (size_t i = 0; i < (cnt); i++) { \
+          char * dst = reinterpret_cast<char *>(&x[i]); \
+          size_t n = sizeof(T); \
+          do { \
+            dst[--n] = data[pos++]; \
+          } while (n > 0); \
+        } \
+      } else { \
+        memcpy(reinterpret_cast<void *>(x), reinterpret_cast<const void *>(data + pos), \
+          (cnt) * sizeof(T)); \
+        pos += (cnt) * sizeof(T); \
+      } \
+    } \
+}
+  DESER_FP_A(float);
+  DESER_FP_A(double);
+#undef DESER_FP_A
+
   template<class T>
   inline void deserializeA(T * x, size_t cnt)
   {
@@ -291,6 +339,7 @@ private:
   const char * data;
   size_t pos;
   size_t lim;   // ignored for now ... better provide correct input
+  bool swap_bytes;
 };
 
 class cycprint
