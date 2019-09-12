@@ -12,6 +12,7 @@ source directory, and then run colcon build in the usual manner:
     cd ros2_ws/src
     git clone https://github.com/atolab/rmw_cyclonedds
     cd ..
+    rosdep install --from src -i
     colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCYCLONEDDS_FROM_SOURCE=ON
     export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 
