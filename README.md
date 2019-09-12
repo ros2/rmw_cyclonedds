@@ -23,8 +23,8 @@ few details that are caused by the machine configuration, that works fine, too. 
 why it wouldn't work the same on Windows, but I haven't tried.
 
 That said, Cyclone DDS has some prerequisites because it currently relies on Java and Maven to build
-its IDL preprocessor, and so it is probably advisable to check its README for details.  On an Ubuntu
-18.04 system, ``sudo apt-get install maven default-jdk`` will likely address that.
+its IDL preprocessor, and so it is probably advisable to check its README for details. You can
+install these with, ``rosdep install -i ros2_ws/src``.
 
 If you want to use a pre-existing installation of Cyclone DDS, you don't need to clone it, but you
 may have to tell CMake where to look for it using the CycloneDDS\_DIR variable.  That also appears
