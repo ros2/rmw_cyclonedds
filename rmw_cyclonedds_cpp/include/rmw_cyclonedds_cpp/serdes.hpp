@@ -50,7 +50,7 @@ public:
   template<class T, size_t S>
   inline cycser & operator<<(const std::array<T, S> & x) {serialize(x); return *this;}
 
-#define SIMPLE(T) inline void serialize(T x) { \
+#define SER(T) inline void serialize(T x) { \
     if ((off % sizeof(T)) != 0) { \
       off += sizeof(T) - (off % sizeof(T)); \
     } \
@@ -58,18 +58,18 @@ public:
     *(reinterpret_cast<T *>(data() + off)) = x; \
     off += sizeof(T); \
 }
-  SIMPLE(char);
-  SIMPLE(int8_t);
-  SIMPLE(uint8_t);
-  SIMPLE(int16_t);
-  SIMPLE(uint16_t);
-  SIMPLE(int32_t);
-  SIMPLE(uint32_t);
-  SIMPLE(int64_t);
-  SIMPLE(uint64_t);
-  SIMPLE(float);
-  SIMPLE(double);
-#undef SIMPLE
+  SER(char);
+  SER(int8_t);
+  SER(uint8_t);
+  SER(int16_t);
+  SER(uint16_t);
+  SER(int32_t);
+  SER(uint32_t);
+  SER(int64_t);
+  SER(uint64_t);
+  SER(float);
+  SER(double);
+#undef SER
 
   inline void serialize(bool x)
   {
@@ -100,7 +100,7 @@ public:
     off += sz * sizeof(wchar_t);
   }
 
-#define SIMPLEA(T) inline void serializeA(const T * x, size_t cnt) { \
+#define SER_A(T) inline void serializeA(const T * x, size_t cnt) { \
     if (cnt > 0) { \
       if ((off % sizeof(T)) != 0) { \
         off += sizeof(T) - (off % sizeof(T)); \
@@ -110,18 +110,19 @@ public:
       off += cnt * sizeof(T); \
     } \
 }
-  SIMPLEA(char);
-  SIMPLEA(int8_t);
-  SIMPLEA(uint8_t);
-  SIMPLEA(int16_t);
-  SIMPLEA(uint16_t);
-  SIMPLEA(int32_t);
-  SIMPLEA(uint32_t);
-  SIMPLEA(int64_t);
-  SIMPLEA(uint64_t);
-  SIMPLEA(float);
-  SIMPLEA(double);
-#undef SIMPLEA
+  SER_A(char);
+  SER_A(int8_t);
+  SER_A(uint8_t);
+  SER_A(int16_t);
+  SER_A(uint16_t);
+  SER_A(int32_t);
+  SER_A(uint32_t);
+  SER_A(int64_t);
+  SER_A(uint64_t);
+  SER_A(float);
+  SER_A(double);
+#undef SER_A
+
   template<class T>
   inline void serializeA(const T * x, size_t cnt)
   {
@@ -155,10 +156,55 @@ private:
   size_t off;
 };
 
-class cycdeser
+class cycdeserbase
 {
 public:
-  // FIXME: byteswapping
+  explicit cycdeserbase(const char * data_);
+  cycdeserbase() = delete;
+
+protected:
+  inline void align(size_t a)
+  {
+    if ((pos % a) != 0) {
+      pos += a - (pos % a);
+    }
+  }
+
+  inline uint16_t bswap2u(uint16_t x)
+  {
+    return (uint16_t) ((x >> 8) | (x << 8));
+  }
+  inline int16_t bswap2(int16_t x)
+  {
+    return (int16_t) bswap2u((uint16_t) x);
+  }
+  inline uint32_t bswap4u(uint32_t x)
+  {
+    return (x >> 24) | ((x >> 8) & 0xff00) | ((x << 8) & 0xff0000) | (x << 24);
+  }
+  inline int32_t bswap4(int32_t x)
+  {
+    return (int32_t) bswap4u((uint32_t) x);
+  }
+  inline uint64_t bswap8u(uint64_t x)
+  {
+    const uint32_t newhi = bswap4u((uint32_t) x);
+    const uint32_t newlo = bswap4u((uint32_t) (x >> 32));
+    return ((uint64_t) newhi << 32) | (uint64_t) newlo;
+  }
+  inline int64_t bswap8(int64_t x)
+  {
+    return (int64_t) bswap8u((uint64_t) x);
+  }
+
+  const char * data;
+  size_t pos;
+  bool swap_bytes;
+};
+
+class cycdeser : cycdeserbase
+{
+public:
   cycdeser(const void * data, size_t size);
   cycdeser() = delete;
 
@@ -182,27 +228,35 @@ public:
   template<class T, size_t S>
   inline cycdeser & operator>>(std::array<T, S> & x) {deserialize(x); return *this;}
 
-#define SIMPLE(T) inline void deserialize(T & x) { \
+#define DESER8(T) DESER(T, )
+#define DESER(T, fn_swap) inline void deserialize(T & x) { \
     align(sizeof(x)); \
     x = *reinterpret_cast<const T *>(data + pos); \
+    if (swap_bytes) {x = fn_swap(x);} \
     pos += sizeof(x); \
 }
-  SIMPLE(char);
-  SIMPLE(int8_t);
-  SIMPLE(uint8_t);
-  SIMPLE(int16_t);
-  SIMPLE(uint16_t);
-  SIMPLE(int32_t);
-  SIMPLE(uint32_t);
-  SIMPLE(int64_t);
-  SIMPLE(uint64_t);
-  SIMPLE(float);
-  SIMPLE(double);
-#undef SIMPLE
+  DESER8(char);
+  DESER8(int8_t);
+  DESER8(uint8_t);
+  DESER(int16_t, bswap2);
+  DESER(uint16_t, bswap2u);
+  DESER(int32_t, bswap4);
+  DESER(uint32_t, bswap4u);
+  DESER(int64_t, bswap8);
+  DESER(uint64_t, bswap8u);
+#undef DESER
 
   inline void deserialize(bool & x)
   {
     unsigned char z; deserialize(z); x = (z != 0);
+  }
+  inline void deserialize(float & x)
+  {
+    deserialize(*reinterpret_cast<uint32_t *>(&x));
+  }
+  inline void deserialize(double & x)
+  {
+    deserialize(*reinterpret_cast<uint64_t *>(&x));
   }
   inline uint32_t deserialize32()
   {
@@ -232,26 +286,42 @@ public:
     pos += sz * sizeof(wchar_t);
   }
 
-#define SIMPLEA(T) inline void deserializeA(T * x, size_t cnt) { \
+#define DESER8_A(T) DESER_A(T, )
+#define DESER_A(T, fn_swap) inline void deserializeA(T * x, size_t cnt) { \
     if (cnt > 0) { \
       align(sizeof(T)); \
-      memcpy(reinterpret_cast<void *>(x), reinterpret_cast<const void *>(data + pos), \
-        (cnt) * sizeof(T)); \
-      pos += (cnt) * sizeof(T); \
+      if (swap_bytes) { \
+        for (size_t i = 0; i < cnt; i++) { \
+          x[i] = fn_swap(*reinterpret_cast<const T *>(data + pos)); \
+          pos += sizeof(T); \
+        } \
+      } else { \
+        memcpy(reinterpret_cast<void *>(x), reinterpret_cast<const void *>(data + pos), \
+          cnt * sizeof(T)); \
+        pos += cnt * sizeof(T); \
+      } \
     } \
 }
-  SIMPLEA(char);
-  SIMPLEA(int8_t);
-  SIMPLEA(uint8_t);
-  SIMPLEA(int16_t);
-  SIMPLEA(uint16_t);
-  SIMPLEA(int32_t);
-  SIMPLEA(uint32_t);
-  SIMPLEA(int64_t);
-  SIMPLEA(uint64_t);
-  SIMPLEA(float);
-  SIMPLEA(double);
-#undef SIMPLEA
+  DESER8_A(char);
+  DESER8_A(int8_t);
+  DESER8_A(uint8_t);
+  DESER_A(int16_t, bswap2);
+  DESER_A(uint16_t, bswap2u);
+  DESER_A(int32_t, bswap4);
+  DESER_A(uint32_t, bswap4u);
+  DESER_A(int64_t, bswap8);
+  DESER_A(uint64_t, bswap8u);
+#undef DESER_A
+
+  inline void deserializeA(float * x, size_t cnt)
+  {
+    deserializeA(reinterpret_cast<uint32_t *>(x), cnt);
+  }
+  inline void deserializeA(double * x, size_t cnt)
+  {
+    deserializeA(reinterpret_cast<uint64_t *>(x), cnt);
+  }
+
   template<class T>
   inline void deserializeA(T * x, size_t cnt)
   {
@@ -281,46 +351,12 @@ public:
   }
 
 private:
-  inline void align(size_t a)
-  {
-    if ((pos % a) != 0) {
-      pos += a - (pos % a);
-    }
-  }
-
-  const char * data;
-  size_t pos;
   size_t lim;   // ignored for now ... better provide correct input
 };
 
-class cycprint
+class cycprint : cycdeserbase
 {
-private:
-  static bool prtf(char * __restrict * buf, size_t * __restrict bufsize, const char * fmt, ...)
-  {
-    va_list ap;
-    if (*bufsize == 0) {
-      return false;
-    }
-    va_start(ap, fmt);
-    int n = vsnprintf(*buf, *bufsize, fmt, ap);
-    va_end(ap);
-    if (n < 0) {
-      **buf = 0;
-      return false;
-    } else if ((size_t) n <= *bufsize) {
-      *buf += (size_t) n;
-      *bufsize -= (size_t) n;
-      return *bufsize > 0;
-    } else {
-      *buf += *bufsize;
-      *bufsize = 0;
-      return false;
-    }
-  }
-
 public:
-  // FIXME: byteswapping
   cycprint(char * buf, size_t bufsize, const void * data, size_t size);
   cycprint() = delete;
 
@@ -349,35 +385,52 @@ public:
   template<class T, size_t S>
   inline cycprint & operator>>(std::array<T, S> & x) {print(x); return *this;}
 
-#define SIMPLE(T, F) inline void print(T & x) { \
+#define PRNT8(T, F) PRNT(T, F, )
+#define PRNT(T, F, fn_swap) inline void print(T & x) { \
     align(sizeof(x)); \
     x = *reinterpret_cast<const T *>(data + pos); \
+    if (swap_bytes) {x = fn_swap(x);} \
     prtf(&buf, &bufsize, F, x); \
     pos += sizeof(x); \
 }
-  SIMPLE(char, "'%c'");
-  SIMPLE(int8_t, "%" PRId8);
-  SIMPLE(uint8_t, "%" PRIu8);
-  SIMPLE(int16_t, "%" PRId16);
-  SIMPLE(uint16_t, "%" PRIu16);
-  SIMPLE(int32_t, "%" PRId32);
-  SIMPLE(uint32_t, "%" PRIu32);
-  SIMPLE(int64_t, "%" PRId64);
-  SIMPLE(uint64_t, "%" PRIu64);
-  SIMPLE(float, "%f");
-  SIMPLE(double, "%f");
-#undef SIMPLE
+  PRNT8(char, "'%c'");
+  PRNT8(int8_t, "%" PRId8);
+  PRNT8(uint8_t, "%" PRIu8);
+  PRNT(int16_t, "%" PRId16, bswap2);
+  PRNT(uint16_t, "%" PRIu16, bswap2u);
+  PRNT(int32_t, "%" PRId32, bswap4);
+  PRNT(uint32_t, "%" PRIu32, bswap4u);
+  PRNT(int64_t, "%" PRId64, bswap8);
+  PRNT(uint64_t, "%" PRIu64, bswap8u);
+#undef PRNT
 
   inline void print(bool & x)
   {
     static_cast<void>(x);
     unsigned char z; print(z);
   }
+  inline void print(float & x)
+  {
+    align(sizeof(x));
+    uint32_t z = *reinterpret_cast<const uint32_t *>(data + pos);
+    if (swap_bytes) {z = bswap4u(z);}
+    prtf(&buf, &bufsize, "%f", *reinterpret_cast<float *>(&z));
+    pos += sizeof(x);
+  }
+  inline void print(double & x)
+  {
+    align(sizeof(x));
+    uint64_t z = *reinterpret_cast<const uint64_t *>(data + pos);
+    if (swap_bytes) {z = bswap8u(z);}
+    prtf(&buf, &bufsize, "%f", *reinterpret_cast<double *>(&z));
+    pos += sizeof(x);
+  }
   inline uint32_t get32()
   {
     uint32_t sz;
     align(sizeof(sz));
     sz = *reinterpret_cast<const uint32_t *>(data + pos);
+    if (swap_bytes) {sz = bswap4u(sz);}
     pos += sizeof(sz);
     return sz;
   }
@@ -429,15 +482,29 @@ public:
   }
 
 private:
-  inline void align(size_t a)
+  static bool prtf(char * __restrict * buf, size_t * __restrict bufsize, const char * fmt, ...)
   {
-    if ((pos % a) != 0) {
-      pos += a - (pos % a);
+    va_list ap;
+    if (*bufsize == 0) {
+      return false;
+    }
+    va_start(ap, fmt);
+    int n = vsnprintf(*buf, *bufsize, fmt, ap);
+    va_end(ap);
+    if (n < 0) {
+      **buf = 0;
+      return false;
+    } else if ((size_t) n <= *bufsize) {
+      *buf += (size_t) n;
+      *bufsize -= (size_t) n;
+      return *bufsize > 0;
+    } else {
+      *buf += *bufsize;
+      *bufsize = 0;
+      return false;
     }
   }
 
-  const char * data;
-  size_t pos;
   char * buf;
   size_t bufsize;
 };

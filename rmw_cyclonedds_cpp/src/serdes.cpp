@@ -11,8 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <exception>
 #include <vector>
 
+#include "dds/ddsrt/endian.h"
 #include "rmw_cyclonedds_cpp/serdes.hpp"
 
 cycser::cycser(std::vector<unsigned char> & dst_)
@@ -20,24 +22,39 @@ cycser::cycser(std::vector<unsigned char> & dst_)
   off(0)
 {
   dst.reserve(4);
-  /* FIXME: hard code to little endian ... and ignoring endianness in deser */
-  dst.push_back(0);
-  dst.push_back(1);
-  /* options: */
+
+  /* endianness: 0x0000 for BE, 0x0001 for LE */
+  dst.push_back(0x00);
+  dst.push_back((DDSRT_ENDIAN == DDSRT_LITTLE_ENDIAN) ? 0x01 : 0x00);
+
+  /* options: defaults to 0x0000 */
   dst.push_back(0);
   dst.push_back(0);
 }
 
-cycdeser::cycdeser(const void * data_, size_t size_)
-: data(static_cast<const char *>(data_) + 4),
+cycdeserbase::cycdeserbase(const char * data_)
+: data(data_),
   pos(0),
+  swap_bytes(false)
+{
+  /* Get the endianness byte (skip unused first byte in data[0]) */
+  uint32_t data_endianness = (data[1] == 0x01) ? DDSRT_LITTLE_ENDIAN : DDSRT_BIG_ENDIAN;
+
+  /* If endianness of data differs from our endianness: swap bytes when deserializing */
+  swap_bytes = (DDSRT_ENDIAN != data_endianness);
+
+  /* Ignore representation options (data_[2] and data_[3]) */
+  data += 4;
+}
+
+cycdeser::cycdeser(const void * data_, size_t size_)
+: cycdeserbase(static_cast<const char *>(data_)),
   lim(size_ - 4)
 {
 }
 
 cycprint::cycprint(char * buf_, size_t bufsize_, const void * data_, size_t size_)
-: data(static_cast<const char *>(data_) + 4),
-  pos(0),
+: cycdeserbase(static_cast<const char *>(data_)),
   buf(buf_),
   bufsize(bufsize_)
 {
