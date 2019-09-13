@@ -33,7 +33,7 @@ find_package(ament_cmake_ros REQUIRED)
 
 find_package(rcutils REQUIRED)
 
-if (CYCLONEDDS_FROM_SOURCE)
+if(CYCLONEDDS_FROM_SOURCE)
   message("Building CycloneDDS from source")
   find_package(cyclonedds_vendor REQUIRED)
 else()
