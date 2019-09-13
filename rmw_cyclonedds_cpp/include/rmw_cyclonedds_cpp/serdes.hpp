@@ -411,18 +411,22 @@ public:
   }
   inline void print(float & x)
   {
+    union { uint32_t u; float f; } tmp;
     align(sizeof(x));
-    uint32_t z = *reinterpret_cast<const uint32_t *>(data + pos);
-    if (swap_bytes) {z = bswap4u(z);}
-    prtf(&buf, &bufsize, "%f", *reinterpret_cast<float *>(&z));
+    tmp.u = *reinterpret_cast<const uint32_t *>(data + pos);
+    if (swap_bytes) {tmp.u = bswap4u(tmp.u);}
+    static_cast<void>(tmp.u);
+    prtf(&buf, &bufsize, "%f", tmp.f);
     pos += sizeof(x);
   }
   inline void print(double & x)
   {
+    union { uint64_t u; double f; } tmp;
     align(sizeof(x));
-    uint64_t z = *reinterpret_cast<const uint64_t *>(data + pos);
-    if (swap_bytes) {z = bswap8u(z);}
-    prtf(&buf, &bufsize, "%f", *reinterpret_cast<double *>(&z));
+    tmp.u = *reinterpret_cast<const uint64_t *>(data + pos);
+    if (swap_bytes) {tmp.u = bswap8u(tmp.u);}
+    static_cast<void>(tmp.u);
+    prtf(&buf, &bufsize, "%f", tmp.f);
     pos += sizeof(x);
   }
   inline uint32_t get32()
