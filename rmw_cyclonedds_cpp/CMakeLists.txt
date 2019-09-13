@@ -16,6 +16,8 @@ cmake_minimum_required(VERSION 3.5)
 
 project(rmw_cyclonedds_cpp)
 
+set(CYCLONEDDS_FROM_SOURCE CACHE BOOL "Should we download and build cycloneDDS from source?")
+
 link_directories(/usr/local/lib)
 
 # Default to C++14
@@ -31,7 +33,13 @@ find_package(ament_cmake_ros REQUIRED)
 
 find_package(rcutils REQUIRED)
 
-find_package(cyclonedds_cmake_module REQUIRED)
+if (CYCLONEDDS_FROM_SOURCE)
+  message("Building CycloneDDS from source")
+  find_package(cyclonedds_vendor REQUIRED)
+else()
+  find_package(cyclonedds_cmake_module REQUIRED)
+  message("Using installed CycloneDDS")
+endif()
 find_package(CycloneDDS REQUIRED CONFIG)
 
 find_package(rmw REQUIRED)

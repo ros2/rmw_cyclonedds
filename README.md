@@ -5,26 +5,25 @@ with [*Eclipse Cyclone DDS*](https://github.com/eclipse-cyclonedds/cyclonedds) a
 implementation.
 
 ## Getting, building and using it
-
-All it takes to get Cyclone DDS support into ROS2 is to clone this repository and the Cyclone DDS
-one in the ROS2 workspace source directory, and then run colcon build in the usual manner:
+   
+All it takes to get Cyclone DDS support into ROS2 is to clone this repository into the ROS2 workspace
+source directory, and then run colcon build in the usual manner:
 
     cd ros2_ws/src
     git clone https://github.com/atolab/rmw_cyclonedds
-    git clone https://github.com/eclipse-cyclonedds/cyclonedds
     cd ..
-    colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
+    rosdep install --from src -i
+    colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCYCLONEDDS_FROM_SOURCE=ON
     export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
+If you prefer to install CycloneDDS yourself, set `-DCYCLONEDDS_FROM_SOURCE=OFF`. CMake caches this
+value, so you can omit it between builds
 
 This seems to work fine on Linux with a binary ROS2 installation as well as when building ROS2 from
 source.  On macOS it has only been tested in a source build on a machine in an "unsupported"
 configuration (macOS 10.14 with SIP enabled, instead of 10.12 with SIP disabled), and apart from a
 few details that are caused by the machine configuration, that works fine, too.  There is no reason
 why it wouldn't work the same on Windows, but I haven't tried.
-
-That said, Cyclone DDS has some prerequisites because it currently relies on Java and Maven to build
-its IDL preprocessor, and so it is probably advisable to check its README for details.  On an Ubuntu
-18.04 system, ``sudo apt-get install maven default-jdk`` will likely address that.
 
 If you want to use a pre-existing installation of Cyclone DDS, you don't need to clone it, but you
 may have to tell CMake where to look for it using the CycloneDDS\_DIR variable.  That also appears

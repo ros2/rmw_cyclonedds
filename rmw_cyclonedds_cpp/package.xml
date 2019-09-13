@@ -14,6 +14,8 @@
 
   <build_depend>cyclonedds</build_depend>
   <build_depend>cyclonedds_cmake_module</build_depend>
+  <build_depend>cyclonedds_vendor</build_depend>
+
   <build_depend>rcutils</build_depend>
   <build_depend>rmw</build_depend>
   <build_depend>rosidl_generator_c</build_depend>
