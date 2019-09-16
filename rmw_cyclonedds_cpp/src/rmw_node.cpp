@@ -713,31 +713,37 @@ extern "C" rmw_ret_t rmw_deserialize(
   const rosidl_message_type_support_t * type_support,
   void * ros_message)
 {
-  cycdeser sd(serialized_message->buffer, serialized_message->buffer_length);
   bool ok;
-  const rosidl_message_type_support_t * ts;
-  if ((ts =
-    get_message_typesupport_handle(type_support,
-    rosidl_typesupport_introspection_c__identifier)) != nullptr)
-  {
-    auto members =
-      static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(ts->data);
-    MessageTypeSupport_c msgts(members);
-    ok = msgts.deserializeROSmessage(sd, ros_message, nullptr);
-  } else {
+  try {
+    cycdeser sd(serialized_message->buffer, serialized_message->buffer_length);
+    const rosidl_message_type_support_t * ts;
     if ((ts =
       get_message_typesupport_handle(type_support,
-      rosidl_typesupport_introspection_cpp::typesupport_identifier)) != nullptr)
+      rosidl_typesupport_introspection_c__identifier)) != nullptr)
     {
       auto members =
-        static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(ts->data);
-      MessageTypeSupport_cpp msgts(members);
+        static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(ts->data);
+      MessageTypeSupport_c msgts(members);
       ok = msgts.deserializeROSmessage(sd, ros_message, nullptr);
     } else {
-      RMW_SET_ERROR_MSG("rmw_serialize: type support trouble");
-      return RMW_RET_ERROR;
+      if ((ts =
+        get_message_typesupport_handle(type_support,
+        rosidl_typesupport_introspection_cpp::typesupport_identifier)) != nullptr)
+      {
+        auto members =
+          static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(ts->data);
+        MessageTypeSupport_cpp msgts(members);
+        ok = msgts.deserializeROSmessage(sd, ros_message, nullptr);
+      } else {
+        RMW_SET_ERROR_MSG("rmw_serialize: type support trouble");
+        return RMW_RET_ERROR;
+      }
     }
+  } catch (rmw_cyclonedds_cpp::Exception & e) {
+    RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("rmw_serialize: %s", e.what());
+    ok = false;
   }
+
   return ok ? RMW_RET_OK : RMW_RET_ERROR;
 }
 

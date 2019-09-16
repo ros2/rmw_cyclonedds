@@ -32,9 +32,10 @@ cycser::cycser(std::vector<unsigned char> & dst_)
   dst.push_back(0);
 }
 
-cycdeserbase::cycdeserbase(const char * data_)
+cycdeserbase::cycdeserbase(const char * data_, size_t lim_)
 : data(data_),
   pos(0),
+  lim(lim_),
   swap_bytes(false)
 {
   /* Get the endianness byte (skip unused first byte in data[0]) */
@@ -48,13 +49,12 @@ cycdeserbase::cycdeserbase(const char * data_)
 }
 
 cycdeser::cycdeser(const void * data_, size_t size_)
-: cycdeserbase(static_cast<const char *>(data_)),
-  lim(size_ - 4)
+: cycdeserbase(static_cast<const char *>(data_), size_ - 4)
 {
 }
 
 cycprint::cycprint(char * buf_, size_t bufsize_, const void * data_, size_t size_)
-: cycdeserbase(static_cast<const char *>(data_)),
+: cycdeserbase(static_cast<const char *>(data_), size_ - 4),
   buf(buf_),
   bufsize(bufsize_)
 {

@@ -24,6 +24,10 @@
 #include <vector>
 #include <type_traits>
 
+#include "rmw_cyclonedds_cpp/DeserializationException.hpp"
+
+using rmw_cyclonedds_cpp::DeserializationException;
+
 class cycser
 {
 public:
@@ -159,17 +163,10 @@ private:
 class cycdeserbase
 {
 public:
-  explicit cycdeserbase(const char * data_);
+  explicit cycdeserbase(const char * data_, size_t lim_);
   cycdeserbase() = delete;
 
 protected:
-  inline void align(size_t a)
-  {
-    if ((pos % a) != 0) {
-      pos += a - (pos % a);
-    }
-  }
-
   inline uint16_t bswap2u(uint16_t x)
   {
     return (uint16_t) ((x >> 8) | (x << 8));
@@ -197,8 +194,28 @@ protected:
     return (int64_t) bswap8u((uint64_t) x);
   }
 
+  inline void align(size_t a)
+  {
+    if ((pos % a) != 0) {
+      pos += a - (pos % a);
+    }
+  }
+  inline void validate_size(size_t sz)
+  {
+    if (pos + sz > lim) {
+      throw DeserializationException("invalid data size");
+    }
+  }
+  inline void validate_str(size_t sz)
+  {
+    if (sz > 0 && data[pos + sz - 1] != '\0') {
+      throw DeserializationException("string data is not null-terminated");
+    }
+  }
+
   const char * data;
   size_t pos;
+  size_t lim;
   bool swap_bytes;
 };
 
@@ -231,6 +248,7 @@ public:
 #define DESER8(T) DESER(T, )
 #define DESER(T, fn_swap) inline void deserialize(T & x) { \
     align(sizeof(x)); \
+    validate_size(sizeof(x)); \
     x = *reinterpret_cast<const T *>(data + pos); \
     if (swap_bytes) {x = fn_swap(x);} \
     pos += sizeof(x); \
@@ -265,6 +283,8 @@ public:
   inline void deserialize(char * & x)
   {
     const uint32_t sz = deserialize32();
+    validate_size(sz);
+    validate_str(sz);
     x = reinterpret_cast<char *>(malloc(sz));
     memcpy(x, data + pos, sz);
     pos += sz;
@@ -272,9 +292,11 @@ public:
   inline void deserialize(std::string & x)
   {
     const uint32_t sz = deserialize32();
+    validate_size(sz);
     if (sz == 0) {
       x = std::string("");
     } else {
+      validate_str(sz);
       x = std::string(data + pos, sz - 1);
     }
     pos += sz;
@@ -282,6 +304,8 @@ public:
   inline void deserialize(std::wstring & x)
   {
     const uint32_t sz = deserialize32();
+    validate_size(sz * sizeof(wchar_t));
+    // wstring is not null-terminated in cdr
     x = std::wstring(reinterpret_cast<const wchar_t *>(data + pos), sz);
     pos += sz * sizeof(wchar_t);
   }
@@ -290,6 +314,7 @@ public:
 #define DESER_A(T, fn_swap) inline void deserializeA(T * x, size_t cnt) { \
     if (cnt > 0) { \
       align(sizeof(T)); \
+      validate_size(cnt * sizeof(T)); \
       if (swap_bytes) { \
         for (size_t i = 0; i < cnt; i++) { \
           x[i] = fn_swap(*reinterpret_cast<const T *>(data + pos)); \
@@ -338,6 +363,7 @@ public:
   inline void deserialize(std::vector<bool> & x)
   {
     const uint32_t sz = deserialize32();
+    validate_size(sz);
     x.resize(sz);
     for (size_t i = 0; i < sz; i++) {
       x[i] = ((data + pos)[i] != 0);
@@ -349,9 +375,6 @@ public:
   {
     deserializeA(x.data(), x.size());
   }
-
-private:
-  size_t lim;   // ignored for now ... better provide correct input
 };
 
 class cycprint : cycdeserbase
@@ -388,6 +411,7 @@ public:
 #define PRNT8(T, F) PRNT(T, F, )
 #define PRNT(T, F, fn_swap) inline void print(T & x) { \
     align(sizeof(x)); \
+    validate_size(sizeof(x)); \
     x = *reinterpret_cast<const T *>(data + pos); \
     if (swap_bytes) {x = fn_swap(x);} \
     prtf(&buf, &bufsize, F, x); \
@@ -413,6 +437,7 @@ public:
   {
     union { uint32_t u; float f; } tmp;
     align(sizeof(x));
+    validate_size(sizeof(x));
     tmp.u = *reinterpret_cast<const uint32_t *>(data + pos);
     if (swap_bytes) {tmp.u = bswap4u(tmp.u);}
     static_cast<void>(tmp.u);
@@ -423,6 +448,7 @@ public:
   {
     union { uint64_t u; double f; } tmp;
     align(sizeof(x));
+    validate_size(sizeof(x));
     tmp.u = *reinterpret_cast<const uint64_t *>(data + pos);
     if (swap_bytes) {tmp.u = bswap8u(tmp.u);}
     static_cast<void>(tmp.u);
@@ -433,6 +459,7 @@ public:
   {
     uint32_t sz;
     align(sizeof(sz));
+    validate_size(sizeof(sz));
     sz = *reinterpret_cast<const uint32_t *>(data + pos);
     if (swap_bytes) {sz = bswap4u(sz);}
     pos += sizeof(sz);
@@ -441,6 +468,8 @@ public:
   inline void print(char * & x)
   {
     const uint32_t sz = get32();
+    validate_size(sz);
+    validate_str(sz);
     const int len = (sz == 0) ? 0 : (sz > INT32_MAX) ? INT32_MAX : static_cast<int>(sz - 1);
     static_cast<void>(x);
     prtf(&buf, &bufsize, "\"%*.*s\"", len, len, static_cast<const char *>(data + pos));
@@ -449,6 +478,8 @@ public:
   inline void print(std::string & x)
   {
     const uint32_t sz = get32();
+    validate_size(sz);
+    validate_str(sz);
     const int len = (sz == 0) ? 0 : (sz > INT32_MAX) ? INT32_MAX : static_cast<int>(sz - 1);
     static_cast<void>(x);
     prtf(&buf, &bufsize, "\"%*.*s\"", len, len, static_cast<const char *>(data + pos));
@@ -457,6 +488,8 @@ public:
   inline void print(std::wstring & x)
   {
     const uint32_t sz = get32();
+    validate_size(sz * sizeof(wchar_t));
+    // wstring is not null-terminated in cdr
     x = std::wstring(reinterpret_cast<const wchar_t *>(data + pos), sz);
     prtf(&buf, &bufsize, "\"%ls\"", x.c_str());
     pos += sz * sizeof(wchar_t);

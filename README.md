@@ -5,7 +5,7 @@ with [*Eclipse Cyclone DDS*](https://github.com/eclipse-cyclonedds/cyclonedds) a
 implementation.
 
 ## Getting, building and using it
-   
+
 All it takes to get Cyclone DDS support into ROS2 is to clone this repository into the ROS2 workspace
 source directory, and then run colcon build in the usual manner:
 
@@ -36,9 +36,3 @@ There are a number of known limitations:
 
 * Cyclone DDS does not yet implement DDS Security.  Consequently, there is no support for security
   in this RMW implementation either.
-
-* Deserialization only handles native format (it doesn't do any byte swapping).  This is pure
-  laziness, adding it is trivial.
-    
-* Deserialization assumes the input is valid and will do terrible things if it isn't.  Again, pure
-  laziness, it's just adding some bounds checks and other validation code.
