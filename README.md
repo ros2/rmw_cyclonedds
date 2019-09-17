@@ -13,11 +13,11 @@ source directory, and then run colcon build in the usual manner:
     git clone https://github.com/atolab/rmw_cyclonedds
     cd ..
     rosdep install --from src -i
-    colcon build --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCYCLONEDDS_FROM_SOURCE=ON
+    colcon build
     export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 
-If you prefer to install CycloneDDS yourself, set `-DCYCLONEDDS_FROM_SOURCE=OFF`. CMake caches this
-value, so you can omit it between builds
+Optionally, you can `git clone https://github.com/eclipse-cyclonedds/cyclonedds` in your workspace
+as well. If you don't, `rosdep` will download it from the package index.
 
 This seems to work fine on Linux with a binary ROS2 installation as well as when building ROS2 from
 source.  On macOS it has only been tested in a source build on a machine in an "unsupported"
@@ -26,7 +26,7 @@ few details that are caused by the machine configuration, that works fine, too. 
 why it wouldn't work the same on Windows, but I haven't tried.
 
 If you want to use a pre-existing installation of Cyclone DDS, you don't need to clone it, but you
-may have to tell CMake where to look for it using the CycloneDDS\_DIR variable.  That also appears
+may have to tell CMake where to look for it using the `CycloneDDS_DIR` variable.  That also appears
 to be the case if there are other packages in the ROS2 workspace that you would like to use Cyclone
 DDS directly instead of via the ROS2 abstraction.
 
