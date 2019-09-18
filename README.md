@@ -11,13 +11,11 @@ source directory, and then run colcon build in the usual manner:
 
     cd ros2_ws/src
     git clone https://github.com/atolab/rmw_cyclonedds
+    git clone https://github.com/eclipse-cyclonedds/cyclonedds
     cd ..
     rosdep install --from src -i
     colcon build
     export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-
-Optionally, you can `git clone https://github.com/eclipse-cyclonedds/cyclonedds` in your workspace
-as well. If you don't, `rosdep` will download it from the package index.
 
 This seems to work fine on Linux with a binary ROS2 installation as well as when building ROS2 from
 source.  On macOS it has only been tested in a source build on a machine in an "unsupported"
