@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "rmw_cyclonedds_cpp/Exception.hpp"
+#include "rmw_cyclonedds_cpp/exception.hpp"
 
 using rmw_cyclonedds_cpp::Exception;
 

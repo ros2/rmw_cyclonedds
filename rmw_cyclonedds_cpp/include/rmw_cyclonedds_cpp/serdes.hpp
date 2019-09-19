@@ -20,11 +20,12 @@
 #include <stdarg.h>
 
 #include <array>
+#include <cassert>
 #include <string>
 #include <vector>
 #include <type_traits>
 
-#include "rmw_cyclonedds_cpp/DeserializationException.hpp"
+#include "rmw_cyclonedds_cpp/deserialization_exception.hpp"
 
 using rmw_cyclonedds_cpp::DeserializationException;
 
@@ -198,11 +199,15 @@ protected:
   {
     if ((pos % a) != 0) {
       pos += a - (pos % a);
+      if (pos > lim) {
+        throw DeserializationException("invalid data size");
+      }
     }
   }
-  inline void validate_size(size_t sz)
+  inline void validate_size(size_t count, size_t sz)
   {
-    if (pos + sz > lim) {
+    assert(sz == 1 || sz == 2 || sz == 4 || sz == 8);
+    if (count > (lim - pos) / sz) {
       throw DeserializationException("invalid data size");
     }
   }
@@ -248,7 +253,7 @@ public:
 #define DESER8(T) DESER(T, )
 #define DESER(T, fn_swap) inline void deserialize(T & x) { \
     align(sizeof(x)); \
-    validate_size(sizeof(x)); \
+    validate_size(1, sizeof(x)); \
     x = *reinterpret_cast<const T *>(data + pos); \
     if (swap_bytes) {x = fn_swap(x);} \
     pos += sizeof(x); \
@@ -276,14 +281,16 @@ public:
   {
     deserialize(*reinterpret_cast<uint64_t *>(&x));
   }
-  inline uint32_t deserialize32()
+  inline uint32_t deserialize_len(size_t el_sz)
   {
-    uint32_t sz; deserialize(sz); return sz;
+    uint32_t sz;
+    deserialize(sz);
+    validate_size(sz, el_sz);
+    return sz;
   }
   inline void deserialize(char * & x)
   {
-    const uint32_t sz = deserialize32();
-    validate_size(sz);
+    const uint32_t sz = deserialize_len(sizeof(char));
     validate_str(sz);
     x = reinterpret_cast<char *>(malloc(sz));
     memcpy(x, data + pos, sz);
@@ -291,8 +298,7 @@ public:
   }
   inline void deserialize(std::string & x)
   {
-    const uint32_t sz = deserialize32();
-    validate_size(sz);
+    const uint32_t sz = deserialize_len(sizeof(char));
     if (sz == 0) {
       x = std::string("");
     } else {
@@ -303,8 +309,7 @@ public:
   }
   inline void deserialize(std::wstring & x)
   {
-    const uint32_t sz = deserialize32();
-    validate_size(sz * sizeof(wchar_t));
+    const uint32_t sz = deserialize_len(sizeof(wchar_t));
     // wstring is not null-terminated in cdr
     x = std::wstring(reinterpret_cast<const wchar_t *>(data + pos), sz);
     pos += sz * sizeof(wchar_t);
@@ -314,7 +319,7 @@ public:
 #define DESER_A(T, fn_swap) inline void deserializeA(T * x, size_t cnt) { \
     if (cnt > 0) { \
       align(sizeof(T)); \
-      validate_size(cnt * sizeof(T)); \
+      validate_size(cnt, sizeof(T)); \
       if (swap_bytes) { \
         for (size_t i = 0; i < cnt; i++) { \
           x[i] = fn_swap(*reinterpret_cast<const T *>(data + pos)); \
@@ -356,14 +361,13 @@ public:
   template<class T>
   inline void deserialize(std::vector<T> & x)
   {
-    const uint32_t sz = deserialize32();
+    const uint32_t sz = deserialize_len(1);
     x.resize(sz);
     deserializeA(x.data(), sz);
   }
   inline void deserialize(std::vector<bool> & x)
   {
-    const uint32_t sz = deserialize32();
-    validate_size(sz);
+    const uint32_t sz = deserialize_len(sizeof(unsigned char));
     x.resize(sz);
     for (size_t i = 0; i < sz; i++) {
       x[i] = ((data + pos)[i] != 0);
@@ -411,7 +415,7 @@ public:
 #define PRNT8(T, F) PRNT(T, F, )
 #define PRNT(T, F, fn_swap) inline void print(T & x) { \
     align(sizeof(x)); \
-    validate_size(sizeof(x)); \
+    validate_size(1, sizeof(x)); \
     x = *reinterpret_cast<const T *>(data + pos); \
     if (swap_bytes) {x = fn_swap(x);} \
     prtf(&buf, &bufsize, F, x); \
@@ -437,7 +441,7 @@ public:
   {
     union { uint32_t u; float f; } tmp;
     align(sizeof(x));
-    validate_size(sizeof(x));
+    validate_size(1, sizeof(x));
     tmp.u = *reinterpret_cast<const uint32_t *>(data + pos);
     if (swap_bytes) {tmp.u = bswap4u(tmp.u);}
     static_cast<void>(tmp.u);
@@ -448,27 +452,27 @@ public:
   {
     union { uint64_t u; double f; } tmp;
     align(sizeof(x));
-    validate_size(sizeof(x));
+    validate_size(1, sizeof(x));
     tmp.u = *reinterpret_cast<const uint64_t *>(data + pos);
     if (swap_bytes) {tmp.u = bswap8u(tmp.u);}
     static_cast<void>(tmp.u);
     prtf(&buf, &bufsize, "%f", tmp.f);
     pos += sizeof(x);
   }
-  inline uint32_t get32()
+  inline uint32_t get_len(size_t el_sz)
   {
     uint32_t sz;
     align(sizeof(sz));
-    validate_size(sizeof(sz));
+    validate_size(1, sizeof(sz));
     sz = *reinterpret_cast<const uint32_t *>(data + pos);
     if (swap_bytes) {sz = bswap4u(sz);}
     pos += sizeof(sz);
+    validate_size(sz, el_sz);
     return sz;
   }
   inline void print(char * & x)
   {
-    const uint32_t sz = get32();
-    validate_size(sz);
+    const uint32_t sz = get_len(sizeof(char));
     validate_str(sz);
     const int len = (sz == 0) ? 0 : (sz > INT32_MAX) ? INT32_MAX : static_cast<int>(sz - 1);
     static_cast<void>(x);
@@ -477,8 +481,7 @@ public:
   }
   inline void print(std::string & x)
   {
-    const uint32_t sz = get32();
-    validate_size(sz);
+    const uint32_t sz = get_len(sizeof(char));
     validate_str(sz);
     const int len = (sz == 0) ? 0 : (sz > INT32_MAX) ? INT32_MAX : static_cast<int>(sz - 1);
     static_cast<void>(x);
@@ -487,8 +490,7 @@ public:
   }
   inline void print(std::wstring & x)
   {
-    const uint32_t sz = get32();
-    validate_size(sz * sizeof(wchar_t));
+    const uint32_t sz = get_len(sizeof(wchar_t));
     // wstring is not null-terminated in cdr
     x = std::wstring(reinterpret_cast<const wchar_t *>(data + pos), sz);
     prtf(&buf, &bufsize, "\"%ls\"", x.c_str());
@@ -509,7 +511,7 @@ public:
   template<class T>
   inline void print(std::vector<T> & x)
   {
-    const uint32_t sz = get32();
+    const uint32_t sz = get_len(1);
     printA(x.data(), sz);
   }
   template<class T, size_t S>

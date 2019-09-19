@@ -64,8 +64,8 @@ add_library(rmw_cyclonedds_cpp
   src/serdes.cpp
   src/graphrhc.cpp
   src/u16string.cpp
-  src/Exception.cpp
-  src/DeserializationException.cpp
+  src/exception.cpp
+  src/deserialization_exception.cpp
 )
 
 target_link_libraries(rmw_cyclonedds_cpp CycloneDDS::ddsc)
