@@ -30,7 +30,6 @@ DDS directly instead of via the ROS2 abstraction.
 
 ## Known limitations
 
-There are a number of known limitations:
-
-* Cyclone DDS does not yet implement DDS Security.  Consequently, there is no support for security
-  in this RMW implementation either.
+Cyclone DDS doesn't yet implement the DDS Security standard, nor does it fully implement
+the Lifespan, Deadline and some of the Liveliness QoS modes.  Consequently these features
+of ROS2 are also not yet supported when using Cyclone DDS.
