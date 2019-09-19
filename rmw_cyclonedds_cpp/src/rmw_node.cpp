@@ -2577,7 +2577,7 @@ static rmw_ret_t get_cs_names_and_types_by_node(
   const auto re_typ = std::regex("^(.*::)dds_::(.*)_(Response|Request)_$", std::regex::extended);
   const auto filter_and_map =
     [re_tp, re_typ, guids, node_name,
-    looking_for_services](const dds_builtintopic_endpoint_t & sample, std::string & topic_name,
+      looking_for_services](const dds_builtintopic_endpoint_t & sample, std::string & topic_name,
       std::string & type_name) -> bool {
       std::cmatch cm_tp, cm_typ;
       if (node_name != nullptr && guids.count(sample.participant_key) == 0) {
