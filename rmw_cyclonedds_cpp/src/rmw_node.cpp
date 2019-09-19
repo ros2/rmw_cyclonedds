@@ -69,8 +69,8 @@
 #define REPORT_BLOCKED_REQUESTS 0
 
 #define RET_ERR_X(msg, code) do {RMW_SET_ERROR_MSG(msg); code;} while (0)
-#define RET_NULL_X(var, code) do {if (!var) RET_ERR_X (#var " is null", code);} while (0)
-#define RET_ALLOC_X(var, code) do {if (!var) RET_ERR_X ("failed to allocate " #var, code); \
+#define RET_NULL_X(var, code) do {if (!var) {RET_ERR_X(#var " is null", code);}} while (0)
+#define RET_ALLOC_X(var, code) do {if (!var) {RET_ERR_X("failed to allocate " #var, code);} \
 } while (0)
 #define RET_WRONG_IMPLID_X(var, code) do { \
     RET_NULL_X(var, code); \
@@ -2577,7 +2577,7 @@ static rmw_ret_t get_cs_names_and_types_by_node(
   const auto re_typ = std::regex("^(.*::)dds_::(.*)_(Response|Request)_$", std::regex::extended);
   const auto filter_and_map =
     [re_tp, re_typ, guids, node_name,
-      looking_for_services](const dds_builtintopic_endpoint_t & sample, std::string & topic_name,
+    looking_for_services](const dds_builtintopic_endpoint_t & sample, std::string & topic_name,
       std::string & type_name) -> bool {
       std::cmatch cm_tp, cm_typ;
       if (node_name != nullptr && guids.count(sample.participant_key) == 0) {
