@@ -654,9 +654,7 @@ inline size_t get_submessage_array_deserialize(
   size_t max_align)
 {
   (void)member;
-  uint32_t vsize = 0;
-  // Deserialize length
-  deser >> vsize;
+  uint32_t vsize = deser.deserialize_len(1);
   auto vector = reinterpret_cast<std::vector<unsigned char> *>(field);
   if (call_new) {
     new(vector) std::vector<unsigned char>;
@@ -677,9 +675,7 @@ inline size_t get_submessage_array_deserialize(
   size_t)
 {
   (void)member;
-  // Deserialize length
-  uint32_t vsize = 0;
-  deser >> vsize;
+  uint32_t vsize = deser.deserialize_len(1);
   auto tmparray = static_cast<rosidl_generator_c__void__Sequence *>(field);
   rosidl_generator_c__void__Sequence__init(tmparray, vsize, sub_members_size);
   subros_message = reinterpret_cast<void *>(tmparray->data);
@@ -786,7 +782,7 @@ void print_field(const M * member, cycprint & deser, T & dummy)
     if (member->array_size_ && !member->is_upper_bound_) {
       deser.printA(&dummy, member->array_size_);
     } else {
-      int32_t dsize = deser.get32();
+      int32_t dsize = deser.get_len(1);
       deser.printA(&dummy, dsize);
     }
     deser.print_constant("}");
@@ -857,7 +853,7 @@ bool TypeSupport<MembersType>::printROSmessage(
             if (member->array_size_ && !member->is_upper_bound_) {
               array_size = member->array_size_;
             } else {
-              array_size = deser.get32();
+              array_size = deser.get_len(1);
             }
             deser.print_constant("{");
             for (size_t index = 0; index < array_size; ++index) {

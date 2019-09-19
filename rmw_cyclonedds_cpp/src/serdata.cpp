@@ -166,44 +166,52 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
   enum ddsi_serdata_kind kind,
   const void * sample)
 {
-  const struct sertopic_rmw * topic = static_cast<const struct sertopic_rmw *>(topiccmn);
-  struct serdata_rmw * d = rmw_serdata_new(topic, kind);
-  if (kind != SDK_DATA) {
-    /* ROS2 doesn't do keys, so SDK_KEY is trivial */
-  } else if (!topic->is_request_header) {
-    cycser sd(d->data);
-    if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
-      auto typed_typesupport =
-        static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
-      (void) typed_typesupport->serializeROSmessage(sample, sd);
-    } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
-      auto typed_typesupport =
-        static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
-      (void) typed_typesupport->serializeROSmessage(sample, sd);
+  try {
+    const struct sertopic_rmw * topic = static_cast<const struct sertopic_rmw *>(topiccmn);
+    struct serdata_rmw * d = rmw_serdata_new(topic, kind);
+    if (kind != SDK_DATA) {
+      /* ROS2 doesn't do keys, so SDK_KEY is trivial */
+    } else if (!topic->is_request_header) {
+      cycser sd(d->data);
+      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
+        auto typed_typesupport =
+          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
+        (void) typed_typesupport->serializeROSmessage(sample, sd);
+      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
+        auto typed_typesupport =
+          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
+        (void) typed_typesupport->serializeROSmessage(sample, sd);
+      }
+    } else {
+      /* The "prefix" lambda is there to inject the service invocation header data into the CDR
+        stream -- I haven't checked how it is done in the official RMW implementations, so it is
+        probably incompatible. */
+      const cdds_request_wrapper_t * wrap = static_cast<const cdds_request_wrapper_t *>(sample);
+      auto prefix = [wrap](cycser & ser) {ser << wrap->header.guid; ser << wrap->header.seq;};
+      cycser sd(d->data);
+      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
+        auto typed_typesupport =
+          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
+        (void) typed_typesupport->serializeROSmessage(wrap->data, sd, prefix);
+      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
+        auto typed_typesupport =
+          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
+        (void) typed_typesupport->serializeROSmessage(wrap->data, sd, prefix);
+      }
     }
-  } else {
-    /* The "prefix" lambda is there to inject the service invocation header data into the CDR
-       stream -- I haven't checked how it is done in the official RMW implementations, so it is
-       probably incompatible. */
-    const cdds_request_wrapper_t * wrap = static_cast<const cdds_request_wrapper_t *>(sample);
-    auto prefix = [wrap](cycser & ser) {ser << wrap->header.guid; ser << wrap->header.seq;};
-    cycser sd(d->data);
-    if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
-      auto typed_typesupport =
-        static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
-      (void) typed_typesupport->serializeROSmessage(wrap->data, sd, prefix);
-    } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
-      auto typed_typesupport =
-        static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
-      (void) typed_typesupport->serializeROSmessage(wrap->data, sd, prefix);
+    /* FIXME: CDR padding in DDSI makes me do this to avoid reading beyond the bounds of the vector
+      when copying data to network.  Should fix Cyclone to handle that more elegantly.  */
+    while (d->data.size() % 4) {
+      d->data.push_back(0);
     }
+    return d;
+  } catch (rmw_cyclonedds_cpp::Exception & e) {
+    RMW_SET_ERROR_MSG(e.what());
+    return nullptr;
+  } catch (std::runtime_error & e) {
+    RMW_SET_ERROR_MSG(e.what());
+    return nullptr;
   }
-  /* FIXME: CDR padding in DDSI makes me do this to avoid reading beyond the bounds of the vector
-     when copying data to network.  Should fix Cyclone to handle that more elegantly.  */
-  while (d->data.size() % 4) {
-    d->data.push_back(0);
-  }
-  return d;
 }
 
 struct ddsi_serdata * serdata_rmw_from_serialized_message(
@@ -257,42 +265,51 @@ static bool serdata_rmw_to_sample(
   const struct ddsi_serdata * dcmn, void * sample, void ** bufptr,
   void * buflim)
 {
-  static_cast<void>(bufptr);    // unused
-  static_cast<void>(buflim);    // unused
-  const struct serdata_rmw * d = static_cast<const struct serdata_rmw *>(dcmn);
-  const struct sertopic_rmw * topic = static_cast<const struct sertopic_rmw *>(d->topic);
-  assert(bufptr == NULL);
-  assert(buflim == NULL);
-  if (d->kind != SDK_DATA) {
-    /* ROS2 doesn't do keys in a meaningful way yet */
-  } else if (!topic->is_request_header) {
-    cycdeser sd(static_cast<const void *>(d->data.data()), d->data.size());
-    if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
-      auto typed_typesupport =
-        static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
-      return typed_typesupport->deserializeROSmessage(sd, sample);
-    } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
-      auto typed_typesupport =
-        static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
-      return typed_typesupport->deserializeROSmessage(sd, sample);
+  try {
+    static_cast<void>(bufptr);    // unused
+    static_cast<void>(buflim);    // unused
+    const struct serdata_rmw * d = static_cast<const struct serdata_rmw *>(dcmn);
+    const struct sertopic_rmw * topic = static_cast<const struct sertopic_rmw *>(d->topic);
+    assert(bufptr == NULL);
+    assert(buflim == NULL);
+    if (d->kind != SDK_DATA) {
+      /* ROS2 doesn't do keys in a meaningful way yet */
+    } else if (!topic->is_request_header) {
+      cycdeser sd(static_cast<const void *>(d->data.data()), d->data.size());
+      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
+        auto typed_typesupport =
+          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
+        return typed_typesupport->deserializeROSmessage(sd, sample);
+      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
+        auto typed_typesupport =
+          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
+        return typed_typesupport->deserializeROSmessage(sd, sample);
+      }
+    } else {
+      /* The "prefix" lambda is there to inject the service invocation header data into the CDR
+        stream -- I haven't checked how it is done in the official RMW implementations, so it is
+        probably incompatible. */
+      cdds_request_wrapper_t * const wrap = static_cast<cdds_request_wrapper_t *>(sample);
+      auto prefix = [wrap](cycdeser & ser) {ser >> wrap->header.guid; ser >> wrap->header.seq;};
+      cycdeser sd(static_cast<const void *>(d->data.data()), d->data.size());
+      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
+        auto typed_typesupport =
+          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
+        return typed_typesupport->deserializeROSmessage(sd, wrap->data, prefix);
+      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
+        auto typed_typesupport =
+          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
+        return typed_typesupport->deserializeROSmessage(sd, wrap->data, prefix);
+      }
     }
-  } else {
-    /* The "prefix" lambda is there to inject the service invocation header data into the CDR
-       stream -- I haven't checked how it is done in the official RMW implementations, so it is
-       probably incompatible. */
-    cdds_request_wrapper_t * const wrap = static_cast<cdds_request_wrapper_t *>(sample);
-    auto prefix = [wrap](cycdeser & ser) {ser >> wrap->header.guid; ser >> wrap->header.seq;};
-    cycdeser sd(static_cast<const void *>(d->data.data()), d->data.size());
-    if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
-      auto typed_typesupport =
-        static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
-      return typed_typesupport->deserializeROSmessage(sd, wrap->data, prefix);
-    } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
-      auto typed_typesupport =
-        static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
-      return typed_typesupport->deserializeROSmessage(sd, wrap->data, prefix);
-    }
+  } catch (rmw_cyclonedds_cpp::Exception & e) {
+    RMW_SET_ERROR_MSG(e.what());
+    return false;
+  } catch (std::runtime_error & e) {
+    RMW_SET_ERROR_MSG(e.what());
+    return false;
   }
+
   return false;
 }
 
@@ -322,41 +339,50 @@ static bool serdata_rmw_eqkey(const struct ddsi_serdata * a, const struct ddsi_s
 static size_t serdata_rmw_print(
   const struct ddsi_sertopic * tpcmn, const struct ddsi_serdata * dcmn, char * buf, size_t bufsize)
 {
-  const struct serdata_rmw * d = static_cast<const struct serdata_rmw *>(dcmn);
-  const struct sertopic_rmw * topic = static_cast<const struct sertopic_rmw *>(tpcmn);
-  if (d->kind != SDK_DATA) {
-    /* ROS2 doesn't do keys in a meaningful way yet */
-    return static_cast<size_t>(snprintf(buf, bufsize, ":k:{}"));
-  } else if (!topic->is_request_header) {
-    cycprint sd(buf, bufsize, static_cast<const void *>(d->data.data()), d->data.size());
-    if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
-      auto typed_typesupport =
-        static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
-      return typed_typesupport->printROSmessage(sd);
-    } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
-      auto typed_typesupport =
-        static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
-      return typed_typesupport->printROSmessage(sd);
+  try {
+    const struct serdata_rmw * d = static_cast<const struct serdata_rmw *>(dcmn);
+    const struct sertopic_rmw * topic = static_cast<const struct sertopic_rmw *>(tpcmn);
+    if (d->kind != SDK_DATA) {
+      /* ROS2 doesn't do keys in a meaningful way yet */
+      return static_cast<size_t>(snprintf(buf, bufsize, ":k:{}"));
+    } else if (!topic->is_request_header) {
+      cycprint sd(buf, bufsize, static_cast<const void *>(d->data.data()), d->data.size());
+      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
+        auto typed_typesupport =
+          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
+        return typed_typesupport->printROSmessage(sd);
+      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
+        auto typed_typesupport =
+          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
+        return typed_typesupport->printROSmessage(sd);
+      }
+    } else {
+      /* The "prefix" lambda is there to inject the service invocation header data into the CDR
+        stream -- I haven't checked how it is done in the official RMW implementations, so it is
+        probably incompatible. */
+      cdds_request_wrapper_t wrap;
+      auto prefix = [&wrap](cycprint & ser) {
+          ser >> wrap.header.guid; ser.print_constant(","); ser >> wrap.header.seq;
+        };
+      cycprint sd(buf, bufsize, static_cast<const void *>(d->data.data()), d->data.size());
+      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
+        auto typed_typesupport =
+          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
+        return typed_typesupport->printROSmessage(sd, prefix);
+      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
+        auto typed_typesupport =
+          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
+        return typed_typesupport->printROSmessage(sd, prefix);
+      }
     }
-  } else {
-    /* The "prefix" lambda is there to inject the service invocation header data into the CDR
-       stream -- I haven't checked how it is done in the official RMW implementations, so it is
-       probably incompatible. */
-    cdds_request_wrapper_t wrap;
-    auto prefix = [&wrap](cycprint & ser) {
-        ser >> wrap.header.guid; ser.print_constant(","); ser >> wrap.header.seq;
-      };
-    cycprint sd(buf, bufsize, static_cast<const void *>(d->data.data()), d->data.size());
-    if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
-      auto typed_typesupport =
-        static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
-      return typed_typesupport->printROSmessage(sd, prefix);
-    } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
-      auto typed_typesupport =
-        static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
-      return typed_typesupport->printROSmessage(sd, prefix);
-    }
+  } catch (rmw_cyclonedds_cpp::Exception & e) {
+    RMW_SET_ERROR_MSG(e.what());
+    return false;
+  } catch (std::runtime_error & e) {
+    RMW_SET_ERROR_MSG(e.what());
+    return false;
   }
+
   return false;
 }
 #endif
