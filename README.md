@@ -10,7 +10,7 @@ All it takes to get Cyclone DDS support into ROS2 is to clone this repository in
 source directory, and then run colcon build in the usual manner:
 
     cd ros2_ws/src
-    git clone https://github.com/atolab/rmw_cyclonedds
+    git clone https://github.com/ros2/rmw_cyclonedds
     git clone https://github.com/eclipse-cyclonedds/cyclonedds
     cd ..
     rosdep install --from src -i
