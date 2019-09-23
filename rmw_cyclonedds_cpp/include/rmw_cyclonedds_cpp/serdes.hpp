@@ -242,7 +242,6 @@ public:
   inline cycdeser & operator>>(uint64_t & x) {deserialize(x); return *this;}
   inline cycdeser & operator>>(float & x) {deserialize(x); return *this;}
   inline cycdeser & operator>>(double & x) {deserialize(x); return *this;}
-  inline cycdeser & operator>>(char * & x) {deserialize(x); return *this;}
   inline cycdeser & operator>>(std::string & x) {deserialize(x); return *this;}
   inline cycdeser & operator>>(std::wstring & x) {deserialize(x); return *this;}
   template<class T>
@@ -287,14 +286,6 @@ public:
     deserialize(sz);
     validate_size(sz, el_sz);
     return sz;
-  }
-  inline void deserialize(char * & x)
-  {
-    const uint32_t sz = deserialize_len(sizeof(char));
-    validate_str(sz);
-    x = reinterpret_cast<char *>(malloc(sz));
-    memcpy(x, data + pos, sz);
-    pos += sz;
   }
   inline void deserialize(std::string & x)
   {
