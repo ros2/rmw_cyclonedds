@@ -35,7 +35,7 @@ cycser::cycser(std::vector<unsigned char> & dst_)
 cycdeserbase::cycdeserbase(const char * data_, size_t size_)
 : data(data_),
   pos(0),
-  lim(size_ - 4),
+  lim(size_),
   swap_bytes(false)
 {
   /* Get the endianness byte (skip unused first byte in data[0]) */
@@ -46,6 +46,7 @@ cycdeserbase::cycdeserbase(const char * data_, size_t size_)
 
   /* Ignore representation options (data_[2] and data_[3]) */
   data += 4;
+  lim -= 4;
 }
 
 cycdeser::cycdeser(const void * data_, size_t size_)
