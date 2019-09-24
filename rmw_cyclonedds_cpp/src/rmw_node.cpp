@@ -2442,9 +2442,9 @@ static rmw_ret_t get_node_guids(
   if (ret != RMW_RET_OK) {
     return ret;
   } else if (guids.size() == 0) {
-    /* It appears the get_..._by_node operations are supposed to return ERROR if no such node
-       exists */
-    return RMW_RET_ERROR;
+    /* It appears the get_..._by_node operations are supposed to return NODE_NAME_NON_EXISTENT
+       if no such node exists */
+    return RMW_RET_NODE_NAME_NON_EXISTENT;
   } else {
     return RMW_RET_OK;
   }
