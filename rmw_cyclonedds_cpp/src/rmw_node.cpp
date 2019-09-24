@@ -2442,9 +2442,14 @@ static rmw_ret_t get_node_guids(
   if (ret != RMW_RET_OK) {
     return ret;
   } else if (guids.size() == 0) {
-    /* It appears the get_..._by_node operations are supposed to return NODE_NAME_NON_EXISTENT
-       if no such node exists */
+    /* It appears the get_..._by_node operations are supposed to return
+       NODE_NAME_NON_EXISTENT (newly introduced in Eloquent) or ERROR
+       (on Dashing and earlier) if no such node exists */
+#ifdef RMW_RET_NODE_NAME_NON_EXISTENT
     return RMW_RET_NODE_NAME_NON_EXISTENT;
+#else
+    return RMW_RET_ERROR;
+#endif
   } else {
     return RMW_RET_OK;
   }
