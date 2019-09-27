@@ -47,7 +47,6 @@ public:
   inline cycser & operator<<(uint64_t x) {serialize(x); return *this;}
   inline cycser & operator<<(float x) {serialize(x); return *this;}
   inline cycser & operator<<(double x) {serialize(x); return *this;}
-  inline cycser & operator<<(const char * x) {serialize(x); return *this;}
   inline cycser & operator<<(const std::string & x) {serialize(x); return *this;}
   inline cycser & operator<<(const std::wstring & x) {serialize(x); return *this;}
   template<class T>
@@ -79,14 +78,6 @@ public:
   inline void serialize(bool x)
   {
     serialize(static_cast<unsigned char>(x));
-  }
-  inline void serialize(const char * x)
-  {
-    size_t sz = strlen(x) + 1;
-    serialize(static_cast<uint32_t>(sz));
-    resize(off + sz);
-    memcpy(data() + off, x, sz);
-    off += sz;
   }
   inline void serialize(const std::string & x)
   {
@@ -242,7 +233,6 @@ public:
   inline cycdeser & operator>>(uint64_t & x) {deserialize(x); return *this;}
   inline cycdeser & operator>>(float & x) {deserialize(x); return *this;}
   inline cycdeser & operator>>(double & x) {deserialize(x); return *this;}
-  inline cycdeser & operator>>(char * & x) {deserialize(x); return *this;}
   inline cycdeser & operator>>(std::string & x) {deserialize(x); return *this;}
   inline cycdeser & operator>>(std::wstring & x) {deserialize(x); return *this;}
   template<class T>
@@ -287,14 +277,6 @@ public:
     deserialize(sz);
     validate_size(sz, el_sz);
     return sz;
-  }
-  inline void deserialize(char * & x)
-  {
-    const uint32_t sz = deserialize_len(sizeof(char));
-    validate_str(sz);
-    x = reinterpret_cast<char *>(malloc(sz));
-    memcpy(x, data + pos, sz);
-    pos += sz;
   }
   inline void deserialize(std::string & x)
   {
@@ -404,7 +386,6 @@ public:
   inline cycprint & operator>>(uint64_t & x) {print(x); return *this;}
   inline cycprint & operator>>(float & x) {print(x); return *this;}
   inline cycprint & operator>>(double & x) {print(x); return *this;}
-  inline cycprint & operator>>(char * & x) {print(x); return *this;}
   inline cycprint & operator>>(std::string & x) {print(x); return *this;}
   inline cycprint & operator>>(std::wstring & x) {print(x); return *this;}
   template<class T>
@@ -469,15 +450,6 @@ public:
     pos += sizeof(sz);
     validate_size(sz, el_sz);
     return sz;
-  }
-  inline void print(char * & x)
-  {
-    const uint32_t sz = get_len(sizeof(char));
-    validate_str(sz);
-    const int len = (sz == 0) ? 0 : (sz > INT32_MAX) ? INT32_MAX : static_cast<int>(sz - 1);
-    static_cast<void>(x);
-    prtf(&buf, &bufsize, "\"%*.*s\"", len, len, static_cast<const char *>(data + pos));
-    pos += sz;
   }
   inline void print(std::string & x)
   {
