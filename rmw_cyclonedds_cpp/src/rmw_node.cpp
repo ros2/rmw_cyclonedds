@@ -1090,10 +1090,11 @@ extern "C" rmw_ret_t rmw_fini_publisher_allocation(rmw_publisher_allocation_t * 
 extern "C" rmw_publisher_t * rmw_create_publisher(
   const rmw_node_t * node,
   const rosidl_message_type_support_t * type_supports, const char * topic_name,
-  const rmw_qos_profile_t * qos_policies)
+  const rmw_qos_profile_t * qos_policies, const rmw_publisher_options_t * publisher_options)
 {
   CddsPublisher * pub;
   rmw_publisher_t * rmw_publisher;
+  RET_NULL_X(publisher_options, return nullptr);
   if ((pub = create_cdds_publisher(node, type_supports, topic_name, qos_policies)) == nullptr) {
     goto fail_common_init;
   }
@@ -1104,6 +1105,7 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
   rmw_publisher->topic_name = reinterpret_cast<char *>(rmw_allocate(strlen(topic_name) + 1));
   RET_ALLOC_X(rmw_publisher->topic_name, goto fail_topic_name);
   memcpy(const_cast<char *>(rmw_publisher->topic_name), topic_name, strlen(topic_name) + 1);
+  rmw_publisher->options = *publisher_options;
   return rmw_publisher;
 fail_topic_name:
   rmw_publisher_free(rmw_publisher);
@@ -1275,13 +1277,14 @@ extern "C" rmw_ret_t rmw_fini_subscription_allocation(rmw_subscription_allocatio
 extern "C" rmw_subscription_t * rmw_create_subscription(
   const rmw_node_t * node,
   const rosidl_message_type_support_t * type_supports, const char * topic_name,
-  const rmw_qos_profile_t * qos_policies, bool ignore_local_publications)
+  const rmw_qos_profile_t * qos_policies, const rmw_subscription_options_t * subscription_options)
 {
   CddsSubscription * sub;
   rmw_subscription_t * rmw_subscription;
+  RET_NULL_X(subscription_options, return nullptr);
   if ((sub =
     create_cdds_subscription(node, type_supports, topic_name, qos_policies,
-    ignore_local_publications)) == nullptr)
+    subscription_options->ignore_local_publications)) == nullptr)
   {
     goto fail_common_init;
   }
@@ -1293,6 +1296,7 @@ extern "C" rmw_subscription_t * rmw_create_subscription(
     reinterpret_cast<const char *>(rmw_allocate(strlen(topic_name) + 1));
   RET_ALLOC_X(rmw_subscription->topic_name, goto fail_topic_name);
   memcpy(const_cast<char *>(rmw_subscription->topic_name), topic_name, strlen(topic_name) + 1);
+  rmw_subscription->options = *subscription_options;
   return rmw_subscription;
 fail_topic_name:
   rmw_subscription_free(rmw_subscription);
