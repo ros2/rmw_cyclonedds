@@ -74,4 +74,6 @@ struct ddsi_serdata * serdata_rmw_from_serialized_message(
   const struct ddsi_sertopic * topiccmn,
   const void * raw, size_t size);
 
+uint64_t serdata_response_guid(const struct ddsi_serdata * dcmn);
+
 #endif  // RMW_CYCLONEDDS_CPP__SERDATA_HPP_

@@ -313,6 +313,37 @@ static bool serdata_rmw_to_sample(
   return false;
 }
 
+uint64_t serdata_response_guid(const struct ddsi_serdata * dcmn)
+{
+  /* Deserializes just the GUID from the data; GUIDs are never 0; should self-evidently
+     never be called for a regular topic */
+  try {
+    const struct serdata_rmw * d = static_cast<const struct serdata_rmw *>(dcmn);
+    const struct sertopic_rmw * topic = static_cast<const struct sertopic_rmw *>(d->topic);
+    assert(bufptr == NULL);
+    assert(buflim == NULL);
+    if (d->kind != SDK_DATA) {
+      /* ROS2 doesn't do keys in a meaningful way yet */
+      return 0;
+    } else if (!topic->is_request_header) {
+      RMW_SET_ERROR_MSG("serdata_response_guid called for non-response topic");
+      assert(false);
+    } else {
+      uint64_t guid;
+      cycdeser sd(static_cast<const void *>(d->data.data()), d->data.size());
+      sd >> guid;
+      return guid;
+    }
+  } catch (rmw_cyclonedds_cpp::Exception & e) {
+    RMW_SET_ERROR_MSG(e.what());
+    return 0;
+  } catch (std::runtime_error & e) {
+    RMW_SET_ERROR_MSG(e.what());
+    return 0;
+  }
+  return 0;
+}
+
 static bool serdata_rmw_topicless_to_sample(
   const struct ddsi_sertopic * topic,
   const struct ddsi_serdata * dcmn, void * sample,

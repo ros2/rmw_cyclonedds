@@ -155,8 +155,14 @@ struct CddsClient
 {
   CddsCS client;
 
-#if REPORT_BLOCKED_REQUESTS
+  /* State used for avoiding spurious wakeups; if rclcpp_action is changed to handle them
+     gracefully or when things are rewritten to use content filtering instead, these
+     should no longer be needed. */
   std::mutex lock;
+  struct ddsi_serdata * response;
+  dds_time_t response_timestamp;
+
+#if REPORT_BLOCKED_REQUESTS
   dds_time_t lastcheck;
   std::map<int64_t, dds_time_t> reqtime;
 #endif
@@ -227,6 +233,8 @@ struct Cdds
 static Cdds gcdds;
 
 static void clean_waitset_caches();
+static bool check_client_trigger(CddsClient * client);
+static bool client_still_triggered(CddsClient * client);
 #if REPORT_BLOCKED_REQUESTS
 static void check_for_blocked_requests(CddsClient & client);
 #endif
@@ -1801,11 +1809,25 @@ extern "C" rmw_ret_t rmw_wait(
     ws->nelems = nelems;
   }
 
+  /* Avoiding spurious wake ups on clients because of responses meant for another client
+     currently relies on checking for a response at the end of wait().  A side-effect of
+     the check is that a non-spurious wake up also removes the request from the reader,
+     storing it in the CddsClient object.  If no further response arrives, the client's
+     reader will not be triggered again.  I'm not sure if the executor will always process
+     all events before calling wait again, so check whether it has a response waiting and
+     avoiding blocking if it does. */
+  bool have_triggered_clients = false;
+  for (auto const & c : ws->cls) {
+    if (client_still_triggered(c)) {
+      have_triggered_clients = true;
+      break;
+    }
+  }
+
   ws->trigs.resize(ws->nelems + 1);
   const dds_duration_t timeout =
-    (wait_timeout == NULL) ?
-    DDS_NEVER :
-    (dds_duration_t) wait_timeout->sec * 1000000000 + wait_timeout->nsec;
+    have_triggered_clients ? 0 : (wait_timeout ==
+    NULL) ? DDS_NEVER : (dds_duration_t) wait_timeout->sec * 1000000000 + wait_timeout->nsec;
   ws->trigs.resize(ws->nelems + 1);
   const dds_return_t ntrig = dds_waitset_wait(ws->waitseth, ws->trigs.data(),
       ws->trigs.size(), timeout);
@@ -1813,18 +1835,26 @@ extern "C" rmw_ret_t rmw_wait(
   std::sort(ws->trigs.begin(), ws->trigs.end());
   ws->trigs.push_back((dds_attach_t) -1);
 
+  /* If any entities really triggered, change to RMW_RET_OK */
+  rmw_ret_t ret = RMW_RET_TIMEOUT;
+
   {
     dds_attach_t trig_idx = 0;
     bool dummy;
     size_t nelems = 0;
-#define DETACH(type, var, name, cond, on_triggered) do { \
+    /* Null the entities that didn't trigger.  Spurious wake ups on clients are avoided by
+       evaluating "really_triggered", not losing events when the client still had a
+       response waiting for processing is done via "still_triggered". */
+#define DETACH(type, var, name, really_triggered, still_triggered, on_triggered) do { \
     if (var) { \
       for (size_t i = 0; i < var->name ## _count; i++) { \
         auto x = static_cast<type *>(var->name ## s[i]); \
-        /*dds_waitset_detach (ws->waitseth, x->cond);*/ \
-        if (ws->trigs[trig_idx] == static_cast<dds_attach_t>(nelems)) { \
+        if (ws->trigs[trig_idx] == static_cast<dds_attach_t>(nelems) && (really_triggered)) { \
           on_triggered; \
           trig_idx++; \
+          ret = RMW_RET_OK; \
+        } else if (still_triggered) { \
+          ret = RMW_RET_OK; \
         } else { \
           var->name ## s[i] = nullptr; \
         } \
@@ -1832,11 +1862,12 @@ extern "C" rmw_ret_t rmw_wait(
       } \
     } \
 } while (0)
-    DETACH(CddsSubscription, subs, subscriber, rdcondh, (void) x);
-    DETACH(CddsGuardCondition, gcs, guard_condition, gcondh,
+    DETACH(CddsSubscription, subs, subscriber, true, false, (void) x);
+    DETACH(CddsGuardCondition, gcs, guard_condition, true, false,
       dds_take_guardcondition(x->gcondh, &dummy));
-    DETACH(CddsService, srvs, service, service.sub->rdcondh, (void) x);
-    DETACH(CddsClient, cls, client, client.sub->rdcondh, (void) x);
+    DETACH(CddsService, srvs, service, true, false, (void) x);
+    DETACH(CddsClient, cls, client, check_client_trigger(x), client_still_triggered(x),
+      (void) x);
 #undef DETACH
   }
 
@@ -1851,7 +1882,7 @@ extern "C" rmw_ret_t rmw_wait(
     ws->inuse = false;
   }
 
-  return (ws->trigs.size() == 1) ? RMW_RET_TIMEOUT : RMW_RET_OK;
+  return ret;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -1859,6 +1890,46 @@ extern "C" rmw_ret_t rmw_wait(
 ///////////    CLIENTS AND SERVERS                                            ///////////
 ///////////                                                                   ///////////
 /////////////////////////////////////////////////////////////////////////////////////////
+
+static bool client_still_triggered(CddsClient * client)
+{
+  /* Used to avoid blocking in wait() if a preceding call to wait found a relevant
+     response in filtering spurious triggers but the application/executor failed to
+     process the response before calling wait() again */
+  std::lock_guard<std::mutex> lock(client->lock);
+  return client->response != nullptr;
+}
+
+static bool check_client_trigger(CddsClient * client)
+{
+  /* Returning true iff there is a response for this particular client present.  It drops
+     responses for other clients until no responses remain or one for this client is
+     found.  As the data is retrieved using takecdr(), a relevant response needs to be
+     cached in the client for "rmw_take_response". */
+  std::lock_guard<std::mutex> lock(client->lock);
+
+  if (client->response != nullptr) {
+    /* If a response is waiting to be processed, this isn't a spurious wakeup -- but it
+       also means the application/executor failed to process the event following the
+       preceding call to wait() */
+    return true;
+  }
+
+  dds_sample_info_t si;
+  struct ddsi_serdata * sd;
+  while (dds_takecdr(client->client.sub->subh, &sd, 1, &si, DDS_ANY_STATE) == 1) {
+    if (si.valid_data && serdata_response_guid(sd) == client->client.pub->pubiid) {
+      /* It's for me */
+      client->response = sd;
+      client->response_timestamp = si.source_timestamp;
+      return true;
+    } else {
+      /* Not for me: drop it */
+      ddsi_serdata_unref(sd);
+    }
+  }
+  return false;
+}
 
 static rmw_ret_t rmw_take_response_request(
   CddsCS * cs, rmw_request_id_t * request_header,
@@ -1891,6 +1962,28 @@ static rmw_ret_t rmw_take_response_request(
   return RMW_RET_OK;
 }
 
+static rmw_ret_t rmw_take_cached_request(
+  CddsClient * info, rmw_request_id_t * request_header,
+  void * ros_response, bool * taken,
+  dds_time_t * source_timestamp)
+{
+  cdds_request_wrapper_t wrap;
+  wrap.data = ros_response;
+  void * wrap_ptr = static_cast<void *>(&wrap);
+  ddsi_serdata_to_sample(info->response, wrap_ptr, NULL, NULL);
+  ddsi_serdata_unref(info->response);
+  info->response = nullptr;
+  *source_timestamp = info->response_timestamp;
+
+  memset(request_header, 0, sizeof(wrap.header));
+  assert(sizeof(wrap.header.guid) <= sizeof(request_header->writer_guid));
+  memcpy(request_header->writer_guid, &wrap.header.guid, sizeof(wrap.header.guid));
+  request_header->sequence_number = wrap.header.seq;
+
+  *taken = true;
+  return RMW_RET_OK;
+}
+
 extern "C" rmw_ret_t rmw_take_response(
   const rmw_client_t * client,
   rmw_request_id_t * request_header, void * ros_response,
@@ -1898,16 +1991,26 @@ extern "C" rmw_ret_t rmw_take_response(
 {
   RET_WRONG_IMPLID(client);
   auto info = static_cast<CddsClient *>(client->data);
-  dds_time_t source_timestamp;
-  rmw_ret_t ret = rmw_take_response_request(&info->client, request_header, ros_response, taken,
-      &source_timestamp, info->client.pub->pubiid);
+  dds_time_t response_timestamp;
+  rmw_ret_t ret;
+
+  /* If a response was cached by check_client_trigger, return that; else try to take one
+     directly from the reader history */
+  {
+    std::lock_guard<std::mutex> lock(info->lock);
+    if (info->response == nullptr) {
+      ret = rmw_take_response_request(&info->client, request_header, ros_response, taken,
+          &response_timestamp, info->client.pub->pubiid);
+    } else {
+      ret = rmw_take_cached_request(info, request_header, ros_response, taken, &response_timestamp);
+    }
+  }
 
 #if REPORT_BLOCKED_REQUESTS
   if (ret == RMW_RET_OK && *taken) {
-    std::lock_guard<std::mutex> lock(info->lock);
     uint64_t seq = request_header->sequence_number;
     dds_time_t tnow = dds_time();
-    dds_time_t dtresp = tnow - source_timestamp;
+    dds_time_t dtresp = tnow - response_timestamp;
     dds_time_t dtreq = tnow - info->reqtime[seq];
     if (dtreq > DDS_MSECS(REPORT_LATE_MESSAGES) || dtresp > DDS_MSECS(REPORT_LATE_MESSAGES)) {
       fprintf(stderr, "** %s response time %.fms; response in history for %.fms\n",
@@ -2148,6 +2251,8 @@ extern "C" rmw_client_t * rmw_create_client(
 #if REPORT_BLOCKED_REQUESTS
   info->lastcheck = 0;
 #endif
+  info->response = nullptr;
+  info->response_timestamp = 0;
   if (rmw_init_cs(&info->client, node, type_supports, service_name, qos_policies,
     false) != RMW_RET_OK)
   {
@@ -2175,6 +2280,9 @@ extern "C" rmw_ret_t rmw_destroy_client(rmw_node_t * node, rmw_client_t * client
   RET_WRONG_IMPLID(client);
   auto info = static_cast<CddsClient *>(client->data);
   clean_waitset_caches();
+  if (info->response != nullptr) {
+    ddsi_serdata_unref(info->response);
+  }
   rmw_fini_cs(&info->client);
   rmw_free(const_cast<char *>(client->service_name));
   rmw_client_free(client);
