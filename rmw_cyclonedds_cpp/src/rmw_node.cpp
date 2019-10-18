@@ -1552,10 +1552,10 @@ extern "C" rmw_ret_t rmw_take_event(
       }
 
     case RMW_EVENT_LIVELINESS_LOST: {
-        auto ei = static_cast<rmw_requested_deadline_missed_status_t *>(event_info);
+        auto ei = static_cast<rmw_liveliness_lost_status_t *>(event_info);
         auto pub = static_cast<CddsPublisher *>(event_handle->data);
-        dds_requested_deadline_missed_status_t st;
-        if (dds_get_requested_deadline_missed_status(pub->pubh, &st) < 0) {
+        dds_liveliness_lost_status_t st;
+        if (dds_get_liveliness_lost_status(pub->pubh, &st) < 0) {
           *taken = false;
           return RMW_RET_ERROR;
         } else {
