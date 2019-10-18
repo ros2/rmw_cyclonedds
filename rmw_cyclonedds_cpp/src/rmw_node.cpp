@@ -61,6 +61,16 @@
 #define MULTIDOMAIN 0
 #endif
 
+/* True if the version of RMW is at least major.minor.patch */
+#define RMW_VERSION_GTE(major, minor, patch) ( \
+       major < RMW_VERSION_MAJOR ? true        \
+     : major > RMW_VERSION_MAJOR ? false       \
+     : minor < RMW_VERSION_MINOR ? true        \
+     : minor > RMW_VERSION_MINOR ? false       \
+     : patch < RMW_VERSION_PATCH ? true        \
+     : patch > RMW_VERSION_PATCH ? false       \
+     : true)
+
 /* Set to > 0 for printing warnings to stderr for each messages that was taken more than this many
    ms after writing */
 #define REPORT_LATE_MESSAGES 0
@@ -1088,13 +1098,18 @@ extern "C" rmw_ret_t rmw_fini_publisher_allocation(rmw_publisher_allocation_t * 
 }
 
 extern "C" rmw_publisher_t * rmw_create_publisher(
-  const rmw_node_t * node,
-  const rosidl_message_type_support_t * type_supports, const char * topic_name,
-  const rmw_qos_profile_t * qos_policies, const rmw_publisher_options_t * publisher_options)
+  const rmw_node_t * node, const rosidl_message_type_support_t * type_supports,
+  const char * topic_name, const rmw_qos_profile_t * qos_policies
+#if RMW_VERSION_GTE(0,8,1)
+  , const rmw_publisher_options_t * publisher_options
+#endif
+)
 {
   CddsPublisher * pub;
   rmw_publisher_t * rmw_publisher;
+#if RMW_VERSION_GTE(0,8,1)
   RET_NULL_X(publisher_options, return nullptr);
+#endif
   if ((pub = create_cdds_publisher(node, type_supports, topic_name, qos_policies)) == nullptr) {
     goto fail_common_init;
   }
@@ -1105,7 +1120,9 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
   rmw_publisher->topic_name = reinterpret_cast<char *>(rmw_allocate(strlen(topic_name) + 1));
   RET_ALLOC_X(rmw_publisher->topic_name, goto fail_topic_name);
   memcpy(const_cast<char *>(rmw_publisher->topic_name), topic_name, strlen(topic_name) + 1);
+#if RMW_VERSION_GTE(0,8,1)
   rmw_publisher->options = *publisher_options;
+#endif
   return rmw_publisher;
 fail_topic_name:
   rmw_publisher_free(rmw_publisher);
@@ -1275,16 +1292,29 @@ extern "C" rmw_ret_t rmw_fini_subscription_allocation(rmw_subscription_allocatio
 }
 
 extern "C" rmw_subscription_t * rmw_create_subscription(
-  const rmw_node_t * node,
-  const rosidl_message_type_support_t * type_supports, const char * topic_name,
-  const rmw_qos_profile_t * qos_policies, const rmw_subscription_options_t * subscription_options)
+  const rmw_node_t * node, const rosidl_message_type_support_t * type_supports,
+  const char * topic_name, const rmw_qos_profile_t * qos_policies
+#if RMW_VERSION_GTE(0,8,1)
+  , const rmw_subscription_options_t * subscription_options
+#else
+  , bool ignore_local_publications
+#endif
+)
 {
   CddsSubscription * sub;
   rmw_subscription_t * rmw_subscription;
+#if RMW_VERSION_GTE(0,8,1)
   RET_NULL_X(subscription_options, return nullptr);
-  if ((sub =
-    create_cdds_subscription(node, type_supports, topic_name, qos_policies,
-    subscription_options->ignore_local_publications)) == nullptr)
+#endif
+  if (
+    (sub = create_cdds_subscription(
+      node, type_supports, topic_name, qos_policies,
+#if RMW_VERSION_GTE(0,8,1)
+      subscription_options->ignore_local_publications
+#else
+      ignore_local_publications
+#endif
+    )) == nullptr)
   {
     goto fail_common_init;
   }
@@ -1296,7 +1326,9 @@ extern "C" rmw_subscription_t * rmw_create_subscription(
     reinterpret_cast<const char *>(rmw_allocate(strlen(topic_name) + 1));
   RET_ALLOC_X(rmw_subscription->topic_name, goto fail_topic_name);
   memcpy(const_cast<char *>(rmw_subscription->topic_name), topic_name, strlen(topic_name) + 1);
+#if RMW_VERSION_GTE(0,8,1)
   rmw_subscription->options = *subscription_options;
+#endif
   return rmw_subscription;
 fail_topic_name:
   rmw_subscription_free(rmw_subscription);
@@ -2577,35 +2609,38 @@ static rmw_ret_t get_cs_names_and_types_by_node(
     }
   }
   std::set<dds_builtintopic_guid_t> guids;
-  if (node_name != nullptr &&
+  if (
+    node_name != nullptr &&
     (ret = get_node_guids(node_impl, node_name, node_namespace, guids)) != RMW_RET_OK)
   {
     return ret;
   }
-  const auto re_tp = std::regex("^(" + std::string(ros_service_requester_prefix) + "|" +
-      std::string(ros_service_response_prefix) + ")(/.*)(Request|Reply)$",
-      std::regex::extended);
+  const auto re_tp = std::regex(
+    "^(" + std::string(ros_service_requester_prefix) + "|" +
+    std::string(ros_service_response_prefix) + ")(/.*)(Request|Reply)$",
+    std::regex::extended);
   const auto re_typ = std::regex("^(.*::)dds_::(.*)_(Response|Request)_$", std::regex::extended);
-  const auto filter_and_map =
-    [re_tp, re_typ, guids, node_name,
-      looking_for_services](const dds_builtintopic_endpoint_t & sample, std::string & topic_name,
-      std::string & type_name) -> bool {
+  const auto filter_and_map = [re_tp, re_typ, guids, node_name, looking_for_services](
+    const dds_builtintopic_endpoint_t & sample,
+    std::string & topic_name, std::string & type_name) -> bool {
       std::cmatch cm_tp, cm_typ;
       if (node_name != nullptr && guids.count(sample.participant_key) == 0) {
         return false;
       }
-      if (!std::regex_search(sample.topic_name, cm_tp,
-        re_tp) || !std::regex_search(sample.type_name, cm_typ, re_typ))
+      if (
+        !std::regex_search(sample.topic_name, cm_tp, re_tp) ||
+        !std::regex_search(sample.type_name, cm_typ, re_typ))
       {
         return false;
       } else {
-        if (looking_for_services !=
+        if (
+          looking_for_services !=
           endpoint_is_from_service(std::string(cm_tp[3]) == "Request", sample.key))
         {
           return false;
         } else {
-          std::string demangled_type = std::regex_replace(std::string(cm_typ[1]), std::regex(
-                "::"), "/");
+          std::string demangled_type =
+            std::regex_replace(std::string(cm_typ[1]), std::regex("::"), "/");
           topic_name = std::string(cm_tp[2]);
           type_name = std::string(demangled_type) + std::string(cm_typ[2]);
           return true;
