@@ -491,9 +491,11 @@ static std::string get_node_user_data(const char * node_name, const char * node_
 extern "C" rmw_node_t * rmw_create_node(
   rmw_context_t * context, const char * name,
   const char * namespace_, size_t domain_id,
-  const rmw_node_security_options_t * security_options)
+  const rmw_node_security_options_t * security_options,
+  bool localhost_only)
 {
   static_cast<void>(context);
+  static_cast<void>(localhost_only);
   RET_NULL_X(name, return nullptr);
   RET_NULL_X(namespace_, return nullptr);
 #if MULTIDOMAIN
