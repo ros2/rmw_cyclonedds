@@ -61,6 +61,16 @@
 #define MULTIDOMAIN 0
 #endif
 
+/* True if the version of RMW is at least major.minor.patch */
+#define RMW_VERSION_GTE(major, minor, patch) ( \
+       major < RMW_VERSION_MAJOR ? true        \
+     : major > RMW_VERSION_MAJOR ? false       \
+     : minor < RMW_VERSION_MINOR ? true        \
+     : minor > RMW_VERSION_MINOR ? false       \
+     : patch < RMW_VERSION_PATCH ? true        \
+     : patch > RMW_VERSION_PATCH ? false       \
+     : true)
+
 /* Set to > 0 for printing warnings to stderr for each messages that was taken more than this many
    ms after writing */
 #define REPORT_LATE_MESSAGES 0
@@ -491,11 +501,16 @@ static std::string get_node_user_data(const char * node_name, const char * node_
 extern "C" rmw_node_t * rmw_create_node(
   rmw_context_t * context, const char * name,
   const char * namespace_, size_t domain_id,
-  const rmw_node_security_options_t * security_options,
-  bool localhost_only)
+  const rmw_node_security_options_t * security_options
+#if RMW_VERSION_GTE(0,8,1)
+  , bool localhost_only
+#endif
+)
 {
   static_cast<void>(context);
+#if RMW_VERSION_GTE(0,8,1)
   static_cast<void>(localhost_only);
+#endif
   RET_NULL_X(name, return nullptr);
   RET_NULL_X(namespace_, return nullptr);
 #if MULTIDOMAIN
@@ -2573,35 +2588,38 @@ static rmw_ret_t get_cs_names_and_types_by_node(
     }
   }
   std::set<dds_builtintopic_guid_t> guids;
-  if (node_name != nullptr &&
+  if (
+    node_name != nullptr &&
     (ret = get_node_guids(node_impl, node_name, node_namespace, guids)) != RMW_RET_OK)
   {
     return ret;
   }
-  const auto re_tp = std::regex("^(" + std::string(ros_service_requester_prefix) + "|" +
-      std::string(ros_service_response_prefix) + ")(/.*)(Request|Reply)$",
-      std::regex::extended);
+  const auto re_tp = std::regex(
+    "^(" + std::string(ros_service_requester_prefix) + "|" +
+    std::string(ros_service_response_prefix) + ")(/.*)(Request|Reply)$",
+    std::regex::extended);
   const auto re_typ = std::regex("^(.*::)dds_::(.*)_(Response|Request)_$", std::regex::extended);
-  const auto filter_and_map =
-    [re_tp, re_typ, guids, node_name,
-      looking_for_services](const dds_builtintopic_endpoint_t & sample, std::string & topic_name,
-      std::string & type_name) -> bool {
+  const auto filter_and_map = [re_tp, re_typ, guids, node_name, looking_for_services](
+    const dds_builtintopic_endpoint_t & sample,
+    std::string & topic_name, std::string & type_name) -> bool {
       std::cmatch cm_tp, cm_typ;
       if (node_name != nullptr && guids.count(sample.participant_key) == 0) {
         return false;
       }
-      if (!std::regex_search(sample.topic_name, cm_tp,
-        re_tp) || !std::regex_search(sample.type_name, cm_typ, re_typ))
+      if (
+        !std::regex_search(sample.topic_name, cm_tp, re_tp) ||
+        !std::regex_search(sample.type_name, cm_typ, re_typ))
       {
         return false;
       } else {
-        if (looking_for_services !=
+        if (
+          looking_for_services !=
           endpoint_is_from_service(std::string(cm_tp[3]) == "Request", sample.key))
         {
           return false;
         } else {
-          std::string demangled_type = std::regex_replace(std::string(cm_typ[1]), std::regex(
-                "::"), "/");
+          std::string demangled_type =
+            std::regex_replace(std::string(cm_typ[1]), std::regex("::"), "/");
           topic_name = std::string(cm_tp[2]);
           type_name = std::string(demangled_type) + std::string(cm_typ[2]);
           return true;

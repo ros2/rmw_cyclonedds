@@ -72,6 +72,13 @@ ament_target_dependencies(rmw_cyclonedds_cpp
 
 configure_rmw_library(rmw_cyclonedds_cpp)
 
+target_compile_definitions(${PROJECT_NAME}
+  PRIVATE
+    RMW_VERSION_MAJOR=${rmw_VERSION_MAJOR}
+    RMW_VERSION_MINOR=${rmw_VERSION_MINOR}
+    RMW_VERSION_PATCH=${rmw_VERSION_PATCH}
+)
+
 # Causes the visibility macros to use dllexport rather than dllimport,
 # which is appropriate when building the dll but not consuming it.
 target_compile_definitions(${PROJECT_NAME}
