@@ -495,6 +495,7 @@ extern "C" rmw_node_t * rmw_create_node(
   bool localhost_only)
 {
   static_cast<void>(context);
+  static_cast<void>(localhost_only);
   RET_NULL_X(name, return nullptr);
   RET_NULL_X(namespace_, return nullptr);
 #if MULTIDOMAIN
