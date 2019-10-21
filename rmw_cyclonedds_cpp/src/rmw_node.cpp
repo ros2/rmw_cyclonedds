@@ -63,13 +63,13 @@
 
 /* True if the version of RMW is at least major.minor.patch */
 #define RMW_VERSION_GTE(major, minor, patch) ( \
-       major < RMW_VERSION_MAJOR ? true        \
-     : major > RMW_VERSION_MAJOR ? false       \
-     : minor < RMW_VERSION_MINOR ? true        \
-     : minor > RMW_VERSION_MINOR ? false       \
-     : patch < RMW_VERSION_PATCH ? true        \
-     : patch > RMW_VERSION_PATCH ? false       \
-     : true)
+    (major < RMW_VERSION_MAJOR) ? true \
+    : (major > RMW_VERSION_MAJOR) ? false \
+    : (minor < RMW_VERSION_MINOR) ? true \
+    : (minor > RMW_VERSION_MINOR) ? false \
+    : (patch < RMW_VERSION_PATCH) ? true \
+    : (patch > RMW_VERSION_PATCH) ? false \
+    : true)
 
 /* Set to > 0 for printing warnings to stderr for each messages that was taken more than this many
    ms after writing */
@@ -502,13 +502,13 @@ extern "C" rmw_node_t * rmw_create_node(
   rmw_context_t * context, const char * name,
   const char * namespace_, size_t domain_id,
   const rmw_node_security_options_t * security_options
-#if RMW_VERSION_GTE(0,8,1)
+#if RMW_VERSION_GTE(0, 8, 1)
   , bool localhost_only
 #endif
 )
 {
   static_cast<void>(context);
-#if RMW_VERSION_GTE(0,8,1)
+#if RMW_VERSION_GTE(0, 8, 1)
   static_cast<void>(localhost_only);
 #endif
   RET_NULL_X(name, return nullptr);
@@ -1105,14 +1105,14 @@ extern "C" rmw_ret_t rmw_fini_publisher_allocation(rmw_publisher_allocation_t * 
 extern "C" rmw_publisher_t * rmw_create_publisher(
   const rmw_node_t * node, const rosidl_message_type_support_t * type_supports,
   const char * topic_name, const rmw_qos_profile_t * qos_policies
-#if RMW_VERSION_GTE(0,8,1)
+#if RMW_VERSION_GTE(0, 8, 1)
   , const rmw_publisher_options_t * publisher_options
 #endif
 )
 {
   CddsPublisher * pub;
   rmw_publisher_t * rmw_publisher;
-#if RMW_VERSION_GTE(0,8,1)
+#if RMW_VERSION_GTE(0, 8, 1)
   RET_NULL_X(publisher_options, return nullptr);
 #endif
   if ((pub = create_cdds_publisher(node, type_supports, topic_name, qos_policies)) == nullptr) {
@@ -1125,7 +1125,7 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
   rmw_publisher->topic_name = reinterpret_cast<char *>(rmw_allocate(strlen(topic_name) + 1));
   RET_ALLOC_X(rmw_publisher->topic_name, goto fail_topic_name);
   memcpy(const_cast<char *>(rmw_publisher->topic_name), topic_name, strlen(topic_name) + 1);
-#if RMW_VERSION_GTE(0,8,1)
+#if RMW_VERSION_GTE(0, 8, 1)
   rmw_publisher->options = *publisher_options;
 #endif
   return rmw_publisher;
@@ -1299,7 +1299,7 @@ extern "C" rmw_ret_t rmw_fini_subscription_allocation(rmw_subscription_allocatio
 extern "C" rmw_subscription_t * rmw_create_subscription(
   const rmw_node_t * node, const rosidl_message_type_support_t * type_supports,
   const char * topic_name, const rmw_qos_profile_t * qos_policies
-#if RMW_VERSION_GTE(0,8,1)
+#if RMW_VERSION_GTE(0, 8, 1)
   , const rmw_subscription_options_t * subscription_options
 #else
   , bool ignore_local_publications
@@ -1308,13 +1308,13 @@ extern "C" rmw_subscription_t * rmw_create_subscription(
 {
   CddsSubscription * sub;
   rmw_subscription_t * rmw_subscription;
-#if RMW_VERSION_GTE(0,8,1)
+#if RMW_VERSION_GTE(0, 8, 1)
   RET_NULL_X(subscription_options, return nullptr);
 #endif
   if (
     (sub = create_cdds_subscription(
       node, type_supports, topic_name, qos_policies,
-#if RMW_VERSION_GTE(0,8,1)
+#if RMW_VERSION_GTE(0, 8, 1)
       subscription_options->ignore_local_publications
 #else
       ignore_local_publications
@@ -1331,7 +1331,7 @@ extern "C" rmw_subscription_t * rmw_create_subscription(
     reinterpret_cast<const char *>(rmw_allocate(strlen(topic_name) + 1));
   RET_ALLOC_X(rmw_subscription->topic_name, goto fail_topic_name);
   memcpy(const_cast<char *>(rmw_subscription->topic_name), topic_name, strlen(topic_name) + 1);
-#if RMW_VERSION_GTE(0,8,1)
+#if RMW_VERSION_GTE(0, 8, 1)
   rmw_subscription->options = *subscription_options;
 #endif
   return rmw_subscription;
