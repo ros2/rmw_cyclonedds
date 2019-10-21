@@ -1237,6 +1237,16 @@ extern "C" rmw_ret_t rmw_return_loaned_message_from_publisher(
   return RMW_RET_UNSUPPORTED;
 }
 
+extern "C" rmw_ret_t rmw_return_loaned_message(
+  const rmw_publisher_t * publisher,
+  void * loaned_message)
+{
+  /* https://github.com/ros2/rmw/pull/192 replaces this one with
+     rmw_return_loaned_message_from_publisher, but until that PR is accepted, this one is
+     needed to make things build & work */
+  return rmw_return_loaned_message_from_publisher(publisher, loaned_message);
+}
+
 extern "C" rmw_ret_t rmw_destroy_publisher(rmw_node_t * node, rmw_publisher_t * publisher)
 {
   RET_WRONG_IMPLID(node);
@@ -1591,6 +1601,16 @@ extern "C" rmw_ret_t rmw_return_loaned_message_from_subscription(
   RMW_SET_ERROR_MSG(
     "rmw_release_loaned_message_from_subscription not implemented for rmw_cyclonedds_cpp");
   return RMW_RET_UNSUPPORTED;
+}
+
+extern "C" rmw_ret_t rmw_release_loaned_message(
+  const rmw_subscription_t * subscription,
+  void * loaned_message)
+{
+  /* https://github.com/ros2/rmw/pull/192 replaces this one with
+     rmw_return_loaned_message_from_subscription, but until that PR is accepted, this one
+     is needed to make things build & work */
+  return rmw_return_loaned_message_from_subscription(subscription, loaned_message);
 }
 
 extern "C" rmw_ret_t rmw_take_event(
