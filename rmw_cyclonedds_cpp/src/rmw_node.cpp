@@ -1140,6 +1140,7 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
   memcpy(const_cast<char *>(rmw_publisher->topic_name), topic_name, strlen(topic_name) + 1);
 #if RMW_VERSION_GTE(0, 8, 1)
   rmw_publisher->options = *publisher_options;
+  rmw_publisher->can_loan_messages = false;
 #endif
   return rmw_publisher;
 fail_topic_name:
@@ -1235,16 +1236,6 @@ extern "C" rmw_ret_t rmw_return_loaned_message_from_publisher(
   RMW_SET_ERROR_MSG(
     "rmw_return_loaned_message_from_publisher not implemented for rmw_cyclonedds_cpp");
   return RMW_RET_UNSUPPORTED;
-}
-
-extern "C" rmw_ret_t rmw_return_loaned_message(
-  const rmw_publisher_t * publisher,
-  void * loaned_message)
-{
-  /* https://github.com/ros2/rmw/pull/192 replaces this one with
-     rmw_return_loaned_message_from_publisher, but until that PR is accepted, this one is
-     needed to make things build & work */
-  return rmw_return_loaned_message_from_publisher(publisher, loaned_message);
 }
 
 extern "C" rmw_ret_t rmw_destroy_publisher(rmw_node_t * node, rmw_publisher_t * publisher)
@@ -1381,6 +1372,7 @@ extern "C" rmw_subscription_t * rmw_create_subscription(
   memcpy(const_cast<char *>(rmw_subscription->topic_name), topic_name, strlen(topic_name) + 1);
 #if RMW_VERSION_GTE(0, 8, 1)
   rmw_subscription->options = *subscription_options;
+  rmw_subscription->can_loan_messages = false;
 #endif
   return rmw_subscription;
 fail_topic_name:
@@ -1599,18 +1591,8 @@ extern "C" rmw_ret_t rmw_return_loaned_message_from_subscription(
   (void) loaned_message;
 
   RMW_SET_ERROR_MSG(
-    "rmw_release_loaned_message_from_subscription not implemented for rmw_cyclonedds_cpp");
+    "rmw_return_loaned_message_from_subscription not implemented for rmw_cyclonedds_cpp");
   return RMW_RET_UNSUPPORTED;
-}
-
-extern "C" rmw_ret_t rmw_release_loaned_message(
-  const rmw_subscription_t * subscription,
-  void * loaned_message)
-{
-  /* https://github.com/ros2/rmw/pull/192 replaces this one with
-     rmw_return_loaned_message_from_subscription, but until that PR is accepted, this one
-     is needed to make things build & work */
-  return rmw_return_loaned_message_from_subscription(subscription, loaned_message);
 }
 
 extern "C" rmw_ret_t rmw_take_event(
