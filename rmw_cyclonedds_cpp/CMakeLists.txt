@@ -33,7 +33,7 @@ find_package(rcutils REQUIRED)
 
 find_package(cyclonedds_cmake_module REQUIRED)
 find_package(CycloneDDS QUIET CONFIG)
-if (NOT CycloneDDS_FOUND)
+if(NOT CycloneDDS_FOUND)
   message(WARNING "Could not find ADLINK CycloneDDS - skipping '${PROJECT_NAME}'")
   ament_package()
   return()
