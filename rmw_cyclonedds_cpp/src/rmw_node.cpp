@@ -1743,6 +1743,7 @@ extern "C" rmw_wait_set_t * rmw_create_wait_set(rmw_context_t * context, size_t 
   RET_ALLOC_X(wait_set->data, goto fail_alloc_wait_set_data);
   // This should default-construct the fields of CddsWaitset
   ws = static_cast<CddsWaitset *>(wait_set->data);
+  // cppcheck-suppress syntaxError
   RMW_TRY_PLACEMENT_NEW(ws, ws, goto fail_placement_new, CddsWaitset, );
   if (!ws) {
     RMW_SET_ERROR_MSG("failed to construct wait set info struct");
