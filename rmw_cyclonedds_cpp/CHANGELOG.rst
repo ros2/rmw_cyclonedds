@@ -2,6 +2,26 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.4.2 (2019-11-01)
+------------------
+* Suppress a syntax error identified by cppcheck 1.89 (`#59 <https://github.com/ros2/rmw_cyclonedds/issues/59>`_)
+  Signed-off-by: Scott K Logan <logans@cottsay.net>
+* Make RMW version acceptable to MSVC (`#58 <https://github.com/ros2/rmw_cyclonedds/issues/58>`_)
+  GCC and Clang support the ternary operator in macros, MSVC does not.
+  Signed-off-by: Erik Boasson <eb@ilities.com>
+* skip compilation of rmw_cyclonedds when cyclone dds is not found (`#56 <https://github.com/ros2/rmw_cyclonedds/issues/56>`_)
+  * skip compilation of rmw_cyclonedds when cyclone dds is not found
+  Signed-off-by: Karsten Knese <karsten@openrobotics.org>
+  * proper case and company name
+  Signed-off-by: Karsten Knese <karsten@openrobotics.org>
+  * linters
+  Signed-off-by: Karsten Knese <karsten@openrobotics.org>
+  * change ADLINK to Eclipse
+  Signed-off-by: Karsten Knese <karsten@openrobotics.org>
+* remove executive flags from source code files
+  Signed-off-by: Karsten Knese <karsten@openrobotics.org>
+* Contributors: Karsten Knese, Scott K Logan, eboasson
+
 0.4.1 (2019-10-24)
 ------------------
 * rename return functions

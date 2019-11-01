@@ -2,6 +2,9 @@
 Changelog for package cyclonedds_cmake_module
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.4.2 (2019-11-01)
+------------------
+
 0.4.1 (2019-10-24)
 ------------------
 * Use rosdep (`#32 <https://github.com/ros2/rmw_cyclonedds/issues/32>`_)
