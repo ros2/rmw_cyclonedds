@@ -233,9 +233,14 @@ struct CddsDomain
   bool localhost_only;
   uint32_t n_nodes;
 
+  /* handle of the domain entity, for versions of Cyclone that have an updated version of
+     dds_create_domain that properly returns a handle; the original version has a value of
+     0 in here (DDS_RETCODE_OK) which is never a valid handle */
+  dds_entity_t domain_handle;
+
   /* Default constructor so operator[] can be safely be used to look one up */
   CddsDomain()
-  : localhost_only(false), n_nodes(0)
+  : localhost_only(false), n_nodes(0), domain_handle(0)
   {}
 };
 #endif
@@ -543,16 +548,15 @@ static void unref_ppant()
 #if SUPPORT_LOCALHOST
 static void node_gone_from_domain_locked(dds_domainid_t did)
 {
-  /* Cyclone automatically deletes the domain when the last participant in it disappears
-     so we don't have to do much here, other than drop the key from the map; there's
-     something fishy about that when it was created explicitly, and moreover there is an
-     issue in that part that has difficulty dealing with a failed attempt at creating a
-     participant (fortunately, that is very unlikely to fail given that the domain already
-     exists).
-
-     Fixes to Cyclone in this area will likely require some small changes. */
-  assert(gcdds.domains[did].n_nodes > 0);
-  if (--gcdds.domains[did].n_nodes == 0) {
+  /* The initial support for dds_create_domain in Cyclone results in domains that get
+     automatically deleted when the last participant in it disappears.  Later versions
+     return a handle and leave it in existence. */
+  CddsDomain & dom = gcdds.domains[did];
+  assert(dom.n_nodes > 0);
+  if (--dom.n_nodes == 0) {
+    if (dom.domain_handle > 0) {
+      dds_delete(dom.domain_handle);
+    }
     gcdds.domains.erase(did);
   }
 }
@@ -594,11 +598,10 @@ static bool check_create_domain_locked(dds_domainid_t did, bool localhost_only)
       config += std::string(config_from_env);
     }
 
-    dds_return_t ret;
-    if ((ret = dds_create_domain(did, config.c_str())) < 0) {
+    if ((dom.domain_handle = dds_create_domain(did, config.c_str())) < 0) {
       RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp",
-        "rmw_create_node: failed to create domain, error %s", dds_strretcode(ret));
-      dom.n_nodes--;
+        "rmw_create_node: failed to create domain, error %s", dds_strretcode(dom.domain_handle));
+      node_gone_from_domain_locked(did);
       return false;
     } else {
       return true;
@@ -664,7 +667,8 @@ extern "C" rmw_node_t * rmw_create_node(
 #if SUPPORT_LOCALHOST
   /* Take domains_lock and hold it until after the participant creation succeeded or
      failed: otherwise there is a race with rmw_destroy_node deleting the last participant
-     and tearing down the domain.  */
+     and tearing down the domain for versions of Cyclone that implement the original
+     version of dds_create_domain that doesn't return a handle.  */
   std::lock_guard<std::mutex> lock(gcdds.domains_lock);
 #endif
   if (!check_create_domain_locked(did, localhost_only)) {
