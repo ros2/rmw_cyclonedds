@@ -666,8 +666,20 @@ extern "C" const rmw_guard_condition_t * rmw_node_get_graph_guard_condition(cons
 ///////////                                                                   ///////////
 /////////////////////////////////////////////////////////////////////////////////////////
 
-using MessageTypeSupport_c =
-  rmw_cyclonedds_cpp::MessageTypeSupport<rosidl_typesupport_introspection_c__MessageMembers>;
+const rosidl_typesupport_introspection_cpp::MessageMembers * message_members(
+  const rosidl_message_type_support_t * type_support)
+{
+  auto introspection_typesupport = get_message_typesupport_handle(type_support,
+      rosidl_typesupport_introspection_cpp::typesupport_identifier);
+  assert(introspection_typesupport);
+  auto members =
+    static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(
+    introspection_typesupport
+    ->data);
+  assert(members);
+  return members;
+}
+
 using MessageTypeSupport_cpp =
   rmw_cyclonedds_cpp::MessageTypeSupport<rosidl_typesupport_introspection_cpp::MessageMembers>;
 
@@ -690,29 +702,10 @@ extern "C" rmw_ret_t rmw_serialize(
   std::vector<unsigned char> data;
   cycser sd(data);
   rmw_ret_t ret;
-  const rosidl_message_type_support_t * ts;
-  if ((ts =
-    get_message_typesupport_handle(type_support,
-    rosidl_typesupport_introspection_c__identifier)) != nullptr)
-  {
-    auto members =
-      static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(ts->data);
-    MessageTypeSupport_c msgts(members);
-    msgts.serializeROSmessage(ros_message, sd, nullptr);
-  } else {
-    if ((ts =
-      get_message_typesupport_handle(type_support,
-      rosidl_typesupport_introspection_cpp::typesupport_identifier)) != nullptr)
-    {
-      auto members =
-        static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(ts->data);
-      MessageTypeSupport_cpp msgts(members);
-      msgts.serializeROSmessage(ros_message, sd, nullptr);
-    } else {
-      RMW_SET_ERROR_MSG("rmw_serialize: type support trouble");
-      return RMW_RET_ERROR;
-    }
-  }
+
+  auto members = message_members(type_support);
+  MessageTypeSupport_cpp msgts(members);
+  msgts.serializeROSmessage(ros_message, sd, nullptr);
 
   if ((ret = rmw_serialized_message_resize(serialized_message, data.size())) != RMW_RET_OK) {
     return ret;
@@ -730,29 +723,10 @@ extern "C" rmw_ret_t rmw_deserialize(
   bool ok;
   try {
     cycdeser sd(serialized_message->buffer, serialized_message->buffer_length);
-    const rosidl_message_type_support_t * ts;
-    if ((ts =
-      get_message_typesupport_handle(type_support,
-      rosidl_typesupport_introspection_c__identifier)) != nullptr)
-    {
-      auto members =
-        static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(ts->data);
-      MessageTypeSupport_c msgts(members);
-      ok = msgts.deserializeROSmessage(sd, ros_message, nullptr);
-    } else {
-      if ((ts =
-        get_message_typesupport_handle(type_support,
-        rosidl_typesupport_introspection_cpp::typesupport_identifier)) != nullptr)
-      {
-        auto members =
-          static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(ts->data);
-        MessageTypeSupport_cpp msgts(members);
-        ok = msgts.deserializeROSmessage(sd, ros_message, nullptr);
-      } else {
-        RMW_SET_ERROR_MSG("rmw_serialize: type support trouble");
-        return RMW_RET_ERROR;
-      }
-    }
+
+    auto members = message_members(type_support);
+    MessageTypeSupport_cpp msgts(members);
+    ok = msgts.deserializeROSmessage(sd, ros_message, nullptr);
   } catch (rmw_cyclonedds_cpp::Exception & e) {
     RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("rmw_serialize: %s", e.what());
     ok = false;
