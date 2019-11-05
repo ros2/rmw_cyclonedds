@@ -16,16 +16,9 @@
 #define RMW_CYCLONEDDS_CPP__U16STRING_HPP_
 
 #include <string>
-#include "rosidl_generator_c/u16string_functions.h"
 
 namespace rmw_cyclonedds_cpp
 {
-
-void u16string_to_wstring(
-  const rosidl_generator_c__U16String & u16str, std::wstring & wstr);
-
-bool wstring_to_u16string(
-  const std::wstring & wstr, rosidl_generator_c__U16String & u16str);
 
 void u16string_to_wstring(const std::u16string & u16str, std::wstring & wstr);
 

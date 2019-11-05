@@ -40,12 +40,10 @@ if(NOT CycloneDDS_FOUND)
 endif()
 
 find_package(rmw REQUIRED)
-find_package(rosidl_generator_c REQUIRED)
 find_package(rosidl_typesupport_introspection_cpp REQUIRED)
 
 ament_export_dependencies(rcutils)
 ament_export_dependencies(rmw)
-ament_export_dependencies(rosidl_generator_c)
 ament_export_dependencies(rosidl_typesupport_introspection_cpp)
 
 include_directories(include)
@@ -69,7 +67,6 @@ ament_target_dependencies(rmw_cyclonedds_cpp
   "rcutils"
   "rosidl_typesupport_introspection_cpp"
   "rmw"
-  "rosidl_generator_c"
 )
 
 configure_rmw_library(rmw_cyclonedds_cpp)
