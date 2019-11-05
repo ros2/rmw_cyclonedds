@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <string>
-#include "rosidl_generator_c/u16string_functions.h"
 
 namespace rmw_cyclonedds_cpp
 {
@@ -35,26 +34,6 @@ bool wstring_to_u16string(const std::wstring & wstr, std::u16string & u16str)
   }
   for (size_t i = 0; i < wstr.size(); ++i) {
     u16str[i] = static_cast<char16_t>(wstr[i]);
-  }
-  return true;
-}
-
-void u16string_to_wstring(const rosidl_generator_c__U16String & u16str, std::wstring & wstr)
-{
-  wstr.resize(u16str.size);
-  for (size_t i = 0; i < u16str.size; ++i) {
-    wstr[i] = static_cast<wchar_t>(u16str.data[i]);
-  }
-}
-
-bool wstring_to_u16string(const std::wstring & wstr, rosidl_generator_c__U16String & u16str)
-{
-  bool succeeded = rosidl_generator_c__U16String__resize(&u16str, wstr.size());
-  if (!succeeded) {
-    return false;
-  }
-  for (size_t i = 0; i < wstr.size(); ++i) {
-    u16str.data[i] = static_cast<char16_t>(wstr[i]);
   }
   return true;
 }

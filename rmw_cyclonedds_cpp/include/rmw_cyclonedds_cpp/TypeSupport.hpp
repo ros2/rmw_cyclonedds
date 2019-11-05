@@ -16,10 +16,6 @@
 #ifndef RMW_CYCLONEDDS_CPP__TYPESUPPORT_HPP_
 #define RMW_CYCLONEDDS_CPP__TYPESUPPORT_HPP_
 
-#include <rosidl_generator_c/string.h>
-#include <rosidl_generator_c/string_functions.h>
-#include <rosidl_generator_c/u16string_functions.h>
-
 #include <cassert>
 #include <string>
 #include <functional>
