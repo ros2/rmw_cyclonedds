@@ -792,19 +792,12 @@ static const rosidl_message_type_support_t * get_typesupport(
   const rosidl_message_type_support_t * ts;
   if ((ts =
     get_message_typesupport_handle(type_supports,
-    rosidl_typesupport_introspection_c__identifier)) != nullptr)
+    rosidl_typesupport_introspection_cpp::typesupport_identifier)) != nullptr)
   {
     return ts;
   } else {
-    if ((ts =
-      get_message_typesupport_handle(type_supports,
-      rosidl_typesupport_introspection_cpp::typesupport_identifier)) != nullptr)
-    {
-      return ts;
-    } else {
-      RMW_SET_ERROR_MSG("type support not from this implementation");
-      return nullptr;
-    }
+    RMW_SET_ERROR_MSG("type support not from this implementation");
+    return nullptr;
   }
 }
 
@@ -2103,19 +2096,12 @@ static const rosidl_service_type_support_t * get_service_typesupport(
   const rosidl_service_type_support_t * ts;
   if ((ts =
     get_service_typesupport_handle(type_supports,
-    rosidl_typesupport_introspection_c__identifier)) != nullptr)
+    rosidl_typesupport_introspection_cpp::typesupport_identifier)) != nullptr)
   {
     return ts;
   } else {
-    if ((ts =
-      get_service_typesupport_handle(type_supports,
-      rosidl_typesupport_introspection_cpp::typesupport_identifier)) != nullptr)
-    {
-      return ts;
-    } else {
-      RMW_SET_ERROR_MSG("service type support not from this implementation");
-      return nullptr;
-    }
+    RMW_SET_ERROR_MSG("service type support not from this implementation");
+    return nullptr;
   }
 }
 

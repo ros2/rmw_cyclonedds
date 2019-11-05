@@ -32,25 +32,13 @@
 #include "rosidl_typesupport_introspection_cpp/service_introspection.hpp"
 #include "rosidl_typesupport_introspection_cpp/visibility_control.h"
 
-#include "rosidl_typesupport_introspection_c/field_types.h"
-#include "rosidl_typesupport_introspection_c/identifier.h"
-#include "rosidl_typesupport_introspection_c/message_introspection.h"
-#include "rosidl_typesupport_introspection_c/service_introspection.h"
-#include "rosidl_typesupport_introspection_c/visibility_control.h"
-
 #include "serdes.hpp"
 
 namespace rmw_cyclonedds_cpp
 {
 
-// Helper class that uses template specialization to read/write string types to/from a
-// cycser/cycdeser
-template<typename MembersType>
-struct StringHelper;
-
-// For C++ introspection typesupport we just reuse the same std::string transparently.
-template<>
-struct StringHelper<rosidl_typesupport_introspection_cpp::MessageMembers>
+// Helper class to read/write string types to/from a cycser/cycdeser
+struct StringHelper
 {
   using type = std::string;
 

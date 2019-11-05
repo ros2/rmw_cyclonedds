@@ -27,9 +27,6 @@
 #include "rosidl_typesupport_introspection_cpp/message_introspection.hpp"
 #include "rosidl_typesupport_introspection_cpp/service_introspection.hpp"
 
-#include "rosidl_typesupport_introspection_c/message_introspection.h"
-#include "rosidl_typesupport_introspection_c/service_introspection.h"
-
 #include "rosidl_generator_c/primitives_sequence_functions.h"
 #include "rosidl_generator_c/u16string_functions.h"
 
@@ -177,15 +174,7 @@ static size_t calculateMaxAlign(const MembersType * members)
           alignment = alignof(uint64_t);
           break;
         case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING:
-          // Note: specialization needed because calculateMaxAlign is called before
-          // casting submembers as std::string, returned value is the same on i386
-          if (std::is_same<MembersType,
-            rosidl_typesupport_introspection_c__MessageMembers>::value)
-          {
-            alignment = alignof(rosidl_generator_c__String);
-          } else {
-            alignment = alignof(std::string);
-          }
+          alignment = alignof(std::string);
           break;
         case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE:
           {
@@ -250,51 +239,6 @@ void serialize_field<std::wstring>(
   }
 }
 
-// C specialization
-template<typename T>
-void serialize_field(
-  const rosidl_typesupport_introspection_c__MessageMember * member,
-  void * field,
-  cycser & ser)
-{
-  if (!member->is_array_) {
-    ser << *static_cast<T *>(field);
-  } else if (member->array_size_ && !member->is_upper_bound_) {
-    ser.serializeA(static_cast<T *>(field), member->array_size_);
-  } else {
-    auto & data = *reinterpret_cast<typename GenericCSequence<T>::type *>(field);
-    ser.serializeS(reinterpret_cast<T *>(data.data), data.size);
-  }
-}
-
-template<>
-inline
-void serialize_field<std::wstring>(
-  const rosidl_typesupport_introspection_c__MessageMember * member,
-  void * field,
-  cycser & ser)
-{
-  std::wstring wstr;
-  if (!member->is_array_) {
-    auto u16str = static_cast<rosidl_generator_c__U16String *>(field);
-    u16string_to_wstring(*u16str, wstr);
-    ser << wstr;
-  } else if (member->array_size_ && !member->is_upper_bound_) {
-    auto array = static_cast<rosidl_generator_c__U16String *>(field);
-    for (size_t i = 0; i < member->array_size_; ++i) {
-      u16string_to_wstring(array[i], wstr);
-      ser << wstr;
-    }
-  } else {
-    auto sequence = static_cast<rosidl_generator_c__U16String__Sequence *>(field);
-    ser << static_cast<uint32_t>(sequence->size);
-    for (size_t i = 0; i < sequence->size; ++i) {
-      u16string_to_wstring(sequence->data[i], wstr);
-      ser << wstr;
-    }
-  }
-}
-
 inline
 size_t get_array_size_and_assign_field(
   const rosidl_typesupport_introspection_cpp::MessageMember * member,
@@ -311,21 +255,6 @@ size_t get_array_size_and_assign_field(
   }
   subros_message = reinterpret_cast<void *>(vector->data());
   return vsize;
-}
-
-inline
-size_t get_array_size_and_assign_field(
-  const rosidl_typesupport_introspection_c__MessageMember * member,
-  void * field,
-  void * & subros_message,
-  size_t, size_t)
-{
-  auto tmpsequence = static_cast<rosidl_generator_c__void__Sequence *>(field);
-  if (member->is_upper_bound_ && tmpsequence->size > member->array_size_) {
-    throw std::runtime_error("vector overcomes the maximum length");
-  }
-  subros_message = reinterpret_cast<void *>(tmpsequence->data);
-  return tmpsequence->size;
 }
 
 template<typename MembersType>
@@ -506,60 +435,6 @@ inline void deserialize_field<std::wstring>(
   }
 }
 
-template<typename T>
-void deserialize_field(
-  const rosidl_typesupport_introspection_c__MessageMember * member,
-  void * field,
-  cycdeser & deser,
-  bool call_new)
-{
-  (void)call_new;
-  if (!member->is_array_) {
-    deser >> *static_cast<T *>(field);
-  } else if (member->array_size_ && !member->is_upper_bound_) {
-    deser.deserializeA(static_cast<T *>(field), member->array_size_);
-  } else {
-    auto & data = *reinterpret_cast<typename GenericCSequence<T>::type *>(field);
-    int32_t dsize = 0;
-    deser >> dsize;
-    GenericCSequence<T>::init(&data, dsize);
-    deser.deserializeA(reinterpret_cast<T *>(data.data), dsize);
-  }
-}
-
-template<>
-inline void deserialize_field<std::wstring>(
-  const rosidl_typesupport_introspection_c__MessageMember * member,
-  void * field,
-  cycdeser & deser,
-  bool call_new)
-{
-  (void)call_new;
-  std::wstring wstr;
-  if (!member->is_array_) {
-    deser >> wstr;
-    wstring_to_u16string(
-      wstr, *static_cast<rosidl_generator_c__U16String *>(field));
-  } else if (member->array_size_ && !member->is_upper_bound_) {
-    auto array = static_cast<rosidl_generator_c__U16String *>(field);
-    for (size_t i = 0; i < member->array_size_; ++i) {
-      deser >> wstr;
-      wstring_to_u16string(wstr, array[i]);
-    }
-  } else {
-    uint32_t size;
-    deser >> size;
-    auto sequence = static_cast<rosidl_generator_c__U16String__Sequence *>(field);
-    if (!rosidl_generator_c__U16String__Sequence__init(sequence, size)) {
-      throw std::runtime_error("unable to initialize rosidl_generator_c__U16String sequence");
-    }
-    for (size_t i = 0; i < sequence->size; ++i) {
-      deser >> wstr;
-      wstring_to_u16string(wstr, sequence->data[i]);
-    }
-  }
-}
-
 inline size_t get_submessage_array_deserialize(
   const rosidl_typesupport_introspection_cpp::MessageMember * member,
   cycdeser & deser,
@@ -578,23 +453,6 @@ inline size_t get_submessage_array_deserialize(
   void * ptr = reinterpret_cast<void *>(sub_members_size);
   vector->resize(vsize * (size_t)align_(max_align, ptr));
   subros_message = reinterpret_cast<void *>(vector->data());
-  return vsize;
-}
-
-inline size_t get_submessage_array_deserialize(
-  const rosidl_typesupport_introspection_c__MessageMember * member,
-  cycdeser & deser,
-  void * field,
-  void * & subros_message,
-  bool,
-  size_t sub_members_size,
-  size_t)
-{
-  (void)member;
-  uint32_t vsize = deser.deserialize_len(1);
-  auto tmparray = static_cast<rosidl_generator_c__void__Sequence *>(field);
-  rosidl_generator_c__void__Sequence__init(tmparray, vsize, sub_members_size);
-  subros_message = reinterpret_cast<void *>(tmparray->data);
   return vsize;
 }
 

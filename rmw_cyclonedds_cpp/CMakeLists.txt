@@ -41,13 +41,11 @@ endif()
 
 find_package(rmw REQUIRED)
 find_package(rosidl_generator_c REQUIRED)
-find_package(rosidl_typesupport_introspection_c REQUIRED)
 find_package(rosidl_typesupport_introspection_cpp REQUIRED)
 
 ament_export_dependencies(rcutils)
 ament_export_dependencies(rmw)
 ament_export_dependencies(rosidl_generator_c)
-ament_export_dependencies(rosidl_typesupport_introspection_c)
 ament_export_dependencies(rosidl_typesupport_introspection_cpp)
 
 include_directories(include)
@@ -69,7 +67,6 @@ target_link_libraries(rmw_cyclonedds_cpp CycloneDDS::ddsc)
 
 ament_target_dependencies(rmw_cyclonedds_cpp
   "rcutils"
-  "rosidl_typesupport_introspection_c"
   "rosidl_typesupport_introspection_cpp"
   "rmw"
   "rosidl_generator_c"
@@ -93,7 +90,6 @@ ament_export_include_directories(include)
 ament_export_libraries(rmw_cyclonedds_cpp)
 
 register_rmw_implementation(
-  "c:rosidl_typesupport_c:rosidl_typesupport_introspection_c"
   "cpp:rosidl_typesupport_cpp:rosidl_typesupport_introspection_cpp")
 
 if(BUILD_TESTING)
