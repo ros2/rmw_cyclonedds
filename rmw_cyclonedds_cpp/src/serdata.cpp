@@ -29,27 +29,14 @@
 #include "dds/ddsi/ddsi_iid.h"
 #include "dds/ddsi/q_radmin.h"
 
-using MessageTypeSupport_c =
-  rmw_cyclonedds_cpp::MessageTypeSupport<rosidl_typesupport_introspection_c__MessageMembers>;
 using MessageTypeSupport_cpp =
   rmw_cyclonedds_cpp::MessageTypeSupport<rosidl_typesupport_introspection_cpp::MessageMembers>;
-using RequestTypeSupport_c = rmw_cyclonedds_cpp::RequestTypeSupport<
-  rosidl_typesupport_introspection_c__ServiceMembers,
-  rosidl_typesupport_introspection_c__MessageMembers>;
 using RequestTypeSupport_cpp = rmw_cyclonedds_cpp::RequestTypeSupport<
   rosidl_typesupport_introspection_cpp::ServiceMembers,
   rosidl_typesupport_introspection_cpp::MessageMembers>;
-using ResponseTypeSupport_c = rmw_cyclonedds_cpp::ResponseTypeSupport<
-  rosidl_typesupport_introspection_c__ServiceMembers,
-  rosidl_typesupport_introspection_c__MessageMembers>;
 using ResponseTypeSupport_cpp = rmw_cyclonedds_cpp::ResponseTypeSupport<
   rosidl_typesupport_introspection_cpp::ServiceMembers,
   rosidl_typesupport_introspection_cpp::MessageMembers>;
-
-static bool using_introspection_c_typesupport(const char * typesupport_identifier)
-{
-  return typesupport_identifier == rosidl_typesupport_introspection_c__identifier;
-}
 
 static bool using_introspection_cpp_typesupport(const char * typesupport_identifier)
 {
@@ -60,11 +47,7 @@ void * create_message_type_support(
   const void * untyped_members,
   const char * typesupport_identifier)
 {
-  if (using_introspection_c_typesupport(typesupport_identifier)) {
-    auto members =
-      static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(untyped_members);
-    return new MessageTypeSupport_c(members);
-  } else if (using_introspection_cpp_typesupport(typesupport_identifier)) {
+  if (using_introspection_cpp_typesupport(typesupport_identifier)) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(untyped_members);
     return new MessageTypeSupport_cpp(members);
@@ -77,11 +60,7 @@ void * create_request_type_support(
   const void * untyped_members,
   const char * typesupport_identifier)
 {
-  if (using_introspection_c_typesupport(typesupport_identifier)) {
-    auto members =
-      static_cast<const rosidl_typesupport_introspection_c__ServiceMembers *>(untyped_members);
-    return new RequestTypeSupport_c(members);
-  } else if (using_introspection_cpp_typesupport(typesupport_identifier)) {
+  if (using_introspection_cpp_typesupport(typesupport_identifier)) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_cpp::ServiceMembers *>(untyped_members);
     return new RequestTypeSupport_cpp(members);
@@ -94,11 +73,7 @@ void * create_response_type_support(
   const void * untyped_members,
   const char * typesupport_identifier)
 {
-  if (using_introspection_c_typesupport(typesupport_identifier)) {
-    auto members =
-      static_cast<const rosidl_typesupport_introspection_c__ServiceMembers *>(untyped_members);
-    return new ResponseTypeSupport_c(members);
-  } else if (using_introspection_cpp_typesupport(typesupport_identifier)) {
+  if (using_introspection_cpp_typesupport(typesupport_identifier)) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_cpp::ServiceMembers *>(untyped_members);
     return new ResponseTypeSupport_cpp(members);
@@ -173,11 +148,7 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
       /* ROS2 doesn't do keys, so SDK_KEY is trivial */
     } else if (!topic->is_request_header) {
       cycser sd(d->data);
-      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
-        (void) typed_typesupport->serializeROSmessage(sample, sd);
-      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
+      if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
           static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
         (void) typed_typesupport->serializeROSmessage(sample, sd);
@@ -189,11 +160,7 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
       const cdds_request_wrapper_t * wrap = static_cast<const cdds_request_wrapper_t *>(sample);
       auto prefix = [wrap](cycser & ser) {ser << wrap->header.guid; ser << wrap->header.seq;};
       cycser sd(d->data);
-      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
-        (void) typed_typesupport->serializeROSmessage(wrap->data, sd, prefix);
-      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
+      if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
           static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
         (void) typed_typesupport->serializeROSmessage(wrap->data, sd, prefix);
@@ -276,11 +243,7 @@ static bool serdata_rmw_to_sample(
       /* ROS2 doesn't do keys in a meaningful way yet */
     } else if (!topic->is_request_header) {
       cycdeser sd(static_cast<const void *>(d->data.data()), d->data.size());
-      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
-        return typed_typesupport->deserializeROSmessage(sd, sample);
-      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
+      if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
           static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
         return typed_typesupport->deserializeROSmessage(sd, sample);
@@ -292,11 +255,7 @@ static bool serdata_rmw_to_sample(
       cdds_request_wrapper_t * const wrap = static_cast<cdds_request_wrapper_t *>(sample);
       auto prefix = [wrap](cycdeser & ser) {ser >> wrap->header.guid; ser >> wrap->header.seq;};
       cycdeser sd(static_cast<const void *>(d->data.data()), d->data.size());
-      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
-        return typed_typesupport->deserializeROSmessage(sd, wrap->data, prefix);
-      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
+      if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
           static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
         return typed_typesupport->deserializeROSmessage(sd, wrap->data, prefix);
@@ -347,11 +306,7 @@ static size_t serdata_rmw_print(
       return static_cast<size_t>(snprintf(buf, bufsize, ":k:{}"));
     } else if (!topic->is_request_header) {
       cycprint sd(buf, bufsize, static_cast<const void *>(d->data.data()), d->data.size());
-      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
-        return typed_typesupport->printROSmessage(sd);
-      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
+      if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
           static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
         return typed_typesupport->printROSmessage(sd);
@@ -365,11 +320,7 @@ static size_t serdata_rmw_print(
           ser >> wrap.header.guid; ser.print_constant(","); ser >> wrap.header.seq;
         };
       cycprint sd(buf, bufsize, static_cast<const void *>(d->data.data()), d->data.size());
-      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
-        return typed_typesupport->printROSmessage(sd, prefix);
-      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
+      if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
           static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
         return typed_typesupport->printROSmessage(sd, prefix);
@@ -480,10 +431,7 @@ inline std::string create_type_name(const void * untyped_members)
 
 static std::string get_type_name(const char * type_support_identifier, void * type_support)
 {
-  if (using_introspection_c_typesupport(type_support_identifier)) {
-    auto typed_typesupport = static_cast<MessageTypeSupport_c *>(type_support);
-    return typed_typesupport->getName();
-  } else if (using_introspection_cpp_typesupport(type_support_identifier)) {
+  if (using_introspection_cpp_typesupport(type_support_identifier)) {
     auto typed_typesupport = static_cast<MessageTypeSupport_cpp *>(type_support);
     return typed_typesupport->getName();
   } else {

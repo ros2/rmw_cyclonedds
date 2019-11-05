@@ -269,45 +269,6 @@ void serialize_field(
 
 template<>
 inline
-void serialize_field<std::string>(
-  const rosidl_typesupport_introspection_c__MessageMember * member,
-  void * field,
-  cycser & ser)
-{
-  using CStringHelper = StringHelper<rosidl_typesupport_introspection_c__MessageMembers>;
-  if (!member->is_array_) {
-    auto && str = CStringHelper::convert_to_std_string(field);
-    // Control maximum length.
-    if (member->string_upper_bound_ && str.length() > member->string_upper_bound_ + 1) {
-      throw std::runtime_error("string overcomes the maximum length");
-    }
-    ser << str;
-  } else {
-    // First, cast field to rosidl_generator_c
-    // Then convert to a std::string using StringHelper and serialize the std::string
-    if (member->array_size_ && !member->is_upper_bound_) {
-      // tmpstring is defined here and not below to avoid
-      // memory allocation in every iteration of the for loop
-      std::string tmpstring;
-      auto string_field = static_cast<rosidl_generator_c__String *>(field);
-      for (size_t i = 0; i < member->array_size_; ++i) {
-        tmpstring = string_field[i].data;
-        ser.serialize(tmpstring);
-      }
-    } else {
-      auto & string_array_field = *reinterpret_cast<rosidl_generator_c__String__Sequence *>(field);
-      std::vector<std::string> cpp_string_vector;
-      for (size_t i = 0; i < string_array_field.size; ++i) {
-        cpp_string_vector.push_back(
-          CStringHelper::convert_to_std_string(string_array_field.data[i]));
-      }
-      ser << cpp_string_vector;
-    }
-  }
-}
-
-template<>
-inline
 void serialize_field<std::wstring>(
   const rosidl_typesupport_introspection_c__MessageMember * member,
   void * field,
@@ -563,51 +524,6 @@ void deserialize_field(
     deser >> dsize;
     GenericCSequence<T>::init(&data, dsize);
     deser.deserializeA(reinterpret_cast<T *>(data.data), dsize);
-  }
-}
-
-template<>
-inline void deserialize_field<std::string>(
-  const rosidl_typesupport_introspection_c__MessageMember * member,
-  void * field,
-  cycdeser & deser,
-  bool call_new)
-{
-  (void)call_new;
-  if (!member->is_array_) {
-    using CStringHelper = StringHelper<rosidl_typesupport_introspection_c__MessageMembers>;
-    CStringHelper::assign(deser, field, call_new);
-  } else {
-    if (member->array_size_ && !member->is_upper_bound_) {
-      auto deser_field = static_cast<rosidl_generator_c__String *>(field);
-      // tmpstring is defined here and not below to avoid
-      // memory allocation in every iteration of the for loop
-      std::string tmpstring;
-      for (size_t i = 0; i < member->array_size_; ++i) {
-        deser.deserialize(tmpstring);
-        if (!rosidl_generator_c__String__assign(&deser_field[i], tmpstring.c_str())) {
-          throw std::runtime_error("unable to assign rosidl_generator_c__String");
-        }
-      }
-    } else {
-      std::vector<std::string> cpp_string_vector;
-      deser >> cpp_string_vector;
-
-      auto & string_array_field = *reinterpret_cast<rosidl_generator_c__String__Sequence *>(field);
-      if (!rosidl_generator_c__String__Sequence__init(&string_array_field,
-        cpp_string_vector.size()))
-      {
-        throw std::runtime_error("unable to initialize rosidl_generator_c__String array");
-      }
-
-      for (size_t i = 0; i < cpp_string_vector.size(); ++i) {
-        if (!rosidl_generator_c__String__assign(&string_array_field.data[i],
-          cpp_string_vector[i].c_str()))
-        {
-          throw std::runtime_error("unable to assign rosidl_generator_c__String");
-        }
-      }
-    }
   }
 }
 

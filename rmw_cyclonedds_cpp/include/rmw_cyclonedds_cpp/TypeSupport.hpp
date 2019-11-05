@@ -48,45 +48,6 @@ namespace rmw_cyclonedds_cpp
 template<typename MembersType>
 struct StringHelper;
 
-// For C introspection typesupport we create intermediate instances of std::string so that
-// cycser/cycdeser can handle the string properly.
-template<>
-struct StringHelper<rosidl_typesupport_introspection_c__MessageMembers>
-{
-  using type = rosidl_generator_c__String;
-
-  static std::string convert_to_std_string(void * data)
-  {
-    auto c_string = static_cast<rosidl_generator_c__String *>(data);
-    if (!c_string) {
-      RCUTILS_LOG_ERROR_NAMED(
-        "rmw_cyclonedds_cpp",
-        "Failed to cast data as rosidl_generator_c__String");
-      return "";
-    }
-    if (!c_string->data) {
-      RCUTILS_LOG_ERROR_NAMED(
-        "rmw_cyclonedds_cpp",
-        "rosidl_generator_c_String had invalid data");
-      return "";
-    }
-    return std::string(c_string->data);
-  }
-
-  static std::string convert_to_std_string(rosidl_generator_c__String & data)
-  {
-    return std::string(data.data);
-  }
-
-  static void assign(cycdeser & deser, void * field, bool)
-  {
-    std::string str;
-    deser >> str;
-    rosidl_generator_c__String * c_str = static_cast<rosidl_generator_c__String *>(field);
-    rosidl_generator_c__String__assign(c_str, str.c_str());
-  }
-};
-
 // For C++ introspection typesupport we just reuse the same std::string transparently.
 template<>
 struct StringHelper<rosidl_typesupport_introspection_cpp::MessageMembers>
