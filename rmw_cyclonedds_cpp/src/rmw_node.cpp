@@ -614,13 +614,6 @@ static void node_gone_from_domain_locked(dds_domainid_t did)
 {
   static_cast<void>(did);
 }
-
-static bool check_create_domain_locked(dds_domainid_t did, bool localhost_only)
-{
-  static_cast<void>(did);
-  static_cast<void>(localhost_only);
-  return true;
-}
 #endif
 
 static std::string get_node_user_data(const char * node_name, const char * node_namespace)
@@ -670,10 +663,10 @@ extern "C" rmw_node_t * rmw_create_node(
      and tearing down the domain for versions of Cyclone that implement the original
      version of dds_create_domain that doesn't return a handle.  */
   std::lock_guard<std::mutex> lock(gcdds.domains_lock);
-#endif
   if (!check_create_domain_locked(did, localhost_only)) {
     return nullptr;
   }
+#endif
 
   dds_qos_t * qos = dds_create_qos();
   std::string user_data = get_node_user_data(name, namespace_);
