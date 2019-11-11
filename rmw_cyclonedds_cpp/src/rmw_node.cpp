@@ -548,9 +548,6 @@ static void unref_ppant()
 #if SUPPORT_LOCALHOST
 static void node_gone_from_domain_locked(dds_domainid_t did)
 {
-  /* The initial support for dds_create_domain in Cyclone results in domains that get
-     automatically deleted when the last participant in it disappears.  Later versions
-     return a handle and leave it in existence. */
   CddsDomain & dom = gcdds.domains[did];
   assert(dom.n_nodes > 0);
   if (--dom.n_nodes == 0) {
@@ -679,6 +676,21 @@ extern "C" rmw_node_t * rmw_create_node(
       "rmw_create_node: failed to create DDS participant");
     return nullptr;
   }
+#if SUPPORT_LOCALHOST
+  if (gcdds.domains[did].domain_handle == 0) {
+    /* Original implementation of dds_create_domain(): returned value is 0 (DDS_RETCODE_OK)
+       and a reference to the domain is leaked, necessitating an explicit call to
+       dds_delete().  For this, we must recover the handle from the participant.  Yikes!
+
+       Pending fixes to Cyclone (https://github.com/eclipse-cyclonedds/cyclonedds/pull/304):
+       a handle is returned by dds_create_domain() and dds_delete() must be called (so
+       entirely in line with other entity types).  In this case, we don't have to do this
+       (though there would be no harm in it either).
+
+       Note that "domains_lock" is held all this time. */
+    gcdds.domains[did].domain_handle = dds_get_parent(pp);
+  }
+#endif
 
   /* Since ROS2 doesn't require anything fancy from DDS Subscribers or Publishers, create a single
      pair & reuse that */
