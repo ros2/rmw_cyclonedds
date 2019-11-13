@@ -2,6 +2,13 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.4.3 (2019-11-13)
+------------------
+* Address "Precondition not met" on rmw_create_node (`#65 <https://github.com/ros2/rmw_cyclonedds/issues/65>`_) (`#66 <https://github.com/ros2/rmw_cyclonedds/issues/66>`_)
+* Fix dashing breakage (`#64 <https://github.com/ros2/rmw_cyclonedds/issues/64>`_)
+* Support localhost-only communications (`#60 <https://github.com/ros2/rmw_cyclonedds/issues/60>`_)
+* Contributors: eboasson
+
 0.4.2 (2019-11-01)
 ------------------
 * Suppress a syntax error identified by cppcheck 1.89 (`#59 <https://github.com/ros2/rmw_cyclonedds/issues/59>`_)
