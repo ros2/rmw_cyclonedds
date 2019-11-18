@@ -12,29 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef RMW_CYCLONEDDS_CPP__EXCEPTION_HPP_
-#define RMW_CYCLONEDDS_CPP__EXCEPTION_HPP_
+#ifndef RMW_CYCLONEDDS_CPP__EXCEPTIONS_HPP_
+#define RMW_CYCLONEDDS_CPP__EXCEPTIONS_HPP_
 
-#include <string>
 #include <exception>
+#include <string>
 
 namespace rmw_cyclonedds_cpp
 {
-
-class Exception : public std::exception
+class Exception : public std::runtime_error
 {
 public:
-  virtual ~Exception() throw();
-  virtual const char * what() const throw();
+  explicit Exception(const std::string & what_arg)
+  : std::runtime_error(what_arg) {}
+  explicit Exception(const char * what_arg)
+  : std::runtime_error(what_arg) {}
+};
 
-protected:
-  explicit Exception(const char * const & message);
-  Exception(const Exception & ex);
-  Exception & operator=(const Exception & ex);
-
-  std::string m_message;
+class DeserializationException : public Exception
+{
+public:
+  explicit DeserializationException(const std::string & what_arg)
+  : Exception(what_arg) {}
+  explicit DeserializationException(const char * what_arg)
+  : Exception(what_arg) {}
 };
 
 }  // namespace rmw_cyclonedds_cpp
 
-#endif  // RMW_CYCLONEDDS_CPP__EXCEPTION_HPP_
+#endif  // RMW_CYCLONEDDS_CPP__EXCEPTIONS_HPP_

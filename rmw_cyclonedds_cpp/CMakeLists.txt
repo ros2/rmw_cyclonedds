@@ -55,8 +55,6 @@ add_library(rmw_cyclonedds_cpp
   src/serdes.cpp
   src/graphrhc.cpp
   src/u16string.cpp
-  src/exception.cpp
-  src/deserialization_exception.cpp
 )
 
 target_include_directories(rmw_cyclonedds_cpp PUBLIC

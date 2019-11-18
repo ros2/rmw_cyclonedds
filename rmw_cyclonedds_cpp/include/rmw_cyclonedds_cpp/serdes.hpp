@@ -25,7 +25,7 @@
 #include <vector>
 #include <type_traits>
 
-#include "rmw_cyclonedds_cpp/deserialization_exception.hpp"
+#include "rmw_cyclonedds_cpp/exceptions.hpp"
 
 using rmw_cyclonedds_cpp::DeserializationException;
 
