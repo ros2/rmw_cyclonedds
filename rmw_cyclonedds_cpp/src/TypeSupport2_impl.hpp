@@ -97,6 +97,7 @@ struct MessageValueHelper
 };
 
 template<>
+// cppcheck-suppress syntaxError
 template<typename UnaryFunction, typename Result>
 Result MemberRef<RTI_Cpp::MetaMember>::with_value_helper(UnaryFunction f)
 {
@@ -279,7 +280,7 @@ public:
     throw_not_implemented();
   }
   MessageRef<MetaMessage> operator[](size_t) const {throw_not_implemented();}
-  size_t size() const {throw_not_implemented();}
+  size_t size() const {throw_not_implemented(); return {};}
 };
 
 template<typename T>
