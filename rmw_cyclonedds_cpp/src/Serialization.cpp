@@ -62,7 +62,14 @@ struct SizeAccumulator
       throw std::length_error("Data exceeds buffer size");
     }
     _size += n;
-    assert(_size <= _capacity);
+  }
+
+  void pad_bytes(size_t n)
+  {
+    if (_size + n > _capacity) {
+      throw std::length_error("Padding exceeds buffer size");
+    }
+    _size += n;
   }
 };
 
@@ -91,11 +98,19 @@ struct DataAccumulator
     memcpy(_data + ByteOffset(_size), s, n);
     _size += n;
   }
+
+  void pad_bytes(size_t n)
+  {
+    if (_size + n > _capacity) {
+      throw std::length_error("Padding exceeds buffer size");
+    }
+    _size += n;
+  }
 };
 
 enum class EncodingVersion
 {
-  Legacy,
+  CDR_Legacy,
   CDR1,
 };
 
@@ -104,62 +119,40 @@ class CDRWriter
 {
 protected:
   Accumulator & dst;
-  const EncodingVersion eversion = EncodingVersion::Legacy;
+
+  const EncodingVersion eversion;
+  const size_t max_align;
 
   void put_bytes(const void * bytes, size_t size) {dst.put_bytes(bytes, size);}
 
-  void put_bytes(std::initializer_list<char> bs)
-  {
-    for (char b : bs) {
-      dst.put_bytes(&b, 1);
-    }
-  }
-
   void align(size_t n_bytes)
   {
-    size_t max_align, origin;
-    switch (eversion) {
-      case (EncodingVersion::Legacy):
-        max_align = 8;
-        origin = 4;
-        break;
-      case EncodingVersion::CDR1:
-        max_align = 8;
-        origin = 0;
-        break;
-    }
-    auto align_to = std::min(max_align, n_bytes);
-    size_t current_align = (dst.size() + max_align - origin) % align_to;
-
-    auto bytes_needed = (align_to - current_align) % align_to;
-    for (size_t i = 0; i < bytes_needed; i++) {
-      auto fill = '\0';
-      dst.put_bytes(&fill, 1);
-    }
+    assert(n_bytes == 1 || n_bytes == 2 || n_bytes == 4 || n_bytes == 8);
+    size_t current_align = (eversion == EncodingVersion::CDR_Legacy) ? dst.size() - 4 : dst.size();
+    dst.pad_bytes((-current_align) % max_align % n_bytes);
   }
 
 public:
   CDRWriter() = delete;
   explicit CDRWriter(Accumulator & dst)
-  : dst(dst) {}
+  : dst(dst),
+    eversion{EncodingVersion::CDR_Legacy},
+    max_align{8} {}
 
   void serialize_top_level(
-    const cdds_request_wrapper_t & request,
-    const rosidl_message_type_support_t & support)
+    const cdds_request_wrapper_t & request, const rosidl_message_type_support_t & support)
   {
     put_rtps_header();
     serialize(request.header.guid);
     serialize(request.header.seq);
-    with_typesupport(support, [&](auto t) {
-        serialize(make_message_ref(t, request.data));
-      });
+    with_typesupport(support, [&](auto t) {serialize(make_message_ref(t, request.data));});
   }
 
   void serialize_top_level(const void * data, const rosidl_message_type_support_t & support)
   {
     put_rtps_header();
     with_typesupport(support, [&](auto t) {
-        if (t.member_count_ == 0 && eversion == EncodingVersion::Legacy) {
+        if (t.member_count_ == 0 && eversion == EncodingVersion::CDR_Legacy) {
           serialize('\0');
         } else {
           serialize(make_message_ref(t, data));
@@ -173,21 +166,20 @@ protected:
     // beginning of message
     char eversion_byte;
     switch (eversion) {
-      case EncodingVersion::Legacy:
-        eversion_byte = 0x00;
+      case EncodingVersion::CDR_Legacy:
+        eversion_byte = '\0';
         break;
       case EncodingVersion::CDR1:
-        eversion_byte = 0x01;
+        eversion_byte = '\1';
         break;
     }
-
-    put_bytes({
-        // encoding version
-        eversion_byte,
-        // encoding format = PLAIN_CDR
-        (native_endian() == endian::little) ? '\1' : '\0',
-        // options
-        '\0', '\0'});
+    std::array<char, 4> rtps_header{
+      eversion_byte,
+      // encoding format = PLAIN_CDR
+      (native_endian() == endian::little) ? '\1' : '\0',
+      // options
+      '\0', '\0'};
+    put_bytes(rtps_header.data(), rtps_header.size());
   }
 
   template<
@@ -229,7 +221,7 @@ protected:
       }
       serialize('\0');
     } else {
-      if (eversion == EncodingVersion::Legacy) {
+      if (eversion == EncodingVersion::CDR_Legacy) {
         serialize_u32(value.size());
         for (char_type s : value) {
           serialize(static_cast<wchar_t>(s));
