@@ -11,23 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <string.h>
+#include "rmw_cyclonedds_cpp/serdata.hpp"
 
-#include <vector>
+#include <cstring>
+
 #include <regex>
 #include <sstream>
 #include <string>
 
+#include "Serialization.hpp"
+#include "dds/ddsi/q_radmin.h"
 #include "rmw/error_handling.h"
-
 #include "rmw_cyclonedds_cpp/MessageTypeSupport.hpp"
 #include "rmw_cyclonedds_cpp/ServiceTypeSupport.hpp"
-
 #include "rmw_cyclonedds_cpp/serdes.hpp"
-#include "rmw_cyclonedds_cpp/serdata.hpp"
-
-#include "dds/ddsi/ddsi_iid.h"
-#include "dds/ddsi/q_radmin.h"
 
 using MessageTypeSupport_c =
   rmw_cyclonedds_cpp::MessageTypeSupport<rosidl_typesupport_introspection_c__MessageMembers>;
@@ -172,32 +169,18 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
     if (kind != SDK_DATA) {
       /* ROS2 doesn't do keys, so SDK_KEY is trivial */
     } else if (!topic->is_request_header) {
-      cycser sd(d->data);
-      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
-        (void) typed_typesupport->serializeROSmessage(sample, sd);
-      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
-        (void) typed_typesupport->serializeROSmessage(sample, sd);
-      }
+      auto sz = rmw_cyclonedds_cpp::get_serialized_size(sample, topic->message_type_support);
+      d->data.resize(sz);
+      rmw_cyclonedds_cpp::serialize(d->data.data(), sz, sample, topic->message_type_support);
     } else {
-      /* The "prefix" lambda is there to inject the service invocation header data into the CDR
-        stream -- I haven't checked how it is done in the official RMW implementations, so it is
-        probably incompatible. */
-      const cdds_request_wrapper_t * wrap = static_cast<const cdds_request_wrapper_t *>(sample);
-      auto prefix = [wrap](cycser & ser) {ser << wrap->header.guid; ser << wrap->header.seq;};
-      cycser sd(d->data);
-      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
-        (void) typed_typesupport->serializeROSmessage(wrap->data, sd, prefix);
-      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
-        (void) typed_typesupport->serializeROSmessage(wrap->data, sd, prefix);
-      }
+      /* inject the service invocation header data into the CDR stream --
+       * I haven't checked how it is done in the official RMW implementations, so it is
+       * probably incompatible. */
+      auto wrap = *static_cast<const cdds_request_wrapper_t *>(sample);
+
+      auto sz = rmw_cyclonedds_cpp::get_serialized_size(wrap, topic->message_type_support);
+      d->data.resize(sz);
+      rmw_cyclonedds_cpp::serialize(d->data.data(), sz, wrap, topic->message_type_support);
     }
     /* FIXME: CDR padding in DDSI makes me do this to avoid reading beyond the bounds of the vector
       when copying data to network.  Should fix Cyclone to handle that more elegantly.  */
@@ -205,10 +188,7 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
       d->data.push_back(0);
     }
     return d;
-  } catch (rmw_cyclonedds_cpp::Exception & e) {
-    RMW_SET_ERROR_MSG(e.what());
-    return nullptr;
-  } catch (std::runtime_error & e) {
+  } catch (std::exception & e) {
     RMW_SET_ERROR_MSG(e.what());
     return nullptr;
   }
@@ -493,7 +473,8 @@ static std::string get_type_name(const char * type_support_identifier, void * ty
 
 struct sertopic_rmw * create_sertopic(
   const char * topicname, const char * type_support_identifier,
-  void * type_support, bool is_request_header)
+  void * type_support, bool is_request_header,
+  const rosidl_message_type_support_t message_type_support)
 {
   struct sertopic_rmw * st = new struct sertopic_rmw;
 #if DDSI_SERTOPIC_HAS_TOPICKIND_NO_KEY
@@ -517,5 +498,6 @@ struct sertopic_rmw * create_sertopic(
   st->type_support.typesupport_identifier_ = type_support_identifier;
   st->type_support.type_support_ = type_support;
   st->is_request_header = is_request_header;
+  st->message_type_support = message_type_support;
   return st;
 }

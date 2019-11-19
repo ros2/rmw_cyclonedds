@@ -40,7 +40,10 @@
 #include "rmw/rmw.h"
 #include "rmw/sanity_checks.h"
 
+#include "Serialization.hpp"
 #include "rmw/impl/cpp/macros.hpp"
+
+#include "TypeSupport2.hpp"
 
 #include "rmw_cyclonedds_cpp/MessageTypeSupport.hpp"
 #include "rmw_cyclonedds_cpp/ServiceTypeSupport.hpp"
@@ -846,6 +849,7 @@ extern "C" rmw_ret_t rmw_get_serialized_message_size(
   static_cast<void>(type_support);
   static_cast<void>(message_bounds);
   static_cast<void>(size);
+
   RMW_SET_ERROR_MSG("rmw_get_serialized_message_size: unimplemented");
   return RMW_RET_ERROR;
 }
@@ -855,39 +859,21 @@ extern "C" rmw_ret_t rmw_serialize(
   const rosidl_message_type_support_t * type_support,
   rmw_serialized_message_t * serialized_message)
 {
-  std::vector<unsigned char> data;
-  cycser sd(data);
   rmw_ret_t ret;
-  const rosidl_message_type_support_t * ts;
-  if ((ts =
-    get_message_typesupport_handle(type_support,
-    rosidl_typesupport_introspection_c__identifier)) != nullptr)
-  {
-    auto members =
-      static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(ts->data);
-    MessageTypeSupport_c msgts(members);
-    msgts.serializeROSmessage(ros_message, sd, nullptr);
-  } else {
-    if ((ts =
-      get_message_typesupport_handle(type_support,
-      rosidl_typesupport_introspection_cpp::typesupport_identifier)) != nullptr)
-    {
-      auto members =
-        static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(ts->data);
-      MessageTypeSupport_cpp msgts(members);
-      msgts.serializeROSmessage(ros_message, sd, nullptr);
-    } else {
-      RMW_SET_ERROR_MSG("rmw_serialize: type support trouble");
-      return RMW_RET_ERROR;
-    }
-  }
 
-  if ((ret = rmw_serialized_message_resize(serialized_message, data.size())) != RMW_RET_OK) {
-    return ret;
+  try {
+    auto size = rmw_cyclonedds_cpp::get_serialized_size(ros_message, *type_support);
+    if ((ret = rmw_serialized_message_resize(serialized_message, size) != RMW_RET_OK)) {
+      RMW_SET_ERROR_MSG("rmw_serialize: failed to allocate space for message");
+      return ret;
+    }
+    rmw_cyclonedds_cpp::serialize(serialized_message->buffer, size, ros_message, *type_support);
+    serialized_message->buffer_length = size;
+    return RMW_RET_OK;
+  } catch (std::exception & e) {
+    RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("rmw_serialize: failed to serialize: %s", e.what());
+    return RMW_RET_ERROR;
   }
-  memcpy(serialized_message->buffer, data.data(), data.size());
-  serialized_message->buffer_length = data.size();
-  return RMW_RET_OK;
 }
 
 extern "C" rmw_ret_t rmw_deserialize(
@@ -1226,7 +1212,8 @@ static CddsPublisher * create_cdds_publisher(
 
   auto sertopic = create_sertopic(
     fqtopic_name.c_str(), type_support->typesupport_identifier,
-    create_message_type_support(type_support->data, type_support->typesupport_identifier), false);
+    create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
+    *type_supports);
   if ((topic =
     dds_create_topic_arbitrary(node_impl->pp, sertopic, nullptr, nullptr, nullptr)) < 0)
   {
@@ -1447,7 +1434,8 @@ static CddsSubscription * create_cdds_subscription(
 
   auto sertopic = create_sertopic(
     fqtopic_name.c_str(), type_support->typesupport_identifier,
-    create_message_type_support(type_support->data, type_support->typesupport_identifier), false);
+    create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
+    *type_supports);
   if ((topic =
     dds_create_topic_arbitrary(node_impl->pp, sertopic, nullptr, nullptr, nullptr)) < 0)
   {
@@ -2331,7 +2319,13 @@ static rmw_ret_t rmw_init_cs(
   auto sub = new CddsSubscription();
   std::string subtopic_name, pubtopic_name;
   void * pub_type_support, * sub_type_support;
+
+  rosidl_message_type_support_t pub_msg_ts, sub_msg_ts;
+
   if (is_service) {
+    std::tie(sub_msg_ts, pub_msg_ts) = rmw_cyclonedds_cpp::get_svc_request_response_typesupports(
+      *type_supports);
+
     sub_type_support = create_request_type_support(type_support->data,
         type_support->typesupport_identifier);
     pub_type_support = create_response_type_support(type_support->data,
@@ -2340,6 +2334,9 @@ static rmw_ret_t rmw_init_cs(
       make_fqtopic(ros_service_requester_prefix, service_name, "Request", qos_policies);
     pubtopic_name = make_fqtopic(ros_service_response_prefix, service_name, "Reply", qos_policies);
   } else {
+    std::tie(pub_msg_ts, sub_msg_ts) = rmw_cyclonedds_cpp::get_svc_request_response_typesupports(
+      *type_supports);
+
     pub_type_support = create_request_type_support(type_support->data,
         type_support->typesupport_identifier);
     sub_type_support = create_response_type_support(type_support->data,
@@ -2358,9 +2355,11 @@ static rmw_ret_t rmw_init_cs(
   dds_entity_t pubtopic, subtopic;
 
   auto pub_st = create_sertopic(
-    pubtopic_name.c_str(), type_support->typesupport_identifier, pub_type_support, true);
+    pubtopic_name.c_str(), type_support->typesupport_identifier, pub_type_support, true,
+    pub_msg_ts);
   auto sub_st = create_sertopic(
-    subtopic_name.c_str(), type_support->typesupport_identifier, sub_type_support, true);
+    subtopic_name.c_str(), type_support->typesupport_identifier, sub_type_support, true,
+    sub_msg_ts);
 
   dds_qos_t * qos;
   if ((pubtopic =

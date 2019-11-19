@@ -57,7 +57,7 @@ add_library(rmw_cyclonedds_cpp
   src/u16string.cpp
   src/exception.cpp
   src/deserialization_exception.cpp
-)
+  src/Serialization.cpp)
 
 target_include_directories(rmw_cyclonedds_cpp PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
