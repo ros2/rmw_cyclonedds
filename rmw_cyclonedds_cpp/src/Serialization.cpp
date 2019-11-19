@@ -97,7 +97,6 @@ enum class EncodingVersion
 {
   Legacy,
   CDR1,
-  CDR2,
 };
 
 template<typename Accumulator>
@@ -126,10 +125,6 @@ protected:
         break;
       case EncodingVersion::CDR1:
         max_align = 8;
-        origin = 0;
-        break;
-      case EncodingVersion::CDR2:
-        max_align = 4;
         origin = 0;
         break;
     }
@@ -184,15 +179,12 @@ protected:
       case EncodingVersion::CDR1:
         eversion_byte = 0x01;
         break;
-      case EncodingVersion::CDR2:
-        eversion_byte = 0x02;
-        break;
     }
 
     put_bytes({
         // encoding version
         eversion_byte,
-        // encoding format = PLAIN_CDR/PLAIN_CDR2
+        // encoding format = PLAIN_CDR
         (native_endian() == endian::little) ? '\1' : '\0',
         // options
         '\0', '\0'});
