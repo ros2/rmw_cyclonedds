@@ -42,70 +42,41 @@ get_svc_request_response_typesupports(const rosidl_service_type_support_t & svc)
            });
 }
 
-struct SizeAccumulator
+struct ByteCountingIterator : public std::iterator<std::output_iterator_tag, void, void, void, void>
 {
-  size_t _size;
-  size_t _capacity;
+  size_t n;
 
-  explicit SizeAccumulator(size_t capacity = std::numeric_limits<size_t>::max(), size_t size = 0)
-  : _size(size), _capacity(capacity)
+  ByteCountingIterator()
+  : n(0) {}
+
+  ByteCountingIterator & operator++()
   {
+    n++;
+    return *this;
   }
 
-  auto size() const {return _size;}
-
-  void put_bytes(const void * s, size_t n)
+  ByteCountingIterator & operator+=(const size_t & s)
   {
-    (void)s;
+    n += s;
+    return *this;
+  }
+  bool operator==(const ByteCountingIterator & other) const {return n == other.n;}
 
-    if (_size + n > _capacity) {
-      throw std::length_error("Data exceeds buffer size");
+  bool operator!=(const ByteCountingIterator & other) const {return n != other.n;}
+
+  ptrdiff_t operator-(const ByteCountingIterator & other) const {return n - other.n;}
+
+  struct DummyByteRef
+  {
+    template<typename T>
+    DummyByteRef & operator=(T &&)
+    {
+      static_assert(sizeof(T) == 1, "assignment value is too big");
+      return *this;
     }
-    _size += n;
-  }
+  };
 
-  void pad_bytes(size_t n)
-  {
-    if (_size + n > _capacity) {
-      throw std::length_error("Padding exceeds buffer size");
-    }
-    _size += n;
-  }
-};
-
-struct DataAccumulator
-{
-  void * _data;
-  size_t _size;
-  size_t _capacity;
-
-  DataAccumulator() = delete;
-  DataAccumulator(void * data, size_t capacity, size_t size = 0)
-  : _data(data), _size(size), _capacity(capacity)
-  {
-    assert(data);
-    assert(size <= capacity);
-  }
-
-  auto size() const {return _size;}
-
-  void put_bytes(const void * s, size_t n)
-  {
-    if (_size + n > _capacity) {
-      throw std::length_error("Data exceeds buffer size");
-    }
-
-    memcpy(_data + ByteOffset(_size), s, n);
-    _size += n;
-  }
-
-  void pad_bytes(size_t n)
-  {
-    if (_size + n > _capacity) {
-      throw std::length_error("Padding exceeds buffer size");
-    }
-    _size += n;
-  }
+  DummyByteRef operator*() {return {};}
 };
 
 enum class EncodingVersion
@@ -114,30 +85,43 @@ enum class EncodingVersion
   CDR1,
 };
 
-template<typename Accumulator>
+template<typename OutputIterator>
 class CDRWriter
 {
 protected:
-  Accumulator & dst;
+  OutputIterator origin;
+  OutputIterator cursor;
 
   const EncodingVersion eversion;
   const size_t max_align;
 
-  void put_bytes(const void * bytes, size_t size) {dst.put_bytes(bytes, size);}
+  void put_bytes(const void * bytes, size_t size)
+  {
+    cursor = std::copy(
+      reinterpret_cast<const byte *>(bytes), reinterpret_cast<const byte *>(bytes) + size, cursor);
+  }
 
   void align(size_t n_bytes)
   {
-    assert(n_bytes == 1 || n_bytes == 2 || n_bytes == 4 || n_bytes == 8);
-    size_t current_align = (eversion == EncodingVersion::CDR_Legacy) ? dst.size() - 4 : dst.size();
-    dst.pad_bytes((-current_align) % max_align % n_bytes);
+    assert(n_bytes != 0);
+    if (n_bytes == 1) {
+      return;
+    }
+    assert(n_bytes == 1 || n_bytes == 2 || n_bytes == 4 || n_bytes == 8 || n_bytes == 16);
+    size_t current_align =
+      (eversion == EncodingVersion::CDR_Legacy) ? (position() - 4) : position();
+
+    cursor += ((-current_align) % max_align % n_bytes);
   }
 
 public:
+  size_t position() {return cursor - origin;}
+
   CDRWriter() = delete;
-  explicit CDRWriter(Accumulator & dst)
-  : dst(dst),
-    eversion{EncodingVersion::CDR_Legacy},
-    max_align{8} {}
+  explicit CDRWriter(OutputIterator dst)
+  : origin(dst), cursor(dst), eversion{EncodingVersion::CDR_Legacy}, max_align{8}
+  {
+  }
 
   void serialize_top_level(
     const cdds_request_wrapper_t & request, const rosidl_message_type_support_t & support)
@@ -173,8 +157,7 @@ protected:
         eversion_byte = '\1';
         break;
     }
-    std::array<char, 4> rtps_header{
-      eversion_byte,
+    std::array<char, 4> rtps_header{eversion_byte,
       // encoding format = PLAIN_CDR
       (native_endian() == endian::little) ? '\1' : '\0',
       // options
@@ -182,56 +165,98 @@ protected:
     put_bytes(rtps_header.data(), rtps_header.size());
   }
 
-  template<
-    typename T,
-    std::enable_if_t<std::is_integral<T>::value && !std::is_same<T, bool>::value, int> = 0>
-  void serialize(T data)
+  // normalize platform-dependent types before serializing
+  template<typename T,
+    std::enable_if_t<std::is_integral<T>::value, int> = 0>
+  static auto format_value(T t)
   {
-    align(sizeof(data));
-    put_bytes(static_cast<const void *>(&data), sizeof(data));
+    return t;
   }
-
+  template<>
+  static auto format_value(bool t)
+  {
+    return uint8_t(t);
+  }
   template<typename T, std::enable_if_t<std::is_floating_point<T>::value, int> = 0>
-  void serialize(T data)
+  static auto format_value(T t)
   {
-    static_assert(std::numeric_limits<T>::is_iec559, "Non-standard float");
-
-    align(sizeof(data));
-    put_bytes(static_cast<const void *>(&data), sizeof(data));
+    static_assert(std::numeric_limits<T>::is_iec559, "nonstandard float");
+    return t;
   }
 
-  template<
-    typename T,
-    std::enable_if_t<
-      std::is_same<T, bool>::value || std::is_same<T, std::vector<bool>::reference>::value ||
-      std::is_same<T, std::vector<bool>::const_reference>::value,
-      int> = 0>
+  template<typename T>
+  void serialize_noalign(T value)
+  {
+    auto v2 = format_value(value);
+    put_bytes(&v2, sizeof(v2));
+  }
+
+  template<typename T,
+    std::enable_if_t<std::is_arithmetic<T>::value, int> = 0>
   void serialize(T value)
   {
-    serialize(value ? '\1' : '\0');
+    auto v2 = format_value(value);
+    align(sizeof(v2));
+    put_bytes(&v2, sizeof(v2));
   }
 
+  void serialize_u32(size_t value)
+  {
+    assert(value <= std::numeric_limits<uint32_t>::max());
+    serialize(uint32_t(value));
+  }
+
+  // specialization for strings
   template<typename T, typename char_type = typename T::traits_type::char_type>
   void serialize(const T & value)
   {
     if (sizeof(char_type) == 1) {
       serialize_u32(value.size() + 1);
-      for (char_type s : value) {
-        serialize(s);
+      for (char_type c : value) {
+        serialize_noalign(c);
       }
-      serialize('\0');
+      serialize_noalign('\0');
+    } else if (eversion == EncodingVersion::CDR_Legacy) {
+      serialize_u32(value.size());
+      for (wchar_t c : value) {
+        serialize_noalign(c);
+      }
     } else {
-      if (eversion == EncodingVersion::CDR_Legacy) {
-        serialize_u32(value.size());
-        for (char_type s : value) {
-          serialize(static_cast<wchar_t>(s));
-        }
-      } else {
-        serialize_u32(value.size() * sizeof(char_type));
-        for (char_type s : value) {
-          serialize(s);
-        }
+      serialize_u32(value.size() * sizeof(char_type));
+      for (char_type c : value) {
+        serialize_noalign(c);
       }
+    }
+  }
+
+  template<typename Iter,
+    typename value_type = typename std::iterator_traits<Iter>::value_type,
+    typename format_type = decltype(format_value(std::declval<value_type>()))
+  >
+  void serialize(Iter begin, Iter end)
+  {
+    // Note we do *NOT* align an empty sequence
+    if (begin == end) {
+      return;
+    }
+    /// for sequences of primitive values, we can align once and the rest will be aligned
+    align(sizeof(format_type));
+    for (auto it = begin; it != end; ++it) {
+      // note the conversion to value_type so that e.g. std::vector<bool> values
+      // get turned into real bools
+      serialize_noalign(value_type(*it));
+    }
+  }
+
+  template<typename Iter,
+    typename value_type = typename std::iterator_traits<Iter>::value_type,
+    std::enable_if_t<!std::is_arithmetic<value_type>::value, int> = 0
+  >
+  void serialize(Iter begin, Iter end)
+  {
+    /// for sequences of non-primitive values, we need to align for every value
+    for (auto it = begin; it != end; ++it) {
+      serialize(*it);
     }
   }
 
@@ -242,63 +267,54 @@ protected:
       auto member = message.at(i);
       switch (member.get_container_type()) {
         case MemberContainerType::SingleValue:
-          member.with_single_value([&](auto m) {serialize(m.get());});
+          member.with_single_value([&](auto m) {serialize(m);});
           break;
         case MemberContainerType::Array:
           member.with_array([&](auto m) {
-              for (size_t j = 0; j < m.size(); j++) {
-                serialize(m[j]);
-              }
+              serialize(std::begin(m), std::end(m));
             });
           break;
         case MemberContainerType::Sequence:
           member.with_sequence([&](auto m) {
               serialize_u32(m.size());
-              for (size_t j = 0; j < m.size(); j++) {
-                serialize(m[j]);
-              }
+              serialize(std::begin(m), std::end(m));
             });
       }
     }
-  }
-  void serialize_u32(size_t s)
-  {
-    assert(s < UINT32_MAX);
-    serialize(static_cast<uint32_t>(s));
   }
 };
 
 void serialize(
   void * dest, size_t dest_size, const void * data, const rosidl_message_type_support_t & ts)
 {
-  DataAccumulator accum{dest, dest_size};
-  CDRWriter<DataAccumulator> writer{accum};
+  CDRWriter<byte *> writer{static_cast<byte *>(dest)};
   writer.serialize_top_level(data, ts);
+  assert(writer.position() == dest_size);
 }
 
 size_t get_serialized_size(const void * data, const rosidl_message_type_support_t & ts)
 {
-  SizeAccumulator accum;
-  CDRWriter<SizeAccumulator> writer{accum};
+  ByteCountingIterator it;
+  CDRWriter<ByteCountingIterator> writer(it);
   writer.serialize_top_level(data, ts);
-  return accum.size();
+  return writer.position();
 }
 
 size_t get_serialized_size(
   const cdds_request_wrapper_t & request, const rosidl_message_type_support_t & ts)
 {
-  SizeAccumulator accum;
-  CDRWriter<SizeAccumulator> writer{accum};
+  ByteCountingIterator it;
+  CDRWriter<ByteCountingIterator> writer(it);
   writer.serialize_top_level(request, ts);
-  return accum.size();
+  return writer.position();
 }
 
 void serialize(
   void * dest, size_t dest_size, const cdds_request_wrapper_t & request,
   const rosidl_message_type_support_t & ts)
 {
-  DataAccumulator accum{dest, dest_size};
-  CDRWriter<DataAccumulator> writer{accum};
+  CDRWriter<byte *> writer{static_cast<byte *>(dest)};
   writer.serialize_top_level(request, ts);
+  assert(writer.position() == dest_size);
 }
 }  // namespace rmw_cyclonedds_cpp

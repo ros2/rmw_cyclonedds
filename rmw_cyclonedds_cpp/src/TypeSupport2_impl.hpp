@@ -13,16 +13,20 @@
 // limitations under the License.
 #ifndef TYPESUPPORT2_IMPL_HPP_
 #define TYPESUPPORT2_IMPL_HPP_
-#include "TypeSupport2.hpp"
-
 #include <limits>
+#include <memory>
 #include <string>
 #include <vector>
+
+#include "TypeSupport2.hpp"
 
 namespace rmw_cyclonedds_cpp
 {
 template<typename T>
-struct typeval { using type = T; };
+struct typeval
+{
+  using type = T;
+};
 
 template<typename UnaryFunction, typename Result>
 Result with_type(ValueType value_type, UnaryFunction f)
@@ -67,33 +71,84 @@ template<typename T>
 struct NativeValueHelper
 {
   using ptr_type = T *;
+  using const_ptr_type = const T *;
   using value_type = T;
   using reference_type = T &;
+
   static size_t sizeof_value() {return sizeof(T);}
   static reference_type cast_value(void * ptr) {return *static_cast<T *>(ptr);}
-  static std::add_const_t<reference_type> cast_value(const void * ptr)
-  {
-    return *static_cast<const T *>(ptr);
-  }
+  static const T & cast_value(const void * ptr) {return *static_cast<const T *>(ptr);}
+  static ptr_type cast_ptr(void * ptr) {return static_cast<ptr_type>(ptr);}
+  static const_ptr_type cast_ptr(const void * ptr) {return static_cast<const_ptr_type>(ptr);}
 };
 
 template<typename MetaMessage>
 struct MessageValueHelper
 {
-  static_assert(std::is_same<MetaMessage, RTI_C::MetaMessage>::value ||
+  using reference_type = MessageRef<MetaMessage>;
+  using value_type = void;
+
+  struct ptr_type
+    : public std::iterator<
+      std::random_access_iterator_tag, void, ptrdiff_t, ptr_type, MessageRef<MetaMessage>>
+  {
+    ptr_type(const MessageValueHelper & helper, void * ptr)
+    : helper(helper), ptr(ptr) {}
+
+    const MessageValueHelper & helper;
+    void * ptr;
+
+    explicit operator void *() const {return ptr;}
+
+    ptr_type & operator++()
+    {
+      return operator+=(1);
+    }
+
+    auto operator*() const {return helper.cast_value(ptr);}
+
+    ptr_type operator+(ptrdiff_t other) const
+    {
+      ptr_type new_ptr{helper, ptr};
+      new_ptr += other;
+      return new_ptr;
+    }
+
+    ptrdiff_t operator-(const ptr_type & other) const
+    {
+      ptrdiff_t n_bytes = ( reinterpret_cast<byte *>(ptr) - reinterpret_cast<byte *>(other.ptr));
+      assert(n_bytes % helper.sizeof_value() == 0);
+      return n_bytes / helper.sizeof_value();
+    }
+
+    ptr_type & operator+=(ptrdiff_t other)
+    {
+      ptr = byte_offset(ptr, other * helper.sizeof_value());
+      return *this;
+    }
+
+    bool operator==(const ptr_type & other) const {return ptr == other.ptr;}
+
+    bool operator!=(const ptr_type & other) const {return !(*this == other);}
+  };
+
+  static_assert(
+    std::is_same<MetaMessage, RTI_C::MetaMessage>::value ||
     std::is_same<MetaMessage, RTI_Cpp::MetaMessage>::value,
     "oops");
   const MetaMessage value_members;
-  using reference_type = MessageRef<MetaMessage>;
+
   size_t sizeof_value() const {return value_members.size_of_;}
-  reference_type cast_value(void * ptr) const
-  {
-    return make_message_ref(value_members, ptr);
-  }
+
+  reference_type cast_value(void * ptr) const {return make_message_ref(value_members, ptr);}
   std::add_const_t<reference_type> cast_value(const void * ptr) const
   {
     return make_message_ref(value_members, ptr);
   }
+
+  ptr_type cast_ptr(void * ptr) const {return ptr_type(*this, ptr);}
+
+  std::add_const_t<ptr_type> cast_ptr(const void * ptr) const {return ptr_type(*this, ptr);}
 };
 
 template<>
@@ -106,17 +161,15 @@ Result MemberRef<RTI_Cpp::MetaMember>::with_value_helper(UnaryFunction f)
     case ValueType::MESSAGE:
       assert(meta_member.members_);
       return with_typesupport(*meta_member.members_, [&](auto submessage_members) {
-                 return f(
-                   MessageValueHelper<decltype(submessage_members)>{submessage_members});
+                 return f(MessageValueHelper<decltype(submessage_members)>{submessage_members});
                });
     case ValueType::STRING:
       return f(NativeValueHelper<std::string>());
     case ValueType::WSTRING:
       return f(NativeValueHelper<std::u16string>());
     default:
-      return with_type(vt, [&](auto t) {
-                 return f(NativeValueHelper<typename decltype(t)::type>());
-               });
+      return with_type(
+        vt, [&](auto t) {return f(NativeValueHelper<typename decltype(t)::type>());});
   }
 }
 
@@ -129,28 +182,17 @@ Result MemberRef<RTI_C::MetaMember>::with_value_helper(UnaryFunction f)
     case ValueType::MESSAGE:
       assert(meta_member.members_);
       return with_typesupport(*meta_member.members_, [&](auto submessage_members) {
-                 return f(
-                   MessageValueHelper<decltype(submessage_members)>{submessage_members});
+                 return f(MessageValueHelper<decltype(submessage_members)>{submessage_members});
                });
     case ValueType::STRING:
       return f(NativeValueHelper<RTI_C::String>());
     case ValueType::WSTRING:
       return f(NativeValueHelper<RTI_C::WString>());
     default:
-      return with_type(vt, [&](auto t) {
-                 return f(NativeValueHelper<typename decltype(t)::type>());
-               });
+      return with_type(
+        vt, [&](auto t) {return f(NativeValueHelper<typename decltype(t)::type>());});
   }
 }
-template<typename MetaMember, typename ValueHelper>
-struct SingleValueMemberRef : MemberRef<MetaMember>
-{
-  SingleValueMemberRef(ValueHelper h, MemberRef<MetaMember> m)
-  : MemberRef<MetaMember>{m}, value_helper{h} {}
-  ValueHelper value_helper;
-  auto get() {return value_helper.cast_value(this->data);}
-  auto get() const {return value_helper.cast_value(this->data);}
-};
 
 template<typename MetaMember>
 template<typename UnaryFunction, typename Result>
@@ -158,21 +200,23 @@ Result MemberRef<MetaMember>::with_single_value(UnaryFunction f)
 {
   assert(get_container_type() == MemberContainerType::SingleValue);
   return with_value_helper([&](auto helper) {
-             return f(SingleValueMemberRef<MetaMember, decltype(helper)>{helper, *this});
+             return f(helper.cast_value(data));
            });
 }
 
-template<typename MetaMember, typename ValueHelper>
-struct ArrayMemberRef : MemberRef<MetaMember>
+template<typename Ptr>
+class ArrayInterface
 {
-  ArrayMemberRef(ValueHelper h, MemberRef<MetaMember> m)
-  : MemberRef<MetaMember>{m}, value_helper{h} {}
-  ValueHelper value_helper;
-  auto operator[](size_t index) const
-  {
-    return value_helper.cast_value(this->data + ByteOffset(value_helper.sizeof_value() * index));
-  }
-  size_t size() const {return this->meta_member.array_size_;}
+  const Ptr begin_ptr;
+  const Ptr end_ptr;
+
+public:
+  ArrayInterface(Ptr && begin_ptr, Ptr && end_ptr)
+  : begin_ptr(begin_ptr), end_ptr(end_ptr) {}
+
+  size_t size() const {return end_ptr - begin_ptr;}
+  auto begin() const {return begin_ptr;}
+  auto end() const {return end_ptr;}
 };
 
 template<typename MetaMember>
@@ -181,7 +225,8 @@ Result MemberRef<MetaMember>::with_array(UnaryFunction f)
 {
   assert(get_container_type() == MemberContainerType::Array);
   return with_value_helper([&](auto helper) {
-             return f(ArrayMemberRef<MetaMember, decltype(helper)>(helper, *this));
+             return f(ArrayInterface<typename decltype(helper)::ptr_type>{
+        helper.cast_ptr(this->data), helper.cast_ptr(this->data) + this->meta_member.array_size_});
            });
 }
 
@@ -201,145 +246,122 @@ struct ObjectSequenceMemberRef : MemberRef<MetaMember>
     }
   }
 
+  template<typename Collection>
+  struct iterator : public std::iterator<
+      std::input_iterator_tag, typename ValueHelper::value_type, std::ptrdiff_t,
+      typename ValueHelper::ptr_type, typename ValueHelper::reference_type>
+  {
+    iterator(const Collection & collection, size_t index)
+    : collection(collection), index(index) {}
+
+    Collection & collection;
+    size_t index;
+
+    iterator & operator++()
+    {
+      index++;
+      return *this;
+    }
+    auto operator*() const {return collection[index];}
+    bool operator==(const iterator & other) const
+    {
+      assert(&collection == &other.collection);
+      return index == other.index;
+    }
+    bool operator!=(const iterator & other) const {return !(*this == other);}
+  };
+
   const ValueHelper value_helper;
 
   auto operator[](size_t index)
   {
-    return value_helper.cast_value(
-      this->meta_member.get_function(this->data, index));
+    return value_helper.cast_value(this->meta_member.get_function(this->data, index));
   }
   auto operator[](size_t index) const
   {
-    return value_helper.cast_value(
-      this->meta_member.get_const_function(this->data, index));
+    return value_helper.cast_value(this->meta_member.get_const_function(this->data, index));
   }
+
   size_t size() const {return this->meta_member.size_function(this->data);}
+  auto begin() const {return iterator<decltype(*this)>(*this, 0);}
+  auto end() const {return iterator<decltype(*this)>(*this, size());}
 };
 
-template<typename MetaMember, typename ValueHelper>
-struct SequenceMemberRef;
-
-template<typename T>
-struct SequenceMemberRef<RTI_Cpp::MetaMember, NativeValueHelper<T>>
-  : MemberRef<RTI_Cpp::MetaMember>
+template<typename ValueHelper>
+struct CSequenceInterface
 {
-  const NativeValueHelper<T> value_helper;
+  ROSIDL_GENERATOR_C__PRIMITIVE_SEQUENCE(T, typename ValueHelper::value_type)
 
-  auto typed_data() const
-  {
-    auto ptr = static_cast<const std::vector<T> *>(this->data);
-    assert(ptr);
-    return ptr;
-  }
-  auto typed_data()
-  {
-    auto ptr = static_cast<std::vector<T> *>(this->data);
-    assert(ptr);
-    return ptr;
-  }
+  const ValueHelper value_helper;
+  size_t upper_bound;
+  rosidl_generator_c__T__Sequence & obj;
 
-  SequenceMemberRef(
-    const NativeValueHelper<T> h,
-    const MemberRef<RTI_Cpp::MetaMember> m)
-  : MemberRef<RTI_Cpp::MetaMember>(m), value_helper(h)
+  using iterator = typename decltype(value_helper)::ptr_type;
+
+  CSequenceInterface(void * ptr, const ValueHelper h, size_t upper_bound)
+  : value_helper{h},
+    upper_bound(upper_bound),
+    obj(*static_cast<rosidl_generator_c__T__Sequence *>(ptr))
   {
-    assert(!meta_member.get_function);
-    assert(!meta_member.get_const_function);
-    assert(!meta_member.resize_function);
-    assert(!meta_member.size_function);
+    assert(size() == 0 || obj.data);
     assert(size() <= std::numeric_limits<int32_t>::max());
-    if (this->meta_member.is_upper_bound_) {
-      assert(size() <= this->meta_member.array_size_);
-    }
+    assert(size() <= upper_bound);
+    assert(size() <= obj.capacity);
   }
   auto operator[](size_t index) const
   {
-    assert(index < size());
-    return typed_data()->at(index);
-  }
-  size_t size() const {return typed_data()->size();}
-};
-
-template<typename MetaMember, typename MetaMessage>
-struct SequenceMemberRef<MetaMember, MessageValueHelper<MetaMessage>>
-  : MemberRef<MetaMember>
-{
-protected:
-  [[noreturn]] void throw_not_implemented() const
-  {
-    throw std::runtime_error(
-            "Non-object sequences of message type not implemented");
-  }
-
-public:
-  SequenceMemberRef(
-    const MessageValueHelper<MetaMessage>,
-    const MemberRef<MetaMember> m)
-  : MemberRef<MetaMember>(m)
-  {
-    throw_not_implemented();
-  }
-  MessageRef<MetaMessage> operator[](size_t) const {throw_not_implemented();}
-  size_t size() const {throw_not_implemented(); return {};}
-};
-
-template<typename T>
-struct SequenceMemberRef<RTI_C::MetaMember, NativeValueHelper<T>>
-  : MemberRef<RTI_C::MetaMember>
-{
-  ROSIDL_GENERATOR_C__PRIMITIVE_SEQUENCE(T, T)
-
-  const NativeValueHelper<T> value_helper;
-
-  auto typed_data() const
-  {
-    return static_cast<const rosidl_generator_c__T__Sequence *>(this->data);
-  }
-  auto typed_data()
-  {
-    return static_cast<rosidl_generator_c__T__Sequence *>(this->data);
-  }
-  SequenceMemberRef(
-    const NativeValueHelper<T> h,
-    const MemberRef<RTI_C::MetaMember> m)
-  : MemberRef<RTI_C::MetaMember>{m}, value_helper{h}
-  {
-    assert(!meta_member.get_function);
-    assert(!meta_member.get_const_function);
-    assert(!meta_member.resize_function);
-    assert(!meta_member.size_function);
-
-    assert(size() == 0 || typed_data()->data);
-    assert(size() <= std::numeric_limits<int32_t>::max());
-    if (this->meta_member.is_upper_bound_) {
-      assert(size() <= this->meta_member.array_size_);
-    }
-    assert(typed_data()->size <= typed_data()->capacity);
-  }
-  auto operator[](size_t index) const
-  {
-    assert(index < typed_data()->size);
-    return typed_data()->data[index];
+    assert(index < obj->size);
+    return obj->data[index];
   }
   auto operator[](size_t index)
   {
-    assert(index < typed_data()->size);
-    return typed_data()->data[index];
+    assert(index < obj.size);
+    return obj.data[index];
   }
-  size_t size() const {return typed_data()->size;}
+  iterator begin() {return value_helper.cast_ptr(obj.data);}
+  iterator end() {return begin() + size();}
+  size_t size() const {return obj.size;}
 };
 
-template<typename MetaMember>
+template<typename T>
+std::vector<T> & cast_vector(void * data, NativeValueHelper<T>)
+{
+  return *static_cast<std::vector<T> *>(data);
+}
+template<typename M>
+[[noreturn]] std::vector<int> & cast_vector(void *, MessageValueHelper<M>)
+{
+  throw std::runtime_error("Can't make a vector of objects of runtime size.");
+}
+
+template<>
 template<typename UnaryFunction, typename Result>
-Result MemberRef<MetaMember>::with_sequence(UnaryFunction f)
+Result MemberRef<RTI_Cpp::MetaMember>::with_sequence(UnaryFunction f)
 {
   assert(get_container_type() == MemberContainerType::Sequence);
   return with_value_helper([&](auto helper) {
-             if (meta_member.size_function) {
-               return f(
-                 ObjectSequenceMemberRef<MetaMember, decltype(helper)>(helper, *this));
+             if (this->is_submessage_type() || meta_member.size_function) {
+               return f(ObjectSequenceMemberRef<RTI_Cpp::MetaMember, decltype(helper)>(helper,
+               *this));
              } else {
-               return f(SequenceMemberRef<MetaMember, decltype(helper)>(helper, *this));
+               return f(cast_vector(data, helper));
+             }
+           });
+}
+
+template<>
+template<typename UnaryFunction, typename Result>
+Result MemberRef<RTI_C::MetaMember>::with_sequence(UnaryFunction f)
+{
+  assert(get_container_type() == MemberContainerType::Sequence);
+  return with_value_helper([&](auto helper) {
+             if (this->is_submessage_type() || meta_member.size_function) {
+               return f(ObjectSequenceMemberRef<RTI_C::MetaMember, decltype(helper)>(helper,
+               *this));
+             } else {
+               size_t upper_bound = meta_member.is_upper_bound_ ? meta_member.array_size_ :
+               std::numeric_limits<uint32_t>::max();
+               return f(CSequenceInterface<decltype(helper)>(data, helper, upper_bound));
              }
            });
 }

@@ -90,32 +90,34 @@ struct WString : rosidl_generator_c__U16String
 
   struct iterator
   {
-    const WString & str;
-    size_t position;
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = char16_t;
+    using difference_type = void;
+    using pointer = void;
+    using reference = void;
+
+    uint_least16_t * ptr;
+
     iterator & operator++()
     {
-      position++;
+      ptr++;
       return *this;
     }
 
     char16_t operator*()
     {
-      if (str.size() <= position) {
-        throw std::out_of_range("string index out of range");
-      }
-      return static_cast<char16_t>(str.data[position]);
+      return static_cast<char16_t>(*ptr);
     }
 
     bool operator==(const iterator & other)
     {
-      assert(&str == &other.str);
-      return position == other.position;
+      return ptr == other.ptr;
     }
     bool operator!=(const iterator & other) {return !(*this == other);}
   };
 
-  auto begin() const {return iterator{*this, 0};}
-  auto end() const {return iterator{*this, size()};}
+  auto begin() const {return iterator{data};}
+  auto end() const {return iterator{data + size()};}
 };
 
 static_assert(sizeof(WString) == sizeof(rosidl_generator_c__U16String),
@@ -203,6 +205,9 @@ struct MessageRef
 template<typename MetaMember>
 struct MemberRef
 {
+  const MetaMember & meta_member;
+  void * data;
+
   MemberRef(const MetaMember & meta_member, void * data)
   : meta_member(meta_member), data(data)
   {
@@ -210,8 +215,6 @@ struct MemberRef
   }
 
   MemberRef() = delete;
-  const MetaMember & meta_member;
-  void * data;
 
   MemberContainerType get_container_type() const
   {
@@ -240,6 +243,18 @@ struct MemberRef
   bool is_submessage_type()
   {
     return ValueType(meta_member.type_id_) == ValueType::MESSAGE;
+  }
+
+  bool is_primitive_type()
+  {
+    switch (ValueType(meta_member.type_id_)) {
+      case ValueType::MESSAGE:
+      case ValueType::WSTRING:
+      case ValueType::WCHAR:
+        return false;
+      default:
+        return true;
+    }
   }
 
   template<typename UnaryFunction>
@@ -309,7 +324,7 @@ auto MessageRef<MetaMessage>::at(size_t index) const
     throw std::out_of_range("index out of range");
   }
   auto & member = meta_message.members_[index];
-  return make_member_ref(member, data + ByteOffset(member.offset_));
+  return make_member_ref(member, byte_offset(data, member.offset_));
 }
 
 }  // namespace rmw_cyclonedds_cpp

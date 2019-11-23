@@ -28,71 +28,20 @@ constexpr endian native_endian() {return endian(DDSRT_ENDIAN);}
 
 enum class byte : unsigned char {};
 
-struct ByteOffset
+template<typename Ptr, size_t N = sizeof(decltype(*Ptr(nullptr)))>
+auto byte_offset(Ptr ptr, ptrdiff_t n)
 {
-  ptrdiff_t n;
-
-  explicit ByteOffset(intmax_t n_bytes)
-  : n(n_bytes)
-  {
-    if (n_bytes < PTRDIFF_MIN || PTRDIFF_MAX < n_bytes) {
-      throw std::invalid_argument("value is too large to be a byte offset " +
-              std::to_string(n_bytes));
-    }
+  if (n % N != 0) {
+    throw std::invalid_argument("offset is not a multiple of the pointed-to object size");
   }
-
-  ByteOffset operator*(intmax_t multiple) const
-  {
-    if (INTPTR_MAX / n < multiple) {
-      throw std::invalid_argument("value is too large to be a byte offset " +
-              std::to_string(n) + " * " +
-              std::to_string(multiple));
-    }
-    return ByteOffset(n * multiple);
-  }
-
-  ByteOffset operator+(const ByteOffset & other) const
-  {
-    return ByteOffset(n + other.n);
-  }
-  ByteOffset operator-(const ByteOffset & other) const
-  {
-    return ByteOffset(n - other.n);
-  }
-
-  ByteOffset operator-() const {return ByteOffset(-n);}
-  explicit operator ptrdiff_t() {return n;}
-
-  template<typename Ptr>
-  Ptr operator+(Ptr p) const
-  {
-    auto p2 = const_cast<void *>(p);
-    // offset any (possibly cv-qualified) null pointer
-    auto p3 = reinterpret_cast<char *>(p2) + n;
-    return Ptr(p3);
-  }
-
-  template<typename Ptr, size_t stride = sizeof(*Ptr(nullptr))>
-  Ptr operator+(Ptr p) const
-  {
-    if (n % stride != 0) {
-      throw std::invalid_argument(
-              "offset is not a multiple of the pointed-to object size");
-    }
-    return p + n / stride;
-  }
-};
-
-template<typename T>
-static auto operator-(T t, ByteOffset b)
-{
-  return (-b).operator+(t);
+  return ptr + n / N;
 }
 
-template<typename T>
-static auto operator+(T t, ByteOffset b)
+template<typename Ptr, std::enable_if_t<std::is_void<std::remove_pointer_t<Ptr>>::value, int> = 0>
+auto byte_offset(Ptr ptr, ptrdiff_t n)
 {
-  return b.operator+(t);
+  void * p = const_cast<void *>(ptr);
+  return static_cast<Ptr>(static_cast<byte *>(p) + n);
 }
 
 #endif  // BYTEWISE_HPP_
