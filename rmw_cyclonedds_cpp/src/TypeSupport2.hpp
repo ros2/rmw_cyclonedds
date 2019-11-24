@@ -63,8 +63,7 @@ enum class MemberContainerType { Array, Sequence, SingleValue };
 
 namespace RTI_C
 {
-static constexpr auto & identifier =
-  rosidl_typesupport_introspection_c__identifier;
+static constexpr auto & identifier = rosidl_typesupport_introspection_c__identifier;
 
 using MetaMessage = rosidl_typesupport_introspection_c__MessageMembers;
 using MetaMember = rosidl_typesupport_introspection_c__MessageMember;
@@ -74,53 +73,21 @@ using MetaService = rosidl_typesupport_introspection_c__ServiceMembers;
 struct String : protected rosidl_generator_c__String
 {
   using traits_type = std::char_traits<char>;
-
+  auto data() const {return rosidl_generator_c__String::data;}
   auto size() const {return rosidl_generator_c__String::size;}
-  auto begin() const {return data;}
-  auto end() const {return data + size();}
 };
-static_assert(sizeof(String) == sizeof(rosidl_generator_c__String),
-  "String should not add any new members");
+static_assert(
+  sizeof(String) == sizeof(rosidl_generator_c__String), "String should not add any new members");
 
-struct WString : rosidl_generator_c__U16String
+struct WString : protected rosidl_generator_c__U16String
 {
   using traits_type = std::char_traits<char16_t>;
-
+  auto data() const {return rosidl_generator_c__U16String::data;}
   auto size() const {return rosidl_generator_c__U16String::size;}
-
-  struct iterator
-  {
-    using iterator_category = std::forward_iterator_tag;
-    using value_type = char16_t;
-    using difference_type = void;
-    using pointer = void;
-    using reference = void;
-
-    uint_least16_t * ptr;
-
-    iterator & operator++()
-    {
-      ptr++;
-      return *this;
-    }
-
-    char16_t operator*()
-    {
-      return static_cast<char16_t>(*ptr);
-    }
-
-    bool operator==(const iterator & other)
-    {
-      return ptr == other.ptr;
-    }
-    bool operator!=(const iterator & other) {return !(*this == other);}
-  };
-
-  auto begin() const {return iterator{data};}
-  auto end() const {return iterator{data + size()};}
 };
 
-static_assert(sizeof(WString) == sizeof(rosidl_generator_c__U16String),
+static_assert(
+  sizeof(WString) == sizeof(rosidl_generator_c__U16String),
   "WString should not add any new members");
 }  // namespace RTI_C
 

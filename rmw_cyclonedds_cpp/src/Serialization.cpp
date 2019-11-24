@@ -211,21 +211,29 @@ protected:
   void serialize(const T & value)
   {
     if (sizeof(char_type) == 1) {
+      // count includes trailing null
       serialize_u32(value.size() + 1);
-      for (char_type c : value) {
-        serialize_noalign(c);
+      auto d = value.data();
+      for (size_t i = 0; i < value.size(); i++) {
+        serialize_noalign(static_cast<char>(d[i]));
       }
       serialize_noalign('\0');
     } else if (eversion == EncodingVersion::CDR_Legacy) {
+      // count of characters
       serialize_u32(value.size());
-      for (wchar_t c : value) {
-        serialize_noalign(c);
+      auto d = value.data();
+      for (size_t i = 0; i < value.size(); i++) {
+        serialize_noalign(static_cast<wchar_t>(d[i]));
       }
+      // no trailing null
     } else {
+      // count of *bytes*
       serialize_u32(value.size() * sizeof(char_type));
-      for (char_type c : value) {
-        serialize_noalign(c);
+      auto d = value.data();
+      for (size_t i = 0; i < value.size(); i++) {
+        serialize_noalign(static_cast<wchar_t>(d[i]));
       }
+      // no trailing null
     }
   }
 
