@@ -262,21 +262,21 @@ protected:
   }
 
   template<typename T, std::enable_if_t<!std::is_void<T>::value, int> = 0>
-  void serialize(ArrayInterface<T> value, MetaMember<g> m)
+  void serialize(ArrayInterface<T> value, MetaMember<g>)
   {
     assert(value.count() > 0);
-    for (size_t i = 0; i < value.count(); i++) {
-      serialize(value.data()[i]);
+    for (size_t i = 0; i < value.size; i++) {
+      serialize(*(value.start + i));
     }
   }
 
   void serialize(ArrayInterface<void> value, MetaMember<g> m)
   {
     assert(value.count() > 0);
-    for (size_t i = 0; i < value.count(); i++) {
+    for (size_t i = 0; i < value.size; i++) {
       auto submessage_ts = cast_typesupport<g>(m.members_);
       serialize(
-        make_message_ref(submessage_ts, byte_offset(value.data(), i * submessage_ts.size_of_)));
+        make_message_ref(submessage_ts, byte_offset(value.start, i * submessage_ts.size_of_)));
     }
   }
 

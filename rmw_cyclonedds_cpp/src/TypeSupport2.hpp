@@ -173,25 +173,6 @@ const MetaMessage<g> & cast_typesupport(const rosidl_message_type_support_t * un
   return *static_cast<const MetaMessage<g> *>(untyped_typesupport->data);
 }
 
-template<typename UnaryFunction>
-auto with_typesupport(const rosidl_message_type_support_t & untyped_typesupport, UnaryFunction f)
-{
-  const rosidl_message_type_support_t * ts;
-
-  {
-    using tgi = TypeGeneratorInfo<TypeGenerator::ROSIDL_C>;
-    if ((ts = get_message_typesupport_handle(&untyped_typesupport, tgi::identifier))) {
-      return f(*static_cast<const tgi::MetaMessage *>(ts->data));
-    }
-  }
-  {
-    using tgi = TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>;
-    if ((ts = get_message_typesupport_handle(&untyped_typesupport, tgi::identifier))) {
-      return f(*static_cast<const tgi::MetaMessage *>(ts->data));
-    }
-  }
-  throw std::runtime_error("typesupport not recognized");
-}
 
 template<typename UnaryFunction>
 auto with_typesupport(const rosidl_service_type_support_t & untyped_typesupport, UnaryFunction f)

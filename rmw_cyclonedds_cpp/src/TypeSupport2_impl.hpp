@@ -15,6 +15,7 @@
 #define TYPESUPPORT2_IMPL_HPP_
 #include <limits>
 #include <memory>
+#include <rosidl_typesupport_introspection_cpp/message_introspection.hpp>
 #include <string>
 #include <vector>
 
@@ -222,19 +223,108 @@ Result MemberRef<g>::with_single_value(UnaryFunction f)
 }
 
 template<typename T>
-class ArrayInterface
+class BufferRef
 {
-protected:
-  const T * start;
-  size_t size;
+  // used to represent the contiguous storage of a Sequences
 
 public:
-  ArrayInterface(const T * start, size_t size)
+  const T * start;
+  size_t size;
+  BufferRef(const T * start, size_t size)
   : start{start}, size{size} {}
-
-  const T * data() {return start;}
-  size_t count() {return size;}
 };
+
+template<typename T>
+class ArrayInterface : public BufferRef<T>
+{
+public:
+  // simply an object wrapper around a buffer
+  ArrayInterface(const T * start, size_t size)
+  : BufferRef<T>(start, size) {}
+};
+
+template<TypeGenerator g, typename T>
+class SequenceRef;
+
+template<typename T>
+class SequenceRef<TypeGenerator::ROSIDL_Cpp, T>
+{
+  SequenceRef(void * data, const MetaMember<TypeGenerator::ROSIDL_Cpp> & m)
+  : obj{data}, get_function{m.get_function}, size_function{m.size_function} {}
+
+protected:
+  void * obj;
+  decltype(MetaMember<TypeGenerator::ROSIDL_Cpp>::get_function) get_function;
+  decltype(MetaMember<TypeGenerator::ROSIDL_Cpp>::size_function) size_function;
+
+public:
+  BufferRef<T> get_buffer() {return {get_function(obj, 0), size_function(obj)};}
+};
+
+template<>
+class SequenceRef<TypeGenerator::ROSIDL_Cpp, bool>
+{
+  SequenceRef(void * data, const MetaMember<TypeGenerator::ROSIDL_Cpp> &)
+  : obj{static_cast<std::vector<bool> *>(data)} {}
+
+protected:
+  // be careful! We don't know the allocator so only methods that don't require allocation or deallocation
+  // are safe
+  const std::vector<bool> * obj;
+
+public:
+  auto begin() const {return std::begin(*obj);}
+  auto end() const {return std::end(*obj);}
+};
+
+template<typename T>
+class SequenceRef<TypeGenerator::ROSIDL_C, T>
+{
+protected:
+  struct GeneratedSequence
+  {
+    //layout defined by rosidl c generator
+    T * data;
+    /// The number of valid items in data
+    size_t size;
+    /// The number of allocated items in data
+    size_t capacity;
+  };
+
+  GeneratedSequence * obj;
+
+public:
+  SequenceRef(void * data)
+  : obj{static_cast<GeneratedSequence *>(data)} {}
+  BufferRef<T> get_buffer() {return {obj->data, obj->size};}
+};
+
+template<TypeGenerator g, typename UnaryFunction>
+void with_member_data(const void * message_data, const MetaMember<g> & meta_member, UnaryFunction f)
+{
+  return with_type2([&](auto t) {
+             // value type
+             using T = typename decltype(t)::type;
+             const void * member_data = byte_offset(message_data, meta_member.offset_);
+             if (!meta_member.is_array_) {
+               const T & value_ref{*static_cast<const T *>(member_data)};
+               return f(
+                 value_ref);
+             }
+             if ( // unbounded sequence
+               meta_member.array_size_ == 0 ||
+               // bounded sequence
+               meta_member.is_upper_bound_)
+             {
+               const ArrayInterface<T> array{static_cast<T *>(member_data), meta_member.array_size_};
+               return f(array);
+             }
+             {
+               const SequenceRef<g, T> sequence{member_data, meta_member};
+               return f(sequence);
+             }
+           });
+}
 
 template<TypeGenerator g>
 template<typename UnaryFunction, typename Result>
