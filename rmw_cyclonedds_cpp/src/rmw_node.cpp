@@ -24,8 +24,8 @@
 #include <utility>
 #include <regex>
 
-#include "rcutils/logging_macros.h"
 #include "rcutils/get_env.h"
+#include "rcutils/logging_macros.h"
 #include "rcutils/strdup.h"
 
 #include "rmw/allocators.h"
