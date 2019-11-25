@@ -268,8 +268,8 @@ protected:
     }
   }
 
-  template<typename MetaMessage>
-  void serialize(const MessageRef<MetaMessage> & message)
+  template<TypeGenerator g>
+  void serialize(const MessageRef<g> & message)
   {
     for (size_t i = 0; i < message.size(); i++) {
       auto member = message.at(i);

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <cassert>
-
 #include <regex>
 #include <string>
 
@@ -32,12 +31,67 @@
 #define TYPESUPPORT2_HPP_
 namespace rmw_cyclonedds_cpp
 {
+enum class TypeGenerator {
+  ROSIDL_C,
+  ROSIDL_Cpp,
+};
 
-namespace  tsi_enum = rosidl_typesupport_introspection_cpp;
+template <TypeGenerator>
+struct TypeGeneratorInfo;
+
+template <>
+struct TypeGeneratorInfo<TypeGenerator::ROSIDL_C>
+{
+  static constexpr auto & identifier = rosidl_typesupport_introspection_c__identifier;
+  using MetaMessage = rosidl_typesupport_introspection_c__MessageMembers;
+  using MetaMember = rosidl_typesupport_introspection_c__MessageMember;
+  using MetaService = rosidl_typesupport_introspection_c__ServiceMembers;
+
+  // wrappers to make these more stringlike
+  struct String : protected rosidl_generator_c__String
+  {
+    using traits_type = std::char_traits<char>;
+    auto data() const { return rosidl_generator_c__String::data; }
+    auto size() const { return rosidl_generator_c__String::size; }
+  };
+
+  static_assert(
+    sizeof(String) == sizeof(rosidl_generator_c__String), "String should not add any new members");
+
+  struct WString : protected rosidl_generator_c__U16String
+  {
+    using traits_type = std::char_traits<char16_t>;
+    auto data() const { return rosidl_generator_c__U16String::data; }
+    auto size() const { return rosidl_generator_c__U16String::size; }
+  };
+
+  static_assert(
+    sizeof(WString) == sizeof(rosidl_generator_c__U16String),
+    "WString should not add any new members");
+};
+
+template <>
+struct TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>
+{
+  static constexpr auto & identifier = rosidl_typesupport_introspection_cpp::typesupport_identifier;
+  using MetaMessage = rosidl_typesupport_introspection_cpp::MessageMembers;
+  using MetaMember = rosidl_typesupport_introspection_cpp::MessageMember;
+  using MetaService = rosidl_typesupport_introspection_cpp::ServiceMembers;
+  using String = std::string;
+  using WString = std::u16string;
+};
+
+template <TypeGenerator g>
+using MetaMessage = typename TypeGeneratorInfo<g>::MetaMessage;
+template <TypeGenerator g>
+using MetaMember = typename TypeGeneratorInfo<g>::MetaMember;
+template <TypeGenerator g>
+using MetaService = typename TypeGeneratorInfo<g>::MetaService;
+
+namespace tsi_enum = rosidl_typesupport_introspection_cpp;
 
 // these are shared between c and cpp
-enum class ValueType : uint8_t
-{
+enum class ValueType : uint8_t {
   FLOAT = tsi_enum::ROS_TYPE_FLOAT,
   DOUBLE = tsi_enum::ROS_TYPE_DOUBLE,
   LONG_DOUBLE = tsi_enum::ROS_TYPE_LONG_DOUBLE,
@@ -61,102 +115,66 @@ enum class ValueType : uint8_t
 
 enum class MemberContainerType { Array, Sequence, SingleValue };
 
-namespace RTI_C
-{
-static constexpr auto & identifier = rosidl_typesupport_introspection_c__identifier;
-
-using MetaMessage = rosidl_typesupport_introspection_c__MessageMembers;
-using MetaMember = rosidl_typesupport_introspection_c__MessageMember;
-using MetaService = rosidl_typesupport_introspection_c__ServiceMembers;
-
-// wrappers to make these more stringlike
-struct String : protected rosidl_generator_c__String
-{
-  using traits_type = std::char_traits<char>;
-  auto data() const {return rosidl_generator_c__String::data;}
-  auto size() const {return rosidl_generator_c__String::size;}
-};
-static_assert(
-  sizeof(String) == sizeof(rosidl_generator_c__String), "String should not add any new members");
-
-struct WString : protected rosidl_generator_c__U16String
-{
-  using traits_type = std::char_traits<char16_t>;
-  auto data() const {return rosidl_generator_c__U16String::data;}
-  auto size() const {return rosidl_generator_c__U16String::size;}
-};
-
-static_assert(
-  sizeof(WString) == sizeof(rosidl_generator_c__U16String),
-  "WString should not add any new members");
-}  // namespace RTI_C
-
-namespace RTI_Cpp
-{
-static constexpr auto & identifier =
-  rosidl_typesupport_introspection_cpp::typesupport_identifier;
-
-using MetaMessage = rosidl_typesupport_introspection_cpp::MessageMembers;
-using MetaMember = rosidl_typesupport_introspection_cpp::MessageMember;
-using MetaService = rosidl_typesupport_introspection_cpp::ServiceMembers;
-}  // namespace RTI_Cpp
-
-template<typename UnaryFunction, typename Result = void>
+template <typename UnaryFunction, typename Result = void>
 Result with_type(ValueType value_type, UnaryFunction f);
 
-template<typename UnaryFunction>
-auto with_typesupport(
-  const rosidl_message_type_support_t & untyped_typesupport, UnaryFunction f)
+template <typename UnaryFunction>
+auto with_typesupport(const rosidl_message_type_support_t & untyped_typesupport, UnaryFunction f)
 {
   const rosidl_message_type_support_t * ts;
 
-  if ((ts = get_message_typesupport_handle(&untyped_typesupport, RTI_C::identifier))) {
-    return f(*static_cast<const RTI_C::MetaMessage *>(ts->data));
+  {
+    using tgi = TypeGeneratorInfo<TypeGenerator::ROSIDL_C>;
+    if ((ts = get_message_typesupport_handle(&untyped_typesupport, tgi::identifier))) {
+      return f(*static_cast<const tgi::MetaMessage *>(ts->data));
+    }
   }
-  if ((ts = get_message_typesupport_handle(&untyped_typesupport, RTI_Cpp::identifier))) {
-    return f(*static_cast<const RTI_Cpp::MetaMessage *>(ts->data));
+  {
+    using tgi = TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>;
+    if ((ts = get_message_typesupport_handle(&untyped_typesupport, tgi::identifier))) {
+      return f(*static_cast<const tgi::MetaMessage *>(ts->data));
+    }
   }
-
   throw std::runtime_error("typesupport not recognized");
 }
 
-template<typename UnaryFunction>
-auto with_typesupport(
-  const rosidl_service_type_support_t & untyped_typesupport,
-  UnaryFunction f)
+template <typename UnaryFunction>
+auto with_typesupport(const rosidl_service_type_support_t & untyped_typesupport, UnaryFunction f)
 {
   const rosidl_service_type_support_t * ts;
 
-  if ((ts = get_service_typesupport_handle(&untyped_typesupport,
-    RTI_C::identifier)))
   {
-    return f(*static_cast<const RTI_C::MetaService *>(ts->data));
+    using tgi = TypeGeneratorInfo<TypeGenerator::ROSIDL_C>;
+    if ((ts = get_service_typesupport_handle(&untyped_typesupport, tgi::identifier))) {
+      return f(*static_cast<const tgi::MetaService *>(ts->data));
+    }
   }
-  if ((ts = get_service_typesupport_handle(&untyped_typesupport,
-    RTI_Cpp::identifier)))
   {
-    return f(*static_cast<const RTI_Cpp::MetaService *>(ts->data));
+    using tgi = TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>;
+    if ((ts = get_service_typesupport_handle(&untyped_typesupport, tgi::identifier))) {
+      return f(*static_cast<const tgi::MetaService *>(ts->data));
+    }
   }
 
   throw std::runtime_error("typesupport not recognized");
 }
 
 //////////////////
-template<typename MetaMessage>
+template <TypeGenerator g>
 struct MessageRef;
 
-template<typename MetaMember>
+template <TypeGenerator g>
 struct MemberRef;
 
-template<typename MetaMessage>
+template <TypeGenerator g>
 struct MessageRef
 {
-  const MetaMessage & meta_message;
+  const MetaMessage<g> & meta_message;
   const void * data;
 
   using MetaMember = decltype(*meta_message.members_);
 
-  MessageRef(const MetaMessage & meta_message, void * data)
+  MessageRef(const MetaMessage<g> & meta_message, void * data)
   : meta_message(meta_message), data(data)
   {
     assert(data);
@@ -164,19 +182,18 @@ struct MessageRef
 
   MessageRef() = delete;
 
-  size_t size() const {return meta_message.member_count_;}
+  size_t size() const { return meta_message.member_count_; }
 
   auto at(size_t index) const;
 };
 
-template<typename MetaMember>
+template <TypeGenerator g>
 struct MemberRef
 {
-  const MetaMember & meta_member;
+  const MetaMember<g> & meta_member;
   void * data;
 
-  MemberRef(const MetaMember & meta_member, void * data)
-  : meta_member(meta_member), data(data)
+  MemberRef(const MetaMember<g> & meta_member, void * data) : meta_member(meta_member), data(data)
   {
     assert(data);
   }
@@ -191,26 +208,22 @@ struct MemberRef
     if (  // unbounded sequence
       meta_member.array_size_ == 0 ||
       // bounded sequence
-      meta_member.is_upper_bound_)
-    {
+      meta_member.is_upper_bound_) {
       return MemberContainerType::Sequence;
     }
     return MemberContainerType::Array;
   }
 
-  template<typename UnaryFunction, typename Result = void>
+  template <typename UnaryFunction, typename Result = void>
   Result with_single_value(UnaryFunction f);
 
-  template<typename UnaryFunction, typename Result = void>
+  template <typename UnaryFunction, typename Result = void>
   Result with_array(UnaryFunction f);
 
-  template<typename UnaryFunction, typename Result = void>
+  template <typename UnaryFunction, typename Result = void>
   Result with_sequence(UnaryFunction f);
 
-  bool is_submessage_type()
-  {
-    return ValueType(meta_member.type_id_) == ValueType::MESSAGE;
-  }
+  bool is_submessage_type() { return ValueType(meta_member.type_id_) == ValueType::MESSAGE; }
 
   bool is_primitive_type()
   {
@@ -224,7 +237,7 @@ struct MemberRef
     }
   }
 
-  template<typename UnaryFunction>
+  template <typename UnaryFunction>
   auto with_submessage_typesupport(UnaryFunction f)
   {
     assert(is_submessage_type());
@@ -233,65 +246,69 @@ struct MemberRef
   }
 
 protected:
-  template<typename UnaryFunction, typename Result = void>
+  template <typename UnaryFunction, typename Result = void>
   Result with_value_helper(UnaryFunction f);
 };
 
-template<typename MetaMessage>
-auto make_message_ref(const MetaMessage & meta, void * data)
+static auto make_message_ref(const MetaMessage<TypeGenerator::ROSIDL_C> & meta, void * data)
 {
-  return MessageRef<MetaMessage>{meta, data};
+  return MessageRef<TypeGenerator::ROSIDL_C>{meta, data};
+}
+static auto make_message_ref(const MetaMessage<TypeGenerator::ROSIDL_Cpp> & meta, void * data)
+{
+  return MessageRef<TypeGenerator::ROSIDL_Cpp>{meta, data};
+}
+static auto make_message_ref(const MetaMessage<TypeGenerator::ROSIDL_C> & meta, const void * data)
+{
+  using ConstMessageRef = const MessageRef<TypeGenerator::ROSIDL_C>;
+  return ConstMessageRef{meta, const_cast<void *>(data)};
+}
+static auto make_message_ref(const MetaMessage<TypeGenerator::ROSIDL_Cpp> & meta,  const void * data)
+{
+  using ConstMessageRef = const MessageRef<TypeGenerator::ROSIDL_Cpp>;
+  return ConstMessageRef{meta, const_cast<void *>(data)};
 }
 
-template<typename MetaMessage>
-auto make_message_ref(const MetaMessage & meta, const void * data)
+template <TypeGenerator g>
+auto make_member_ref(const MetaMember<g> & meta, void * data)
 {
-  const MessageRef<MetaMessage> x(meta, const_cast<void *>(data));
-  return x;
+  return MemberRef<g>(meta, data);
 }
 
-template<typename MetaMember>
-auto make_member_ref(const MetaMember & meta, void * data)
+template <TypeGenerator g>
+auto make_member_ref(const MetaMember<g> & meta, const void * data)
 {
-  return MemberRef<MetaMember>(meta, data);
+  using T = const MemberRef<g>;
+  return T(meta, const_cast<void *>(data));
 }
 
-template<typename MetaMember>
-auto make_member_ref(const MetaMember & meta, const void * data)
-{
-  const MemberRef<MetaMember> x(meta, const_cast<void *>(data));
-  return x;
-}
-
-template<typename UnaryFunction>
+template <typename UnaryFunction>
 auto with_message(
-  const rosidl_message_type_support_t * type_support,
-  const void * data, UnaryFunction f)
+  const rosidl_message_type_support_t * type_support, const void * data, UnaryFunction f)
 {
-  return with_typesupport(
-    type_support, [&](auto meta) {return f(make_message_ref(meta, data));});
+  return with_typesupport(type_support, [&](auto meta) { return f(make_message_ref(meta, data)); });
 }
 
-template<typename MetaService>
-auto make_service_request_ref(const MetaService & meta, const void * data)
+template <TypeGenerator g>
+auto make_service_request_ref(const MetaService<g> & meta, const void * data)
 {
   return make_message_ref(meta.request_members_, data);
 }
 
-template<typename MetaService>
-auto make_service_response_ref(const MetaService & meta, const void * data)
+template <TypeGenerator g>
+auto make_service_response_ref(const MetaService<g> & meta, const void * data)
 {
   return make_message_ref(meta.response_members_, data);
 }
 
-template<typename MetaMessage>
-auto MessageRef<MetaMessage>::at(size_t index) const
+template <TypeGenerator g>
+auto MessageRef<g>::at(size_t index) const
 {
   if (index >= meta_message.member_count_) {
     throw std::out_of_range("index out of range");
   }
   auto & member = meta_message.members_[index];
-  return make_member_ref(member, byte_offset(data, member.offset_));
+  return MemberRef<g>(member, const_cast<void *>(byte_offset(data, member.offset_)));
 }
 
 }  // namespace rmw_cyclonedds_cpp
