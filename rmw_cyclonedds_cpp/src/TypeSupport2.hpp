@@ -184,7 +184,7 @@ struct MessageRef
 
   size_t size() const { return meta_message.member_count_; }
 
-  auto at(size_t index) const;
+  MemberRef<g> at(size_t index) const;
 };
 
 template <TypeGenerator g>
@@ -302,7 +302,7 @@ auto make_service_response_ref(const MetaService<g> & meta, const void * data)
 }
 
 template <TypeGenerator g>
-auto MessageRef<g>::at(size_t index) const
+MemberRef<g> MessageRef<g>::at(size_t index) const
 {
   if (index >= meta_message.member_count_) {
     throw std::out_of_range("index out of range");

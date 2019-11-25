@@ -138,7 +138,7 @@ struct MessageValueHelper
 
   size_t sizeof_value() const {return value_members.size_of_;}
 
-  reference_type cast_value(void * ptr) const {return make_message_ref(value_members, ptr);}
+  reference_type cast_value(void * ptr) const {return reference_type(value_members, ptr);}
   std::add_const_t<reference_type> cast_value(const void * ptr) const
   {
     return make_message_ref(value_members, ptr);
