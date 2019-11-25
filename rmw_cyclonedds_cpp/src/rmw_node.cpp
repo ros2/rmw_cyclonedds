@@ -25,6 +25,7 @@
 #include <regex>
 
 #include "rcutils/logging_macros.h"
+#include "rcutils/get_env.h"
 #include "rcutils/strdup.h"
 
 #include "rmw/allocators.h"
@@ -590,9 +591,16 @@ static bool check_create_domain_locked(dds_domainid_t did, bool localhost_only)
       "";
 
     /* Emulate default behaviour of Cyclone of reading CYCLONEDDS_URI */
-    char * config_from_env = getenv("CYCLONEDDS_URI");
-    if (config_from_env != nullptr) {
+    const char * get_env_error;
+    const char * config_from_env;
+    if ((get_env_error = rcutils_get_env("CYCLONEDDS_URI", &config_from_env)) == nullptr) {
       config += std::string(config_from_env);
+    } else {
+      RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp",
+        "rmw_create_node: failed to retrieve CYCLONEDDS_URI environment variable, error %s",
+        get_env_error);
+      node_gone_from_domain_locked(did);
+      return false;
     }
 
     if ((dom.domain_handle = dds_create_domain(did, config.c_str())) < 0) {
