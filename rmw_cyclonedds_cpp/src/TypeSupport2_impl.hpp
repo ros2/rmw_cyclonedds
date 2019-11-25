@@ -28,6 +28,50 @@ struct typeval
   using type = T;
 };
 
+template<TypeGenerator g, typename UnaryFunction>
+void with_type2(ValueType value_type, UnaryFunction f)
+{
+  switch (value_type) {
+    case ValueType::FLOAT:
+      return f(typeval<float>());
+    case ValueType::DOUBLE:
+      return f(typeval<double>());
+    case ValueType::LONG_DOUBLE:
+      return f(typeval<long double>());
+    case ValueType::WCHAR:
+      return f(typeval<char16_t>());
+    case ValueType::CHAR:
+      return f(typeval<char>());
+    case ValueType::BOOLEAN:
+      return f(typeval<bool>());
+    case ValueType::OCTET:
+      return f(typeval<unsigned char>());
+    case ValueType::UINT8:
+      return f(typeval<uint8_t>());
+    case ValueType::INT8:
+      return f(typeval<int8_t>());
+    case ValueType::UINT16:
+      return f(typeval<uint16_t>());
+    case ValueType::INT16:
+      return f(typeval<int16_t>());
+    case ValueType::UINT32:
+      return f(typeval<uint32_t>());
+    case ValueType::INT32:
+      return f(typeval<int32_t>());
+    case ValueType::UINT64:
+      return f(typeval<uint64_t>());
+    case ValueType::INT64:
+      return f(typeval<int64_t>());
+    case ValueType::STRING:
+      return f(typeval<typename TypeGeneratorInfo<g>::String>());
+    case ValueType::WSTRING:
+      return f(typeval<typename TypeGeneratorInfo<g>::WString>());
+    case ValueType::MESSAGE:
+    default:
+      return f(typeval<void>());
+  }
+}
+
 template<typename UnaryFunction, typename Result>
 Result with_type(ValueType value_type, UnaryFunction f)
 {
@@ -85,7 +129,8 @@ struct NativeValueHelper
 template<TypeGenerator g>
 struct MessageValueHelper
 {
-  MessageValueHelper(const MetaMessage<g> m): value_members(m) {};
+  MessageValueHelper(const MetaMessage<g> m)
+  : value_members(m) {}
 
   const MetaMessage<g> value_members;
 
@@ -93,8 +138,8 @@ struct MessageValueHelper
   using value_type = void;
 
   struct ptr_type
-    : public std::iterator<
-      std::random_access_iterator_tag, void, ptrdiff_t, ptr_type, MessageRef<g>>
+    : public std::iterator<std::random_access_iterator_tag, void, ptrdiff_t, ptr_type,
+      MessageRef<g>>
   {
     ptr_type(const MessageValueHelper & helper, void * ptr)
     : helper(helper), ptr(ptr) {}
@@ -104,10 +149,7 @@ struct MessageValueHelper
 
     explicit operator void *() const {return ptr;}
 
-    ptr_type & operator++()
-    {
-      return operator+=(1);
-    }
+    ptr_type & operator++() {return operator+=(1);}
 
     auto operator*() const {return helper.cast_value(ptr);}
 
@@ -120,7 +162,7 @@ struct MessageValueHelper
 
     ptrdiff_t operator-(const ptr_type & other) const
     {
-      ptrdiff_t n_bytes = ( reinterpret_cast<byte *>(ptr) - reinterpret_cast<byte *>(other.ptr));
+      ptrdiff_t n_bytes = (reinterpret_cast<byte *>(ptr) - reinterpret_cast<byte *>(other.ptr));
       assert(n_bytes % helper.sizeof_value() == 0);
       return n_bytes / helper.sizeof_value();
     }
@@ -159,7 +201,8 @@ Result MemberRef<g>::with_value_helper(UnaryFunction f)
   switch (vt) {
     case ValueType::MESSAGE:
       assert(meta_member.members_);
-      return f(MessageValueHelper<g>{* static_cast<const MetaMessage<g> *>(meta_member.members_->data)});
+      return f(
+        MessageValueHelper<g>{*static_cast<const MetaMessage<g> *>(meta_member.members_->data)});
     case ValueType::STRING:
       return f(NativeValueHelper<typename tgi::String>());
     case ValueType::WSTRING:
@@ -175,24 +218,22 @@ template<typename UnaryFunction, typename Result>
 Result MemberRef<g>::with_single_value(UnaryFunction f)
 {
   assert(get_container_type() == MemberContainerType::SingleValue);
-  return with_value_helper([&](auto helper) {
-             return f(helper.cast_value(data));
-           });
+  return with_value_helper([&](auto helper) {return f(helper.cast_value(data));});
 }
 
-template<typename Ptr>
+template<typename T>
 class ArrayInterface
 {
-  const Ptr begin_ptr;
-  const Ptr end_ptr;
+protected:
+  const T * start;
+  size_t size;
 
 public:
-  ArrayInterface(Ptr && begin_ptr, Ptr && end_ptr)
-  : begin_ptr(begin_ptr), end_ptr(end_ptr) {}
+  ArrayInterface(const T * start, size_t size)
+  : start{start}, size{size} {}
 
-  size_t size() const {return end_ptr - begin_ptr;}
-  auto begin() const {return begin_ptr;}
-  auto end() const {return end_ptr;}
+  const T * data() {return start;}
+  size_t count() {return size;}
 };
 
 template<TypeGenerator g>
@@ -200,9 +241,9 @@ template<typename UnaryFunction, typename Result>
 Result MemberRef<g>::with_array(UnaryFunction f)
 {
   assert(get_container_type() == MemberContainerType::Array);
-  return with_value_helper([&](auto helper) {
-             return f(ArrayInterface<typename decltype(helper)::ptr_type>{
-        helper.cast_ptr(this->data), helper.cast_ptr(this->data) + this->meta_member.array_size_});
+  return with_type2<g>(ValueType(meta_member.type_id_), [&](auto t) {
+             using T = typename decltype(t)::type;
+             f(ArrayInterface<T>(static_cast<T *>(data), meta_member.array_size_));
            });
 }
 

@@ -85,7 +85,7 @@ enum class EncodingVersion
   CDR1,
 };
 
-template<typename OutputIterator>
+template<typename OutputIterator, TypeGenerator g>
 class CDRWriter
 {
 protected:
@@ -123,25 +123,22 @@ public:
   {
   }
 
-  void serialize_top_level(
-    const cdds_request_wrapper_t & request, const rosidl_message_type_support_t & support)
+  void serialize_top_level(const cdds_request_wrapper_t & request, const MetaMessage<g> & support)
   {
     put_rtps_header();
     serialize(request.header.guid);
     serialize(request.header.seq);
-    with_typesupport(support, [&](auto t) {serialize(make_message_ref(t, request.data));});
+    serialize(request.data, support);
   }
 
-  void serialize_top_level(const void * data, const rosidl_message_type_support_t & support)
+  void serialize_top_level(const void * data, const MetaMessage<g> & support)
   {
     put_rtps_header();
-    with_typesupport(support, [&](auto t) {
-        if (t.member_count_ == 0 && eversion == EncodingVersion::CDR_Legacy) {
-          serialize('\0');
-        } else {
-          serialize(make_message_ref(t, data));
-        }
-      });
+    if (support.member_count_ == 0 && eversion == EncodingVersion::CDR_Legacy) {
+      serialize('\0');
+    } else {
+      serialize(make_message_ref(support, data));
+    }
   }
 
 protected:
@@ -166,8 +163,7 @@ protected:
   }
 
   // normalize platform-dependent types before serializing
-  template<typename T,
-    std::enable_if_t<std::is_integral<T>::value, int> = 0>
+  template<typename T, std::enable_if_t<std::is_integral<T>::value, int> = 0>
   static auto format_value(T t)
   {
     return t;
@@ -191,8 +187,7 @@ protected:
     put_bytes(&v2, sizeof(v2));
   }
 
-  template<typename T,
-    std::enable_if_t<std::is_arithmetic<T>::value, int> = 0>
+  template<typename T, std::enable_if_t<std::is_arithmetic<T>::value, int> = 0>
   void serialize(T value)
   {
     auto v2 = format_value(value);
@@ -237,10 +232,9 @@ protected:
     }
   }
 
-  template<typename Iter,
-    typename value_type = typename std::iterator_traits<Iter>::value_type,
-    typename format_type = decltype(format_value(std::declval<value_type>()))
-  >
+  template<
+    typename Iter, typename value_type = typename std::iterator_traits<Iter>::value_type,
+    typename format_type = decltype(format_value(std::declval<value_type>()))>
   void serialize(Iter begin, Iter end)
   {
     // Note we do *NOT* align an empty sequence
@@ -256,10 +250,9 @@ protected:
     }
   }
 
-  template<typename Iter,
-    typename value_type = typename std::iterator_traits<Iter>::value_type,
-    std::enable_if_t<!std::is_arithmetic<value_type>::value, int> = 0
-  >
+  template<
+    typename Iter, typename value_type = typename std::iterator_traits<Iter>::value_type,
+    std::enable_if_t<!std::is_arithmetic<value_type>::value, int> = 0>
   void serialize(Iter begin, Iter end)
   {
     /// for sequences of non-primitive values, we need to align for every value
@@ -268,7 +261,33 @@ protected:
     }
   }
 
-  template<TypeGenerator g>
+  template<typename T, std::enable_if_t<!std::is_void<T>::value, int> = 0>
+  void serialize(ArrayInterface<T> value, MetaMember<g> m)
+  {
+    assert(value.count() > 0);
+    for (size_t i = 0; i < value.count(); i++) {
+      serialize(value.data()[i]);
+    }
+  }
+
+  void serialize(ArrayInterface<void> value, MetaMember<g> m)
+  {
+    assert(value.count() > 0);
+    for (size_t i = 0; i < value.count(); i++) {
+      auto submessage_ts = cast_typesupport<g>(m.members_);
+      serialize(
+        make_message_ref(submessage_ts, byte_offset(value.data(), i * submessage_ts.size_of_)));
+    }
+  }
+
+  void serialize(void * data, const MetaMessage<g> & typesupport)
+  {
+    for (size_t i = 0; i < typesupport.member_count_; i++) {
+      auto member_data = byte_offset(data, typesupport.members_[i].offset_);
+      //todo...
+    }
+  }
+
   void serialize(const MessageRef<g> & message)
   {
     for (size_t i = 0; i < message.size(); i++) {
@@ -278,9 +297,7 @@ protected:
           member.with_single_value([&](auto m) {serialize(m);});
           break;
         case MemberContainerType::Array:
-          member.with_array([&](auto m) {
-              serialize(std::begin(m), std::end(m));
-            });
+          member.with_array([&](auto m) {serialize(m, member.meta_member);});
           break;
         case MemberContainerType::Sequence:
           member.with_sequence([&](auto m) {
@@ -290,39 +307,61 @@ protected:
       }
     }
   }
-};
+};  // namespace rmw_cyclonedds_cpp
+
+//template<typename Output, typename Object>
+//auto serialize_top_level(Output dest, const void * data, const rosidl_message_type_support_t & ts){
+//  ts.typesupport_identifier
+//  CDRWriter<Output,
+//};
 
 void serialize(
   void * dest, size_t dest_size, const void * data, const rosidl_message_type_support_t & ts)
 {
-  CDRWriter<byte *> writer{static_cast<byte *>(dest)};
-  writer.serialize_top_level(data, ts);
-  assert(writer.position() == dest_size);
+  return with_typesupport_info(ts.typesupport_identifier, [&](auto info) {
+             auto & mts = *static_cast<const typename decltype(info)::MetaMessage *>(ts.data);
+             CDRWriter<byte *, info.enum_value> writer{static_cast<byte *>(dest)};
+             writer.serialize_top_level(data, mts);
+             assert(writer.position() == dest_size);
+           });
 }
 
 size_t get_serialized_size(const void * data, const rosidl_message_type_support_t & ts)
 {
-  ByteCountingIterator it;
-  CDRWriter<ByteCountingIterator> writer(it);
-  writer.serialize_top_level(data, ts);
-  return writer.position();
+  size_t n;
+  with_typesupport_info(ts.typesupport_identifier, [&](auto info) {
+      auto & mts = *static_cast<const typename decltype(info)::MetaMessage *>(ts.data);
+      ByteCountingIterator it;
+      CDRWriter<ByteCountingIterator, info.enum_value> writer(it);
+      writer.serialize_top_level(data, mts);
+      n = writer.position();
+    });
+  return n;
 }
 
 size_t get_serialized_size(
   const cdds_request_wrapper_t & request, const rosidl_message_type_support_t & ts)
 {
-  ByteCountingIterator it;
-  CDRWriter<ByteCountingIterator> writer(it);
-  writer.serialize_top_level(request, ts);
-  return writer.position();
+  size_t n;
+  with_typesupport_info(ts.typesupport_identifier, [&](auto info) {
+      auto & mts = *static_cast<const typename decltype(info)::MetaMessage *>(ts.data);
+      ByteCountingIterator it;
+      CDRWriter<ByteCountingIterator, info.enum_value> writer(it);
+      writer.serialize_top_level(request, mts);
+      n = writer.position();
+    });
+  return n;
 }
 
 void serialize(
   void * dest, size_t dest_size, const cdds_request_wrapper_t & request,
   const rosidl_message_type_support_t & ts)
 {
-  CDRWriter<byte *> writer{static_cast<byte *>(dest)};
-  writer.serialize_top_level(request, ts);
-  assert(writer.position() == dest_size);
+  return with_typesupport_info(ts.typesupport_identifier, [&](auto info) {
+             auto & mts = *static_cast<const typename decltype(info)::MetaMessage *>(ts.data);
+             CDRWriter<byte *, info.enum_value> writer{static_cast<byte *>(dest)};
+             writer.serialize_top_level(request, mts);
+             assert(writer.position() == dest_size);
+           });
 }
 }  // namespace rmw_cyclonedds_cpp
