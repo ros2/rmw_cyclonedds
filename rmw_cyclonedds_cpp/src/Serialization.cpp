@@ -78,7 +78,10 @@ protected:
   }
 
 public:
-  size_t position() {return static_cast<const char *>(cursor) - static_cast<const char *>(origin);}
+  size_t position()
+  {
+    return static_cast<const char *>(cursor) - static_cast<const char *>(origin);
+  }
 
   CDRWriter() = delete;
   explicit CDRWriter(void * dst)
@@ -110,7 +113,7 @@ public:
     size_t offset = 0;
     offset += 4 + sizeof(request.header.guid) + sizeof(request.header.seq);
     size_t alignment = (eversion == EncodingVersion::CDR_Legacy ? offset - 4 : offset);
-    offset += get_serialized_size(make_message_ref(support, request.data), alignment);
+    offset += get_serialized_size(alignment, make_message_ref(support, request.data));
     return offset;
   }
 
@@ -119,7 +122,7 @@ public:
     size_t offset = 0;
     offset += 4;
     size_t alignment = (eversion == EncodingVersion::CDR_Legacy ? offset - 4 : offset);
-    offset += get_serialized_size(make_message_ref(support, data), alignment);
+    offset += get_serialized_size(alignment, make_message_ref(support, data));
     return offset;
   }
 
@@ -185,12 +188,16 @@ protected:
 
   size_t num_alignment_bytes(size_t align_before, size_t sizeof_value)
   {
-    if (sizeof_value == 1) {return 0;}
+    if (sizeof_value == 1) {
+      return 0;
+    }
 
     size_t align_to = std::min(sizeof_value, max_align);
     assert(align_to == 1 || align_to == 2 || align_to == 4 || align_to == 8);
 
-    if (align_before % align_to == 0) {return 0;}
+    if (align_before % align_to == 0) {
+      return 0;
+    }
 
     return (-align_before) % align_to;
   }
@@ -225,82 +232,95 @@ protected:
     }
   }
 
+
   template<typename T, std::enable_if_t<std::is_fundamental<T>::value, int> = 0>
-  size_t get_serialized_size(T, size_t align_before)
+  size_t get_serialized_size(size_t align_before, T)
   {
     return num_alignment_bytes(align_before, sizeof(T)) + sizeof(T);
   }
 
-  size_t get_serialized_size(typename TypeGeneratorInfo<g>::String s, size_t align_before)
+  size_t get_serialized_size(size_t align_before, typename TypeGeneratorInfo<g>::String s)
   {
-    size_t cursor = align_before;
-    cursor += num_alignment_bytes(align_before, 4);
-    cursor += 4;
-    cursor += s.size();
-    return cursor - align_before;
+    size_t offset = align_before;
+    offset += num_alignment_bytes(align_before, 4);
+    offset += 4;
+    offset += s.size();
+    return offset - align_before;
   }
 
-  size_t get_serialized_size(typename TypeGeneratorInfo<g>::WString s, size_t align_before)
+  size_t get_serialized_size(size_t align_before, typename TypeGeneratorInfo<g>::WString s)
   {
-    size_t cursor = align_before;
-    cursor += num_alignment_bytes(align_before, 4);
-    cursor += 4;
+    size_t offset = align_before;
+    offset += num_alignment_bytes(align_before, 4);
+    offset += 4;
     switch (eversion) {
       case EncodingVersion::CDR_Legacy:
-        cursor += s.size() * sizeof(wchar_t);
+        offset += s.size() * sizeof(wchar_t);
         break;
       default:
-        cursor += s.size() * 2;
+        offset += s.size() * 2;
     }
-    return cursor - align_before;
+    return offset - align_before;
   }
 
-  /// returns the total serialized size, including needed padding
-  /// this must inspect the values, so it can take a while
-  size_t get_serialized_size_slow(MemberRef<g> member, size_t align_before)
+  template<typename T>
+  size_t get_serialized_size(size_t align_before, SequenceRef<g, T> s)
   {
-    size_t cursor = align_before;
-    switch (member.get_container_type()) {
-      case MemberContainerType::SingleValue:
-        member.with_single_value([&](auto v) {cursor += get_serialized_size(v, cursor);});
-      case MemberContainerType::Array:
-        member.with_array([&](auto v) {
-            for (auto x : v) {
-              cursor += get_serialized_size(v, cursor);
-            }
-          });
-      case MemberContainerType::Sequence:
-        member.with_sequence([&](auto v) {
-            cursor += num_alignment_bytes(align_before, 4);
-            cursor += 4;
-            for (auto x : v) {
-              cursor += get_serialized_size(v, cursor);
-            }
-          });
-    }
-    return cursor - align_before;
+    size_t offset = align_before;
+    offset += num_alignment_bytes(offset, 4);
+    offset += 4;
+    offset += get_serialized_size(s.get_buffer());
+    return offset - align_before;
   }
 
-  size_t get_serialized_size(MessageRef<g> message, size_t align_before)
+  size_t get_serialized_size(size_t align_before, MessageRef<g> message)
   {
-    size_t cursor = align_before;
+    size_t offset = align_before;
     for (auto i = 0; i < message.size(); i++) {
-      cursor += get_serialized_size(message.at(i), cursor);
+      offset += get_serialized_size(offset, message.at(i));
     }
-    return cursor - align_before;
+    return offset - align_before;
   }
 
-  /// return the total serialized size, including needed padding
-  /// this tries to take a shortcut if it's a fixed size object
-  size_t get_serialized_size(MemberRef<g> member, size_t align_before)
+  template<typename T>
+  size_t get_serialized_size(size_t align_before, BufferRef<T> buffer, MetaMember<g> ts)
+  {
+    ValueType vt = ValueType(ts.type_id_);
+    size_t value_size = get_primitive_type_size(vt);
+
+    if (value_size != 0) {
+      return num_alignment_bytes(align_before, value_size) + value_size * buffer.size;
+    } else {
+      size_t cursor = align_before;
+      for (size_t i = 0; i < buffer.size; i++) {
+        cursor += get_serialized_size(buffer.start + i);
+      }
+      return cursor - align_before;
+    }
+  }
+  template<>
+  size_t get_serialized_size(size_t align_before, BufferRef<void> buffer, MetaMember<g> ts)
+  {
+    size_t cursor = align_before;
+    size_t element_size = ts.size_of_;
+    for (size_t i = 0; i < buffer.size; i++) {
+      cursor += get_serialized_size(byte_offset(buffer.start, i * element_size));
+    }
+  }
+
+  template<typename T>
+  size_t get_serialized_size(size_t align_before, ArrayInterface<T> ar, MetaMember<g> ts)
+  {
+    return get_serialized_size(align_before, ar.get_buffer(), ts);
+  }
+
+  size_t get_serialized_size(size_t align_before, MemberRef<g> member)
   {
     ValueType vt = ValueType(member.meta_member.type_id_);
-    align_before %= max_align;
-
     size_t value_size = get_primitive_type_size(vt);
 
     if (value_size == 0) {
-      return get_serialized_size_slow(member, align_before);
+      // return get_serialized_size_slow(align_before, member );
     }
 
     switch (member.get_container_type()) {
@@ -386,7 +406,7 @@ protected:
   }
 
   template<typename T, std::enable_if_t<!std::is_void<T>::value, int> = 0>
-  void serialize(ArrayInterface<T> value, MetaMember<g>)
+  void serialize(BufferRef<T> value, const MetaMember<g> &)
   {
     assert(value.count() > 0);
     for (size_t i = 0; i < value.size; i++) {
@@ -394,14 +414,19 @@ protected:
     }
   }
 
-  void serialize(ArrayInterface<void> value, MetaMember<g> m)
+  void serialize(BufferRef<void> value, const MetaMember<g> & m)
   {
-    assert(value.count() > 0);
     for (size_t i = 0; i < value.size; i++) {
       auto submessage_ts = cast_typesupport<g>(m.members_);
       serialize(
         make_message_ref(submessage_ts, byte_offset(value.start, i * submessage_ts.size_of_)));
     }
+  }
+
+  template<typename T>
+  void serialize(ArrayInterface<T> value, const MetaMember<g> & m)
+  {
+    serialize(value.get_buffer(), m);
   }
 
   void serialize(void * data, const MetaMessage<g> & typesupport)

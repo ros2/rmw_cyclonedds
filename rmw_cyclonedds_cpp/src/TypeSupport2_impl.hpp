@@ -229,18 +229,21 @@ class BufferRef
 
 public:
   const T * start;
-  size_t size;
+  const size_t size;
   BufferRef(const T * start, size_t size)
   : start{start}, size{size} {}
 };
 
 template<typename T>
-class ArrayInterface : public BufferRef<T>
+class ArrayInterface
 {
 public:
+  BufferRef<T> m_buffer;
   // simply an object wrapper around a buffer
   ArrayInterface(const T * start, size_t size)
-  : BufferRef<T>(start, size) {}
+  : m_buffer{start, size} {}
+
+  BufferRef<T> get_buffer() {return m_buffer;}
 };
 
 template<TypeGenerator g, typename T>
