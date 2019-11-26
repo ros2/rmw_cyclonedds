@@ -225,7 +225,7 @@ Result MemberRef<g>::with_single_value(UnaryFunction f)
 template<typename T>
 class BufferRef
 {
-  // used to represent the contiguous storage of a Sequences
+  // used to represent the contiguous storage of a Sequence or other collection
 
 public:
   const T * start;
