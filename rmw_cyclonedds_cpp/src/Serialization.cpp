@@ -28,26 +28,27 @@ std::pair<rosidl_message_type_support_t, rosidl_message_type_support_t>
 get_svc_request_response_typesupports(const rosidl_service_type_support_t & svc)
 {
   return with_typesupport(svc, [&](auto svc_ts) {
-    return std::make_pair(
-      rosidl_message_type_support_t{
+             return std::make_pair(
+               rosidl_message_type_support_t{
         svc.typesupport_identifier,
         svc_ts.request_members_,
         get_message_typesupport_handle_function,
       },
-      rosidl_message_type_support_t{
+               rosidl_message_type_support_t{
         svc.typesupport_identifier,
         svc_ts.response_members_,
         get_message_typesupport_handle_function,
       });
-  });
+           });
 }
 
-enum class EncodingVersion {
+enum class EncodingVersion
+{
   CDR_Legacy,
   CDR1,
 };
 
-template <TypeGenerator g>
+template<TypeGenerator g>
 class CDRWriter
 {
 protected:
@@ -73,11 +74,11 @@ protected:
     size_t current_align =
       (eversion == EncodingVersion::CDR_Legacy) ? (position() - 4) : position();
 
-    byte_offset(cursor ,((-current_align) % max_align % n_bytes));
+    byte_offset(cursor, ((-current_align) % max_align % n_bytes));
   }
 
 public:
-  size_t position() { return static_cast<const char *>(cursor) - static_cast<const char *>(origin); }
+  size_t position() {return static_cast<const char *>(cursor) - static_cast<const char *>(origin);}
 
   CDRWriter() = delete;
   explicit CDRWriter(void * dst)
@@ -136,39 +137,39 @@ protected:
         break;
     }
     std::array<char, 4> rtps_header{eversion_byte,
-                                    // encoding format = PLAIN_CDR
-                                    (native_endian() == endian::little) ? '\1' : '\0',
-                                    // options
-                                    '\0', '\0'};
+      // encoding format = PLAIN_CDR
+      (native_endian() == endian::little) ? '\1' : '\0',
+      // options
+      '\0', '\0'};
     put_bytes(rtps_header.data(), rtps_header.size());
   }
 
   // normalize platform-dependent types before serializing
-  template <typename T, std::enable_if_t<std::is_integral<T>::value, int> = 0>
+  template<typename T, std::enable_if_t<std::is_integral<T>::value, int> = 0>
   static auto format_value(T t)
   {
     return t;
   }
-  template <>
+  template<>
   static auto format_value(bool t)
   {
     return uint8_t(t);
   }
-  template <typename T, std::enable_if_t<std::is_floating_point<T>::value, int> = 0>
+  template<typename T, std::enable_if_t<std::is_floating_point<T>::value, int> = 0>
   static auto format_value(T t)
   {
     static_assert(std::numeric_limits<T>::is_iec559, "nonstandard float");
     return t;
   }
 
-  template <typename T>
+  template<typename T>
   void serialize_noalign(T value)
   {
     auto v2 = format_value(value);
     put_bytes(&v2, sizeof(v2));
   }
 
-  template <typename T, std::enable_if_t<std::is_arithmetic<T>::value, int> = 0>
+  template<typename T, std::enable_if_t<std::is_arithmetic<T>::value, int> = 0>
   void serialize(T value)
   {
     auto v2 = format_value(value);
@@ -184,15 +185,15 @@ protected:
 
   size_t num_alignment_bytes(size_t align_before, size_t sizeof_value)
   {
-    if (sizeof_value == 1) return 0;
+    if (sizeof_value == 1) {return 0;}
 
     size_t align_to = std::min(sizeof_value, max_align);
     assert(align_to == 1 || align_to == 2 || align_to == 4 || align_to == 8);
 
-    if (align_before % align_to == 0) return 0;
+    if (align_before % align_to == 0) {return 0;}
 
-    return ((-align_before) % align_to);
-  };
+    return (-align_before) % align_to;
+  }
 
   size_t get_primitive_type_size(ValueType vt)
   {
@@ -224,9 +225,10 @@ protected:
     }
   }
 
-  template <typename T, std::enable_if_t<std::is_fundamental<T>::value,int > = 0>
-  size_t get_serialized_size(T, size_t align_before){
-    return num_alignment_bytes(align_before,sizeof(T)) + sizeof(T);
+  template<typename T, std::enable_if_t<std::is_fundamental<T>::value, int> = 0>
+  size_t get_serialized_size(T, size_t align_before)
+  {
+    return num_alignment_bytes(align_before, sizeof(T)) + sizeof(T);
   }
 
   size_t get_serialized_size(typename TypeGeneratorInfo<g>::String s, size_t align_before)
@@ -260,29 +262,30 @@ protected:
     size_t cursor = align_before;
     switch (member.get_container_type()) {
       case MemberContainerType::SingleValue:
-        member.with_single_value([&](auto v) { cursor += get_serialized_size(v, cursor); });
+        member.with_single_value([&](auto v) {cursor += get_serialized_size(v, cursor);});
       case MemberContainerType::Array:
         member.with_array([&](auto v) {
-          for (auto x : v) {
-            cursor += get_serialized_size(v, cursor);
-          }
-        });
+            for (auto x : v) {
+              cursor += get_serialized_size(v, cursor);
+            }
+          });
       case MemberContainerType::Sequence:
         member.with_sequence([&](auto v) {
-          cursor += num_alignment_bytes(align_before, 4);
-          cursor += 4;
-          for (auto x : v) {
-            cursor += get_serialized_size(v, cursor);
-          }
-        });
+            cursor += num_alignment_bytes(align_before, 4);
+            cursor += 4;
+            for (auto x : v) {
+              cursor += get_serialized_size(v, cursor);
+            }
+          });
     }
     return cursor - align_before;
   }
 
-  size_t get_serialized_size(MessageRef<g> message, size_t align_before) {
+  size_t get_serialized_size(MessageRef<g> message, size_t align_before)
+  {
     size_t cursor = align_before;
-    for (auto i=0;i< message.size();i++){
-      cursor += get_serialized_size( message.at(i), cursor);
+    for (auto i = 0; i < message.size(); i++) {
+      cursor += get_serialized_size(message.at(i), cursor);
     }
     return cursor - align_before;
   }
@@ -309,21 +312,21 @@ protected:
       case MemberContainerType::Sequence:
         size_t total_size;
         member.with_sequence([&](auto seq) {
-          size_t cursor = align_before;
-          cursor += num_alignment_bytes(cursor, 4);
-          cursor += 4;
-          if (seq.size() > 0) {
-            cursor += num_alignment_bytes(cursor, value_size);
-            cursor += seq.size() * value_size;
-          }
-          total_size = cursor - align_before;
-        });
+            size_t cursor = align_before;
+            cursor += num_alignment_bytes(cursor, 4);
+            cursor += 4;
+            if (seq.size() > 0) {
+              cursor += num_alignment_bytes(cursor, value_size);
+              cursor += seq.size() * value_size;
+            }
+            total_size = cursor - align_before;
+          });
         return total_size;
     }
   }
 
   // specialization for strings
-  template <typename T, typename char_type = typename T::traits_type::char_type>
+  template<typename T, typename char_type = typename T::traits_type::char_type>
   void serialize(const T & value)
   {
     if (sizeof(char_type) == 1) {
@@ -353,7 +356,7 @@ protected:
     }
   }
 
-  template <
+  template<
     typename Iter, typename value_type = typename std::iterator_traits<Iter>::value_type,
     typename format_type = decltype(format_value(std::declval<value_type>()))>
   void serialize(Iter begin, Iter end)
@@ -371,7 +374,7 @@ protected:
     }
   }
 
-  template <
+  template<
     typename Iter, typename value_type = typename std::iterator_traits<Iter>::value_type,
     std::enable_if_t<!std::is_arithmetic<value_type>::value, int> = 0>
   void serialize(Iter begin, Iter end)
@@ -382,7 +385,7 @@ protected:
     }
   }
 
-  template <typename T, std::enable_if_t<!std::is_void<T>::value, int> = 0>
+  template<typename T, std::enable_if_t<!std::is_void<T>::value, int> = 0>
   void serialize(ArrayInterface<T> value, MetaMember<g>)
   {
     assert(value.count() > 0);
@@ -415,16 +418,16 @@ protected:
       auto member = message.at(i);
       switch (member.get_container_type()) {
         case MemberContainerType::SingleValue:
-          member.with_single_value([&](auto m) { serialize(m); });
+          member.with_single_value([&](auto m) {serialize(m);});
           break;
         case MemberContainerType::Array:
-          member.with_array([&](auto m) { serialize(m, member.meta_member); });
+          member.with_array([&](auto m) {serialize(m, member.meta_member);});
           break;
         case MemberContainerType::Sequence:
           member.with_sequence([&](auto m) {
-            serialize_u32(m.size());
-            serialize(std::begin(m), std::end(m));
-          });
+              serialize_u32(m.size());
+              serialize(std::begin(m), std::end(m));
+            });
       }
     }
   }
@@ -434,22 +437,22 @@ void serialize(
   void * dest, size_t dest_size, const void * data, const rosidl_message_type_support_t & ts)
 {
   return with_typesupport_info(ts.typesupport_identifier, [&](auto info) {
-    auto & mts = *static_cast<const typename decltype(info)::MetaMessage *>(ts.data);
-    CDRWriter<info.enum_value> writer{dest};
-    writer.serialize_top_level(data, mts);
-    assert(writer.position() == dest_size);
-  });
+             auto & mts = *static_cast<const typename decltype(info)::MetaMessage *>(ts.data);
+             CDRWriter<info.enum_value> writer{dest};
+             writer.serialize_top_level(data, mts);
+             assert(writer.position() == dest_size);
+           });
 }
 
 size_t get_serialized_size(const void * data, const rosidl_message_type_support_t & ts)
 {
   size_t n;
   with_typesupport_info(ts.typesupport_identifier, [&](auto info) {
-    auto & mts = *static_cast<const typename decltype(info)::MetaMessage *>(ts.data);
-    void * dummy = nullptr;
-    CDRWriter<info.enum_value> writer(dummy);
-    n = writer.get_serialized_size_top_level(data, mts);
-  });
+      auto & mts = *static_cast<const typename decltype(info)::MetaMessage *>(ts.data);
+      void * dummy = nullptr;
+      CDRWriter<info.enum_value> writer(dummy);
+      n = writer.get_serialized_size_top_level(data, mts);
+    });
   return n;
 }
 
@@ -458,11 +461,11 @@ size_t get_serialized_size(
 {
   size_t n;
   with_typesupport_info(ts.typesupport_identifier, [&](auto info) {
-    auto & mts = *static_cast<const typename decltype(info)::MetaMessage *>(ts.data);
-    void * dummy = nullptr;
-    CDRWriter<info.enum_value> writer(dummy);
-    n = writer.get_serialized_size_top_level(request, mts);
-  });
+      auto & mts = *static_cast<const typename decltype(info)::MetaMessage *>(ts.data);
+      void * dummy = nullptr;
+      CDRWriter<info.enum_value> writer(dummy);
+      n = writer.get_serialized_size_top_level(request, mts);
+    });
   return n;
 }
 
@@ -471,10 +474,10 @@ void serialize(
   const rosidl_message_type_support_t & ts)
 {
   return with_typesupport_info(ts.typesupport_identifier, [&](auto info) {
-    auto & mts = *static_cast<const typename decltype(info)::MetaMessage *>(ts.data);
-    CDRWriter<info.enum_value> writer{dest};
-    writer.serialize_top_level(request, mts);
-    assert(writer.position() == dest_size);
-  });
+             auto & mts = *static_cast<const typename decltype(info)::MetaMessage *>(ts.data);
+             CDRWriter<info.enum_value> writer{dest};
+             writer.serialize_top_level(request, mts);
+             assert(writer.position() == dest_size);
+           });
 }
 }  // namespace rmw_cyclonedds_cpp
