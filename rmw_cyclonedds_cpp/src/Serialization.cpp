@@ -111,18 +111,21 @@ public:
     const cdds_request_wrapper_t & request, const MetaMessage<g> & support)
   {
     size_t offset = 0;
-    offset += 4 + sizeof(request.header.guid) + sizeof(request.header.seq);
+    if (eversion != EncodingVersion::CDR_Legacy) {offset += 4;}
+    offset += sizeof(request.header.guid) + sizeof(request.header.seq);
     size_t alignment = (eversion == EncodingVersion::CDR_Legacy ? offset - 4 : offset);
     offset += get_serialized_size(alignment, make_message_ref(support, request.data));
+    if (eversion == EncodingVersion::CDR_Legacy) {offset += 4;}
     return offset;
   }
 
   size_t get_serialized_size_top_level(const void * data, const MetaMessage<g> & support)
   {
     size_t offset = 0;
-    offset += 4;
-    size_t alignment = (eversion == EncodingVersion::CDR_Legacy ? offset - 4 : offset);
-    offset += get_serialized_size(alignment, make_message_ref(support, data));
+    // legacy encoding does not count the RTPS header for alignment purposes, so we add it in later
+    if (eversion != EncodingVersion::CDR_Legacy) {offset += 4;}
+    offset = offset_after(offset, make_message_ref(support, data));
+    if (eversion == EncodingVersion::CDR_Legacy) {offset += 4;}
     return offset;
   }
 
@@ -232,26 +235,40 @@ protected:
     }
   }
 
-
-  template<typename T, std::enable_if_t<std::is_fundamental<T>::value, int> = 0>
-  size_t get_serialized_size(size_t align_before, T)
+  size_t offset_after_align(size_t offset, size_t sizeof_value)
   {
-    return num_alignment_bytes(align_before, sizeof(T)) + sizeof(T);
+    if (sizeof_value == 1) {
+      return offset;
+    }
+
+    size_t align_to = std::min(sizeof_value, max_align);
+    assert(align_to == 1 || align_to == 2 || align_to == 4 || align_to == 8);
+
+    return offset + ((-offset) % align_to);
   }
 
-  size_t get_serialized_size(size_t align_before, typename TypeGeneratorInfo<g>::String s)
+  template<typename T, std::enable_if_t<std::is_arithmetic<T>::value, int> = 0>
+  size_t offset_after(size_t offset, const T &, MetaMember<g> member_info)
   {
-    size_t offset = align_before;
-    offset += num_alignment_bytes(align_before, 4);
+    auto p = get_primitive_type_size(ValueType(member_info.type_id_));
+    return offset_after_align(offset, p) + p;
+  }
+
+  size_t offset_after(
+    size_t offset, typename TypeGeneratorInfo<g>::String s, MetaMember<g> member_info)
+  {
+    auto p = get_primitive_type_size(ValueType(member_info.type_id_));
+    offset = offset_after_align(offset, 4);
     offset += 4;
     offset += s.size();
-    return offset - align_before;
+    return offset;
   }
 
-  size_t get_serialized_size(size_t align_before, typename TypeGeneratorInfo<g>::WString s)
+  size_t offset_after(
+    size_t offset, typename TypeGeneratorInfo<g>::WString s, MetaMember<g> member_info)
   {
-    size_t offset = align_before;
-    offset += num_alignment_bytes(align_before, 4);
+    auto p = get_primitive_type_size(ValueType(member_info.type_id_));
+    offset = offset_after_align(offset, 4);
     offset += 4;
     switch (eversion) {
       case EncodingVersion::CDR_Legacy:
@@ -260,89 +277,64 @@ protected:
       default:
         offset += s.size() * 2;
     }
-    return offset - align_before;
+    return offset;
   }
 
   template<typename T>
-  size_t get_serialized_size(size_t align_before, SequenceRef<g, T> s)
+  size_t offset_after(size_t offset, SequenceRef<g, T> s, MetaMember<g> member_info)
   {
-    size_t offset = align_before;
     offset += num_alignment_bytes(offset, 4);
     offset += 4;
-    offset += get_serialized_size(s.get_buffer());
-    return offset - align_before;
+    return offset_after(offset, s.get_buffer(), member_info);
   }
 
-  size_t get_serialized_size(size_t align_before, MessageRef<g> message)
+  size_t offset_after(size_t offset, MessageRef<g> message)
   {
-    size_t offset = align_before;
-    for (auto i = 0; i < message.size(); i++) {
-      offset += get_serialized_size(offset, message.at(i));
+    offset += num_alignment_bytes(offset, 4);
+    offset += 4;
+    for (size_t i = 0; i < message.size(); i++) {
+      auto member_info = message.meta_message.members_[i];
+      with_member_data<g>(
+        message.data, member_info, [&](auto m) {offset = offset_after(offset, m, member_info);});
     }
-    return offset - align_before;
+    return offset;
   }
 
   template<typename T>
-  size_t get_serialized_size(size_t align_before, BufferRef<T> buffer, MetaMember<g> ts)
+  size_t offset_after(size_t offset, BufferRef<T> buffer, MetaMember<g> member_info)
   {
-    ValueType vt = ValueType(ts.type_id_);
+    ValueType vt = ValueType(member_info.type_id_);
     size_t value_size = get_primitive_type_size(vt);
 
     if (value_size != 0) {
-      return num_alignment_bytes(align_before, value_size) + value_size * buffer.size;
+      /// shortcut!
+      offset = offset_after_align(offset, value_size);
+      offset += value_size * buffer.size;
+      return offset;
     } else {
-      size_t cursor = align_before;
+      /// slow way....
       for (size_t i = 0; i < buffer.size; i++) {
-        cursor += get_serialized_size(buffer.start + i);
+        offset = offset_after(buffer.start + i);
       }
-      return cursor - align_before;
+      return offset;
     }
   }
   template<>
-  size_t get_serialized_size(size_t align_before, BufferRef<void> buffer, MetaMember<g> ts)
+  size_t offset_after(size_t offset, BufferRef<void> buffer, MetaMember<g> member_info)
   {
-    size_t cursor = align_before;
-    size_t element_size = ts.size_of_;
+    auto members_ts = cast_typesupport(member_info.members_);
+    size_t stride = members_ts.size_of_;
     for (size_t i = 0; i < buffer.size; i++) {
-      cursor += get_serialized_size(byte_offset(buffer.start, i * element_size));
+      auto ptr = byte_offset(buffer.start, i * stride);
+      offset = get_serialized_size(offset, MessageRef<g>(members_ts, ptr), member_info);
     }
+    return offset;
   }
 
   template<typename T>
-  size_t get_serialized_size(size_t align_before, ArrayInterface<T> ar, MetaMember<g> ts)
+  size_t offset_after(size_t offset, ArrayInterface<T> ar, MetaMember<g> member_info)
   {
-    return get_serialized_size(align_before, ar.get_buffer(), ts);
-  }
-
-  size_t get_serialized_size(size_t align_before, MemberRef<g> member)
-  {
-    ValueType vt = ValueType(member.meta_member.type_id_);
-    size_t value_size = get_primitive_type_size(vt);
-
-    if (value_size == 0) {
-      // return get_serialized_size_slow(align_before, member );
-    }
-
-    switch (member.get_container_type()) {
-      case MemberContainerType::SingleValue:
-        return num_alignment_bytes(align_before, value_size) + value_size;
-      case MemberContainerType::Array:
-        return num_alignment_bytes(align_before, value_size) +
-               value_size * member.meta_member.array_size_;
-      case MemberContainerType::Sequence:
-        size_t total_size;
-        member.with_sequence([&](auto seq) {
-            size_t cursor = align_before;
-            cursor += num_alignment_bytes(cursor, 4);
-            cursor += 4;
-            if (seq.size() > 0) {
-              cursor += num_alignment_bytes(cursor, value_size);
-              cursor += seq.size() * value_size;
-            }
-            total_size = cursor - align_before;
-          });
-        return total_size;
-    }
+    return offset_after(offset, ar.get_buffer(), member_info);
   }
 
   // specialization for strings

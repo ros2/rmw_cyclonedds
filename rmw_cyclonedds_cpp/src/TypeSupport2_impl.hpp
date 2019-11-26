@@ -228,9 +228,9 @@ class BufferRef
   // used to represent the contiguous storage of a Sequence or other collection
 
 public:
-  const T * start;
+  T * const start;
   const size_t size;
-  BufferRef(const T * start, size_t size)
+  BufferRef(T * const start, size_t size)
   : start{start}, size{size} {}
 };
 
@@ -239,8 +239,18 @@ class ArrayInterface
 {
 public:
   BufferRef<T> m_buffer;
+
+  ArrayInterface(const void * ptr_to_member, MetaMember<TypeGenerator::ROSIDL_C> ts)
+  : m_buffer{static_cast<T * const>(ptr_to_member), ts.array_size_}
+  {
+  }
+  ArrayInterface(const void * ptr_to_member, MetaMember<TypeGenerator::ROSIDL_Cpp> ts)
+  : m_buffer{static_cast<T * const>(ptr_to_member), ts.array_size_}
+  {
+  }
+
   // simply an object wrapper around a buffer
-  ArrayInterface(const T * start, size_t size)
+  ArrayInterface(T * const start, size_t size)
   : m_buffer{start, size} {}
 
   BufferRef<T> get_buffer() {return m_buffer;}
@@ -253,22 +263,26 @@ template<typename T>
 class SequenceRef<TypeGenerator::ROSIDL_Cpp, T>
 {
   SequenceRef(void * data, const MetaMember<TypeGenerator::ROSIDL_Cpp> & m)
-  : obj{data}, get_function{m.get_function}, size_function{m.size_function} {}
+  : obj{data}, get_const_function{m.get_const_function}, size_function{m.size_function}
+  {
+  }
 
 protected:
   void * obj;
-  decltype(MetaMember<TypeGenerator::ROSIDL_Cpp>::get_function) get_function;
+  decltype(MetaMember<TypeGenerator::ROSIDL_Cpp>::get_const_function) get_const_function;
   decltype(MetaMember<TypeGenerator::ROSIDL_Cpp>::size_function) size_function;
 
 public:
-  BufferRef<T> get_buffer() {return {get_function(obj, 0), size_function(obj)};}
+  BufferRef<T> get_buffer() const {return {get_const_function(obj, 0), size_function(obj)};}
 };
 
 template<>
 class SequenceRef<TypeGenerator::ROSIDL_Cpp, bool>
 {
   SequenceRef(void * data, const MetaMember<TypeGenerator::ROSIDL_Cpp> &)
-  : obj{static_cast<std::vector<bool> *>(data)} {}
+  : obj{static_cast<std::vector<bool> *>(data)}
+  {
+  }
 
 protected:
   // be careful! We don't know the allocator so only methods that don't require allocation or deallocation
@@ -297,33 +311,35 @@ protected:
   GeneratedSequence * obj;
 
 public:
-  SequenceRef(void * data)
-  : obj{static_cast<GeneratedSequence *>(data)} {}
+  SequenceRef(void * data, const MetaMember<TypeGenerator::ROSIDL_Cpp> &)
+  : SequenceRef(data), obj{static_cast<GeneratedSequence *>(data)}
+  {
+  }
   BufferRef<T> get_buffer() {return {obj->data, obj->size};}
 };
 
 template<TypeGenerator g, typename UnaryFunction>
 void with_member_data(const void * message_data, const MetaMember<g> & meta_member, UnaryFunction f)
 {
-  return with_type2([&](auto t) {
+  auto vt = ValueType(meta_member.type_id_);
+  return with_type2<g>(vt, [&](auto t) {
              // value type
              using T = typename decltype(t)::type;
              const void * member_data = byte_offset(message_data, meta_member.offset_);
              if (!meta_member.is_array_) {
                const T & value_ref{*static_cast<const T *>(member_data)};
-               return f(
-                 value_ref);
+               return f(value_ref);
              }
              if ( // unbounded sequence
                meta_member.array_size_ == 0 ||
                // bounded sequence
                meta_member.is_upper_bound_)
              {
-               const ArrayInterface<T> array{static_cast<T *>(member_data), meta_member.array_size_};
+               const ArrayInterface<const T> array{member_data, meta_member};
                return f(array);
              }
              {
-               const SequenceRef<g, T> sequence{member_data, meta_member};
+               const SequenceRef<g, const T> sequence{member_data, meta_member};
                return f(sequence);
              }
            });
