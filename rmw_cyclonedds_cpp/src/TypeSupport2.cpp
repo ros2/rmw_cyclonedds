@@ -13,49 +13,66 @@
 // limitations under the License.
 #include "TypeSupport2.hpp"
 
+#include <unordered_map>
 #include <utility>
 namespace rmw_cyclonedds_cpp
 {
+static std::unordered_map<
+  const rosidl_message_type_support_t *, std::unique_ptr<AnyStructValueType>>
+s_struct_cache;
+
 class ROSIDLC_StructValueType : public AnyStructValueType
 {
-public:
   const rosidl_typesupport_introspection_c__MessageMembers impl;
+  std::vector<std::unique_ptr<ROSIDLC_Member>> m_members;
+
+public:
   static constexpr TypeGenerator gen = TypeGenerator::ROSIDL_C;
   using MemberType = ROSIDLC_Member;
-  explicit ROSIDLC_StructValueType(decltype(impl) impl)
-  : impl(impl) {}
+  explicit ROSIDLC_StructValueType(decltype(impl) impl);
   size_t sizeof_struct() const override {return impl.size_of_;}
   size_t n_members() const override {return impl.member_count_;}
-  std::unique_ptr<AnyMember> get_member(size_t index) const override;
+  const AnyMember * get_member(size_t index) const override {return m_members.at(index).get();}
 };
 
 class ROSIDLCPP_StructValueType : public AnyStructValueType
 {
-public:
   const rosidl_typesupport_introspection_cpp::MessageMembers impl;
+  std::vector<std::unique_ptr<ROSIDLCPP_Member>> m_members;
+
+public:
   static constexpr TypeGenerator gen = TypeGenerator::ROSIDL_Cpp;
   using MemberType = ROSIDLCPP_Member;
-  explicit ROSIDLCPP_StructValueType(decltype(impl) impl)
-  : impl(impl) {}
+  explicit ROSIDLCPP_StructValueType(decltype(impl) impl);
   size_t sizeof_struct() const override {return impl.size_of_;}
   size_t n_members() const override {return impl.member_count_;}
-  std::unique_ptr<AnyMember> get_member(size_t index) const override;
+  const AnyMember * get_member(size_t index) const final {return m_members.at(index).get();}
 };
 
-std::unique_ptr<AnyStructValueType> from_rosidl(const rosidl_message_type_support_t * mts)
+const AnyStructValueType * from_rosidl(const rosidl_message_type_support_t * mts)
 {
-  auto ts = identify_typesupport(mts->typesupport_identifier);
-  switch (ts) {
-    case TypeGenerator::ROSIDL_C: {
-        auto c = static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(mts->data);
-        return std::make_unique<ROSIDLC_StructValueType>(*c);
-      }
-    case TypeGenerator::ROSIDL_Cpp: {
-        auto c =
-          static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(mts->data);
-        return std::make_unique<ROSIDLCPP_StructValueType>(*c);
-      }
+  auto iter = s_struct_cache.find(mts);
+  if (iter == s_struct_cache.end()) {
+    auto ts = identify_typesupport(mts->typesupport_identifier);
+    switch (ts) {
+      case TypeGenerator::ROSIDL_C: {
+          auto c =
+            static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(mts->data);
+          iter =
+            s_struct_cache.emplace(std::make_pair(mts, std::make_unique<ROSIDLC_StructValueType>(
+                *c)))
+            .first;
+        }; break;
+      case TypeGenerator::ROSIDL_Cpp: {
+          auto c =
+            static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(mts->data);
+          iter = s_struct_cache
+            .emplace(std::make_pair(mts, std::make_unique<ROSIDLCPP_StructValueType>(*c)))
+            .first;
+        }; break;
+    }
   }
+  return iter->second.get();
 }
 
 std::pair<rosidl_message_type_support_t, rosidl_message_type_support_t>
@@ -84,45 +101,54 @@ get_svc_request_response_typesupports(const rosidl_service_type_support_t & svc)
   return {request, response};
 }
 
-std::unique_ptr<AnyMember> ROSIDLC_StructValueType::get_member(size_t index) const
+ROSIDLC_StructValueType::ROSIDLC_StructValueType(decltype(impl) impl)
+: impl(impl)
 {
-  assert(index < impl.member_count_);
-  size_t next_member_offset;
-  if (index + 1 == impl.member_count_) {
-    next_member_offset = impl.size_of_;
-  } else {
-    next_member_offset = impl.members_[index + 1].offset_;
+  for (size_t index = 0; index < impl.member_count_; index++) {
+    size_t next_member_offset;
+
+    if (index + 1 == impl.member_count_) {
+      next_member_offset = impl.size_of_;
+    } else {
+      next_member_offset = impl.members_[index + 1].offset_;
+    }
+    auto member_impl = impl.members_[index];
+    std::unique_ptr<ROSIDLC_Member> a_member;
+    if (!member_impl.is_array_) {
+      a_member = std::make_unique<ROSIDLC_SingleValueMember>(member_impl, next_member_offset);
+    } else if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
+      a_member = std::make_unique<ROSIDLC_ArrayMember>(member_impl, next_member_offset);
+    } else {
+      a_member = std::make_unique<ROSIDLC_SequenceMember>(member_impl, next_member_offset);
+    }
+    m_members.push_back(std::move(a_member));
   }
-  auto member_impl = impl.members_[index];
-  if (!member_impl.is_array_) {
-    return std::make_unique<ROSIDLC_SingleValueMember>(member_impl, next_member_offset);
-  }
-  if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
-    return std::make_unique<ROSIDLC_ArrayMember>(member_impl, next_member_offset);
-  }
-  return std::make_unique<ROSIDLC_SequenceMember>(member_impl, next_member_offset);
 }
 
-std::unique_ptr<AnyMember> ROSIDLCPP_StructValueType::get_member(size_t index) const
+ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(decltype(impl) impl)
+: impl(impl)
 {
-  assert(index < impl.member_count_);
-  size_t next_member_offset;
-  if (index + 1 == impl.member_count_) {
-    next_member_offset = impl.size_of_;
-  } else {
-    next_member_offset = impl.members_[index + 1].offset_;
-  }
-  auto member_impl = impl.members_[index];
-  if (!member_impl.is_array_) {
-    return std::make_unique<ROSIDLCPP_SingleValueMember>(member_impl, next_member_offset);
-  }
-  if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
-    return std::make_unique<ROSIDLCPP_ArrayMember>(member_impl, next_member_offset);
-  }
-  if (ROSIDL_TypeKind(member_impl.type_id_) == ROSIDL_TypeKind::BOOLEAN) {
-    return std::make_unique<ROSIDLCPP_BoolSequenceMember>(member_impl, next_member_offset);
-  } else {
-    return std::make_unique<ROSIDLCPP_SpanSequenceMember>(member_impl, next_member_offset);
+  for (size_t index = 0; index < impl.member_count_; index++) {
+    size_t next_member_offset;
+
+    if (index + 1 == impl.member_count_) {
+      next_member_offset = impl.size_of_;
+    } else {
+      next_member_offset = impl.members_[index + 1].offset_;
+    }
+    auto member_impl = impl.members_[index];
+
+    std::unique_ptr<ROSIDLCPP_Member> a_member;
+    if (!member_impl.is_array_) {
+      a_member = std::make_unique<ROSIDLCPP_SingleValueMember>(member_impl, next_member_offset);
+    } else if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
+      a_member = std::make_unique<ROSIDLCPP_ArrayMember>(member_impl, next_member_offset);
+    } else if (ROSIDL_TypeKind(member_impl.type_id_) == ROSIDL_TypeKind::BOOLEAN) {
+      a_member = std::make_unique<ROSIDLCPP_BoolSequenceMember>(member_impl, next_member_offset);
+    } else {
+      a_member = std::make_unique<ROSIDLCPP_SpanSequenceMember>(member_impl, next_member_offset);
+    }
+    m_members.push_back(std::move(a_member));
   }
 }
 
@@ -143,45 +169,57 @@ TypeGenerator identify_typesupport(const char * identifier)
   throw std::runtime_error(std::string("unrecognized typesupport") + identifier);
 }
 
-std::unique_ptr<AnyValueType> ROSIDLC_Member::get_value_type() const
+ROSIDLC_Member::ROSIDLC_Member(decltype(impl) impl, size_t next_member_offset)
+: impl(impl), next_member_offset(next_member_offset)
 {
   auto value_type = ROSIDL_TypeKind(impl.type_id_);
   switch (value_type) {
     case ROSIDL_TypeKind::STRING:
-      return std::make_unique<ROSIDLC_StringValueType>();
+      m_value_type = std::make_unique<ROSIDLC_StringValueType>();
+      break;
     case ROSIDL_TypeKind::WSTRING:
-      return std::make_unique<ROSIDLC_WStringValueType>();
+      m_value_type = std::make_unique<ROSIDLC_WStringValueType>();
+      break;
     case ROSIDL_TypeKind::MESSAGE: {
         auto m = impl.members_;
         assert(m);
         assert(identify_typesupport(m->typesupport_identifier) == TypeGenerator::ROSIDL_C);
         auto mm =
           static_cast<const TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::MetaMessage *>(m->data);
-        return std::make_unique<ROSIDLC_StructValueType>(*mm);
+        m_value_type = std::make_unique<ROSIDLC_StructValueType>(*mm);
       }
+      break;
     default:
-      return std::make_unique<PrimitiveValueType>(value_type);
+      m_value_type = std::make_unique<PrimitiveValueType>(value_type);
+      break;
   }
 }
 
-std::unique_ptr<AnyValueType> ROSIDLCPP_Member::get_value_type() const
+ROSIDLCPP_Member::ROSIDLCPP_Member(decltype(impl) impl, size_t next_member_offset)
+: impl(impl), next_member_offset(next_member_offset)
 {
-  auto value_type = ROSIDL_TypeKind(impl.type_id_);
-  switch (value_type) {
+  auto type_kind = ROSIDL_TypeKind(impl.type_id_);
+  switch (type_kind) {
     case ROSIDL_TypeKind::STRING:
-      return std::make_unique<ROSIDLCPP_StringValueType>();
+      m_value_type = std::make_unique<ROSIDLCPP_StringValueType>();
+      break;
     case ROSIDL_TypeKind::WSTRING:
-      return std::make_unique<ROSIDLCPP_U16StringValueType>();
+      m_value_type = std::make_unique<ROSIDLCPP_U16StringValueType>();
+      break;
     case ROSIDL_TypeKind::MESSAGE: {
         auto m = impl.members_;
         assert(m);
         assert(identify_typesupport(m->typesupport_identifier) == TypeGenerator::ROSIDL_Cpp);
         auto mm =
           static_cast<const TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::MetaMessage *>(m->data);
-        return std::make_unique<ROSIDLCPP_StructValueType>(*mm);
+        m_value_type = std::make_unique<ROSIDLCPP_StructValueType>(*mm);
       }
+      break;
+
     default:
-      return std::make_unique<PrimitiveValueType>(value_type);
+      m_value_type = std::make_unique<PrimitiveValueType>(type_kind);
+      break;
+
   }
 }
 }  // namespace rmw_cyclonedds_cpp

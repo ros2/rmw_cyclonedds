@@ -14,6 +14,7 @@
 #ifndef SERIALIZATION_HPP_
 #define SERIALIZATION_HPP_
 
+#include <unordered_map>
 #include <utility>
 
 #include "rmw_cyclonedds_cpp/serdata.hpp"

@@ -280,43 +280,43 @@ protected:
     }
   }
 
-  void serialize(CDRCursor * cursor, const void * data, const AnyValueType & value_type)
+  void serialize(CDRCursor * cursor, const void * data, const AnyValueType * value_type)
   {
-    if (auto s = dynamic_cast<const PrimitiveValueType *>(&value_type)) {
+    if (auto s = dynamic_cast<const PrimitiveValueType *>(value_type)) {
       return serialize(cursor, data, *s);
     }
-    if (auto s = dynamic_cast<const AnyU8StringValueType *>(&value_type)) {
+    if (auto s = dynamic_cast<const AnyU8StringValueType *>(value_type)) {
       return serialize(cursor, data, *s);
     }
-    if (auto s = dynamic_cast<const AnyU16StringValueType *>(&value_type)) {
+    if (auto s = dynamic_cast<const AnyU16StringValueType *>(value_type)) {
       return serialize(cursor, data, *s);
     }
-    if (auto s = dynamic_cast<const AnyStructValueType *>(&value_type)) {
+    if (auto s = dynamic_cast<const AnyStructValueType *>(value_type)) {
       return serialize(cursor, data, *s);
     }
     throw std::logic_error("Unhandled case");
   }
 
   void serialize_many(
-    CDRCursor * cursor, const UntypedSpan & span, size_t count, const AnyValueType & vt)
+    CDRCursor * cursor, const UntypedSpan & span, size_t count, const AnyValueType * vt)
   {
     // nothing to do; not even alignment
     if (count == 0) {return;}
 
-    size_t maybe_value_size = get_cdr_size_of_primitive(vt.type_kind());
-    size_t value_align = get_cdr_alignof_primitive(vt.type_kind());
+    size_t maybe_value_size = get_cdr_size_of_primitive(vt->type_kind());
+    size_t value_align = get_cdr_alignof_primitive(vt->type_kind());
     if (cursor->ignores_data() && maybe_value_size) {
       cursor->align(value_align);
       cursor->advance(count * maybe_value_size);
       return;
     }
-    if (is_value_type_trivially_serialized(vt)) {
+    if (is_value_type_trivially_serialized(*vt)) {
       cursor->align(value_align);
       cursor->put_bytes(span.data(), count * maybe_value_size);
       return;
     }
     for (size_t i = 0; i < count; i++) {
-      auto element = byte_offset(span.data(), i * vt.sizeof_type());
+      auto element = byte_offset(span.data(), i * vt->sizeof_type());
       serialize(cursor, element, vt);
     }
   }
@@ -326,19 +326,16 @@ protected:
   {
     for (size_t i = 0; i < struct_info.n_members(); i++) {
       auto member_info = struct_info.get_member(i);
-      auto p_member_info = member_info.get();
       auto value_type = member_info->get_value_type();
-      auto p_value_type = value_type.get();
-      if (auto c = dynamic_cast<const SingleValueMember *>(p_member_info)) {
-        serialize(cursor, c->get_member_data(struct_data), *p_value_type);
-      } else if (auto c = dynamic_cast<const ArrayValueMember *>(p_member_info)) {
-        serialize_many(cursor, c->array_contents(struct_data), c->array_size(), *p_value_type);
-      } else if (auto c = dynamic_cast<const SpanSequenceValueMember *>(p_member_info)) {
-        auto t = p_value_type->type_kind();
+      if (auto c = dynamic_cast<const SingleValueMember *>(member_info)) {
+        serialize(cursor, c->get_member_data(struct_data), value_type);
+      } else if (auto c = dynamic_cast<const ArrayValueMember *>(member_info)) {
+        serialize_many(cursor, c->array_contents(struct_data), c->array_size(), value_type);
+      } else if (auto c = dynamic_cast<const SpanSequenceValueMember *>(member_info)) {
         size_t count = c->sequence_size(struct_data);
         serialize_u32(cursor, count);
-        serialize_many(cursor, c->sequence_contents(struct_data), count, *p_value_type);
-      } else if (auto c = dynamic_cast<const ROSIDLCPP_BoolSequenceMember *>(p_member_info)) {
+        serialize_many(cursor, c->sequence_contents(struct_data), count, value_type);
+      } else if (auto c = dynamic_cast<const ROSIDLCPP_BoolSequenceMember *>(member_info)) {
         auto & v = c->get_bool_vector(struct_data);
         size_t count = v.size();
         serialize_u32(cursor, count);

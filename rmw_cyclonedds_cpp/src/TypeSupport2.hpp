@@ -231,7 +231,7 @@ enum class ROSIDL_TypeKind : uint8_t
 };
 
 class AnyStructValueType;
-std::unique_ptr<AnyStructValueType> from_rosidl(const rosidl_message_type_support_t * mts);
+const AnyStructValueType * from_rosidl(const rosidl_message_type_support_t * mts);
 
 class AnyMember;
 
@@ -250,7 +250,7 @@ public:
   size_t sizeof_type() const final {return sizeof_struct();}
   virtual size_t sizeof_struct() const = 0;
   virtual size_t n_members() const = 0;
-  virtual std::unique_ptr<AnyMember> get_member(size_t) const = 0;
+  virtual const AnyMember * get_member(size_t) const = 0;
 };
 
 struct PrimitiveValueType : public AnyValueType
@@ -313,7 +313,7 @@ class AnyMember
 public:
   virtual ~AnyMember() = default;
   virtual const void * get_member_data(const void * struct_data) const = 0;
-  virtual std::unique_ptr<AnyValueType> get_value_type() const = 0;
+  virtual const AnyValueType * get_value_type() const = 0;
 };
 
 class ROSIDLC_Member : public virtual AnyMember
@@ -321,14 +321,17 @@ class ROSIDLC_Member : public virtual AnyMember
 protected:
   const rosidl_typesupport_introspection_c__MessageMember impl;
   size_t next_member_offset;
+  std::unique_ptr<AnyValueType> m_value_type;
 
 public:
-  ROSIDLC_Member(decltype(impl) impl, size_t next_member_offset)
-  : impl(impl), next_member_offset(next_member_offset)
-  {
-  }
+  ROSIDLC_Member(const ROSIDLC_Member &) = delete;
 
-  std::unique_ptr<AnyValueType> get_value_type() const final;
+  ROSIDLC_Member(decltype(impl) impl, size_t next_member_offset);
+
+  const AnyValueType * get_value_type() const final
+  {
+    return m_value_type.get();
+  }
 
   const void * get_member_data(const void * struct_data) const final
   {
@@ -343,13 +346,17 @@ class ROSIDLCPP_Member : public virtual AnyMember
 protected:
   const rosidl_typesupport_introspection_cpp::MessageMember impl;
   size_t next_member_offset;
-  std::unique_ptr<AnyValueType> get_value_type() const final;
+  std::unique_ptr<AnyValueType> m_value_type;
 
 public:
-  ROSIDLCPP_Member(decltype(impl) impl, size_t next_member_offset)
-  : impl(impl), next_member_offset(next_member_offset)
+  ROSIDLCPP_Member(const ROSIDLCPP_Member &) = delete;
+
+  const AnyValueType * get_value_type() const final
   {
+    return m_value_type.get();
   }
+
+  ROSIDLCPP_Member(decltype(impl) impl, size_t next_member_offset);
 
   const void * get_member_data(const void * struct_data) const final
   {
@@ -357,6 +364,7 @@ public:
   }
   size_t sizeof_member_plus_padding() const {return next_member_offset - impl.offset_;}
 };
+
 
 class SingleValueMember : public virtual AnyMember
 {
@@ -486,6 +494,7 @@ public:
   }
 };
 
+
 class ROSIDLC_Member;
 class ROSIDLC_StructValueType;
 
@@ -531,6 +540,7 @@ class ROSIDLC_WStringValueType : public AnyU16StringValueType
 {
 public:
   using type = rosidl_generator_c__U16String;
+
   TypedSpan<const char_traits::char_type> data(const void * ptr) const override
   {
     auto str = static_cast<const type *>(ptr);
@@ -543,6 +553,7 @@ public:
   }
   size_t sizeof_type() const override {return sizeof(type);}
 };
+
 class ROSIDLCPP_StringValueType : public AnyU8StringValueType
 {
 public:
