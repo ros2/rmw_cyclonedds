@@ -401,6 +401,12 @@ class ROSIDLC_SequenceMember : public SpanSequenceValueMember, public ROSIDLC_Me
 {
 protected:
   using ROSIDLC_Member::get_member_data;
+  struct ROSIDLC_SequenceObject
+  {
+    void * data;
+    size_t size;     /*!< The number of valid items in data */
+    size_t capacity; /*!< The number of allocated items in data */
+  };
 
 public:
   using ROSIDLC_Member::get_value_type;
@@ -408,11 +414,21 @@ public:
 
   size_t sequence_size(const void * struct_data) const final
   {
-    return impl.size_function(get_member_data(struct_data));
+    if (impl.size_function) {
+      return impl.size_function(get_member_data(struct_data));
+    } else {
+      return static_cast<const ROSIDLC_SequenceObject *>(get_member_data(struct_data))->size;
+    }
   }
+
   UntypedSpan sequence_contents(const void * struct_data) const final
   {
-    auto data = impl.get_const_function(get_member_data(struct_data), 0);
+    const void * data;
+    if (impl.get_const_function) {
+      data = impl.get_const_function(get_member_data(struct_data), 0);
+    } else {
+      data = static_cast<const ROSIDLC_SequenceObject *>(get_member_data(struct_data))->data;
+    }
     return {data, sequence_size(struct_data) * get_value_type()->sizeof_type()};
   }
 };
