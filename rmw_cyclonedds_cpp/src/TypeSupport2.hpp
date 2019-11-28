@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#pragma once
 
 #include <cassert>
 #include <regex>
@@ -27,8 +28,6 @@
 #include "rosidl_typesupport_introspection_cpp/message_introspection.hpp"
 #include "rosidl_typesupport_introspection_cpp/service_introspection.hpp"
 
-#ifndef TYPESUPPORT2_HPP_
-#define TYPESUPPORT2_HPP_
 namespace rmw_cyclonedds_cpp
 {
 enum class TypeGenerator
@@ -37,8 +36,82 @@ enum class TypeGenerator
   ROSIDL_Cpp,
 };
 
+TypeGenerator identify_typesupport(const char * identifier);
+
 template<TypeGenerator>
 struct TypeGeneratorInfo;
+
+struct AnyValueType;
+
+/// contiguous storage objects
+template<typename T>
+class TypedSpan;
+class UntypedSpan;
+
+template<typename T>
+class TypedSpan
+{
+  const T * m_data;
+  const size_t m_size;
+
+public:
+  TypedSpan(const T * data, size_t size)
+  : m_data(data), m_size(size) {}
+
+  size_t size() const {return m_size;}
+  size_t size_bytes() const {return size() * sizeof(T);}
+  const T * data() const {return m_data;}
+
+  auto begin() {return m_data;}
+  auto end() {return m_data + size();}
+};
+
+class UntypedSpan
+{
+protected:
+  const void * m_data;
+  size_t m_size_bytes;
+
+public:
+  UntypedSpan(const void * data, size_t size_bytes)
+  : m_data(data), m_size_bytes(size_bytes) {}
+
+  template<typename T>
+  TypedSpan<T> cast() const
+  {
+    assert(m_size_bytes % sizeof(T) == 0);
+    return {static_cast<T *>(m_data), m_size_bytes / sizeof(T)};
+  }
+  size_t size_bytes() const {return m_size_bytes;}
+  const void * data() const {return m_data;}
+};
+
+class ChunkedIterator
+{
+protected:
+  void * m_data;
+  size_t m_size_bytes;
+
+public:
+  ChunkedIterator & operator++()
+  {
+    m_data = byte_offset(m_data, m_size_bytes);
+    return *this;
+  }
+  UntypedSpan operator*() const {return {m_data, m_size_bytes};}
+  bool operator==(const ChunkedIterator & other) const
+  {
+    assert(m_size_bytes == other.m_size_bytes);
+    return m_data == other.m_data;
+  }
+  bool operator!=(const ChunkedIterator & other) const {return !(*this == other);}
+};
+
+template<typename NativeType>
+auto make_typed_span(const NativeType * m_data, size_t size)
+{
+  return TypedSpan<NativeType>{m_data, size};
+}
 
 template<>
 struct TypeGeneratorInfo<TypeGenerator::ROSIDL_C>
@@ -134,7 +207,7 @@ using MetaService = typename TypeGeneratorInfo<g>::MetaService;
 namespace tsi_enum = rosidl_typesupport_introspection_cpp;
 
 // these are shared between c and cpp
-enum class ValueType : uint8_t
+enum class ROSIDL_TypeKind : uint8_t
 {
   FLOAT = tsi_enum::ROS_TYPE_FLOAT,
   DOUBLE = tsi_enum::ROS_TYPE_DOUBLE,
@@ -157,198 +230,332 @@ enum class ValueType : uint8_t
   MESSAGE = tsi_enum::ROS_TYPE_MESSAGE,
 };
 
+class AnyStructValueType;
+std::unique_ptr<AnyStructValueType> from_rosidl(const rosidl_message_type_support_t * mts);
+
+class AnyMember;
+
+struct AnyValueType
+{
+  // represents not just the IDL value but also its physical representation
+  virtual ~AnyValueType() = default;
+  virtual ROSIDL_TypeKind type_kind() const = 0;
+  virtual size_t sizeof_type() const = 0;
+};
+
+class AnyStructValueType : public AnyValueType
+{
+public:
+  ROSIDL_TypeKind type_kind() const final {return ROSIDL_TypeKind::MESSAGE;}
+  size_t sizeof_type() const final {return sizeof_struct();}
+  virtual size_t sizeof_struct() const = 0;
+  virtual size_t n_members() const = 0;
+  virtual std::unique_ptr<AnyMember> get_member(size_t) const = 0;
+};
+
+struct PrimitiveValueType : public AnyValueType
+{
+  const ROSIDL_TypeKind m_type_kind;
+
+  explicit PrimitiveValueType(ROSIDL_TypeKind value_type)
+  : m_type_kind(value_type)
+  {
+    assert(value_type != ROSIDL_TypeKind::STRING);
+    assert(value_type != ROSIDL_TypeKind::WSTRING);
+    assert(value_type != ROSIDL_TypeKind::MESSAGE);
+  }
+  ROSIDL_TypeKind type_kind() const final {return m_type_kind;}
+  size_t sizeof_type() const final
+  {
+    switch (m_type_kind) {
+      case ROSIDL_TypeKind::FLOAT:
+        return sizeof(float);
+      case ROSIDL_TypeKind::DOUBLE:
+        return sizeof(double);
+      case ROSIDL_TypeKind::LONG_DOUBLE:
+        return sizeof(long double);
+      case ROSIDL_TypeKind::CHAR:
+        return sizeof(char);
+      case ROSIDL_TypeKind::WCHAR:
+        return sizeof(char16_t);
+      case ROSIDL_TypeKind::BOOLEAN:
+        return sizeof(bool);
+      case ROSIDL_TypeKind::OCTET:
+        return sizeof(unsigned char);
+      case ROSIDL_TypeKind::UINT8:
+        return sizeof(uint_least8_t);
+      case ROSIDL_TypeKind::INT8:
+        return sizeof(int_least8_t);
+      case ROSIDL_TypeKind::UINT16:
+        return sizeof(uint_least16_t);
+      case ROSIDL_TypeKind::INT16:
+        return sizeof(int_least16_t);
+      case ROSIDL_TypeKind::UINT32:
+        return sizeof(uint_least32_t);
+      case ROSIDL_TypeKind::INT32:
+        return sizeof(int_least32_t);
+      case ROSIDL_TypeKind::UINT64:
+        return sizeof(uint_least64_t);
+      case ROSIDL_TypeKind::INT64:
+        return sizeof(int_least64_t);
+      case ROSIDL_TypeKind::STRING:
+      case ROSIDL_TypeKind::WSTRING:
+      case ROSIDL_TypeKind::MESSAGE:
+        throw std::runtime_error(
+                "not a primitive value type: " +
+                std::to_string(std::underlying_type_t<ROSIDL_TypeKind>(m_type_kind)));
+    }
+  }
+};
+
+class AnyMember
+{
+public:
+  virtual ~AnyMember() = default;
+  virtual const void * get_member_data(const void * message_data) const = 0;
+  virtual std::unique_ptr<AnyValueType> get_value_type() const = 0;
+};
+
+class ROSIDLC_Member : public virtual AnyMember
+{
+protected:
+  const rosidl_typesupport_introspection_c__MessageMember & impl;
+  size_t next_member_offset;
+
+public:
+  ROSIDLC_Member(decltype(impl) impl, size_t next_member_offset)
+  : impl(impl), next_member_offset(next_member_offset) {}
+
+  std::unique_ptr<AnyValueType> get_value_type() const final;
+
+  const void * get_member_data(const void * struct_data) const override
+  {
+    return byte_offset(struct_data, impl.offset_);
+  }
+
+  size_t sizeof_member_plus_padding() const {return next_member_offset - impl.offset_;}
+};
+
+class ROSIDLCPP_Member : public virtual AnyMember
+{
+protected:
+  const rosidl_typesupport_introspection_cpp::MessageMember & impl;
+  size_t next_member_offset;
+  std::unique_ptr<AnyValueType> get_value_type() const final;
+
+public:
+  ROSIDLCPP_Member(decltype(impl) impl, size_t next_member_offset)
+  : impl(impl), next_member_offset(next_member_offset) {}
+
+  const void * get_member_data(const void * struct_data) const
+  {
+    return byte_offset(struct_data, impl.offset_);
+  }
+  size_t sizeof_member_plus_padding() const {return next_member_offset - impl.offset_;}
+};
+
+class SingleValueMember : public virtual AnyMember
+{
+public:
+};
+
+class ArrayValueMember : public virtual AnyMember
+{
+public:
+  virtual size_t array_size() const = 0;
+  virtual UntypedSpan array_contents(const void * message_data) const = 0;
+};
+
+class SpanSequenceValueMember : public virtual AnyMember
+{
+public:
+  virtual size_t sequence_size(const void * message_data) const = 0;
+  virtual UntypedSpan sequence_contents(const void * message_data) const = 0;
+};
+
+class ROSIDLC_SingleValueMember : public virtual SingleValueMember, public ROSIDLC_Member
+{
+public:
+  using ROSIDLC_Member::get_member_data;
+  using ROSIDLC_Member::ROSIDLC_Member;
+};
+
+class ROSIDLC_ArrayMember : public ArrayValueMember, public ROSIDLC_Member
+{
+public:
+  using ROSIDLC_Member::get_member_data;
+  using ROSIDLC_Member::ROSIDLC_Member;
+
+  virtual size_t array_size() const {return impl.array_size_;}
+  virtual UntypedSpan array_contents(const void * message_data) const
+  {
+    return {get_member_data(message_data), array_size()};
+  }
+};
+
+class ROSIDLC_SequenceMember : public SpanSequenceValueMember, public ROSIDLC_Member
+{
+protected:
+  using ROSIDLC_Member::get_member_data;
+
+public:
+  using ROSIDLC_Member::get_value_type;
+  using ROSIDLC_Member::ROSIDLC_Member;
+
+  virtual size_t sequence_size(const void * message_data) const
+  {
+    return impl.size_function(get_member_data(message_data));
+  }
+  virtual UntypedSpan sequence_contents(const void * message_data) const
+  {
+    auto data = impl.get_const_function(get_member_data(message_data), 0);
+    return {data, sequence_size(message_data) * get_value_type()->sizeof_type()};
+  }
+};
+
+class ROSIDLCPP_SingleValueMember : public virtual SingleValueMember, public ROSIDLCPP_Member
+{
+public:
+  using ROSIDLCPP_Member::get_member_data;
+  using ROSIDLCPP_Member::ROSIDLCPP_Member;
+};
+
+class ROSIDLCPP_ArrayMember : public ArrayValueMember, public ROSIDLCPP_Member
+{
+public:
+  using ROSIDLCPP_Member::get_member_data;
+  using ROSIDLCPP_Member::ROSIDLCPP_Member;
+
+  virtual size_t array_size() const {return impl.array_size_;}
+  virtual UntypedSpan array_contents(const void * message_data) const
+  {
+    return {get_member_data(message_data), array_size()};
+  }
+};
+
+class ROSIDLCPP_SpanSequenceMember : public SpanSequenceValueMember, public ROSIDLCPP_Member
+{
+public:
+  using ROSIDLCPP_Member::get_member_data;
+  using ROSIDLCPP_Member::get_value_type;
+  using ROSIDLCPP_Member::ROSIDLCPP_Member;
+
+  virtual size_t sequence_size(const void * message_data) const override
+  {
+    return impl.size_function(get_member_data(message_data));
+  }
+  UntypedSpan sequence_contents(const void * message_data) const override
+  {
+    auto member_data = get_member_data(message_data);
+    auto size = impl.size_function(member_data);
+    auto data = impl.get_const_function(member_data, 0);
+    return {data, size * get_value_type()->sizeof_type()};
+  }
+};
+
+class ROSIDLCPP_BoolSequenceMember : public ROSIDLCPP_Member
+{
+public:
+  using ROSIDLCPP_Member::ROSIDLCPP_Member;
+
+  std::unique_ptr<AnyValueType> value_type;
+  size_t get_size(void * data) const {return static_cast<std::vector<bool> *>(data)->size();}
+  const std::vector<bool> & get_bool_vector(const void * struct_data) const
+  {
+    return *static_cast<const std::vector<bool> *>(get_member_data(struct_data));
+  }
+};
+
+class ROSIDLC_Member;
+class ROSIDLC_StructValueType;
+
 enum class MemberContainerType { Array, Sequence, SingleValue };
 
-template<typename UnaryFunction, typename Result = void>
-Result with_type(ValueType value_type, UnaryFunction f);
-
-template<TypeGenerator g>
-const MetaMessage<g> & cast_typesupport(const rosidl_message_type_support_t * untyped_typesupport)
+class AnyU8StringValueType : public AnyValueType
 {
-  if (untyped_typesupport->typesupport_identifier != get_identifier(g) &&
-    std::strcmp(untyped_typesupport->typesupport_identifier, get_identifier(g)) != 0)
-  {
-    throw std::runtime_error("unrecognized typesupport");
-  }
-  return *static_cast<const MetaMessage<g> *>(untyped_typesupport->data);
-}
-
-
-template<typename UnaryFunction>
-auto with_typesupport(const rosidl_service_type_support_t & untyped_typesupport, UnaryFunction f)
-{
-  const rosidl_service_type_support_t * ts;
-
-  {
-    using tgi = TypeGeneratorInfo<TypeGenerator::ROSIDL_C>;
-    if ((ts = get_service_typesupport_handle(&untyped_typesupport, tgi::identifier))) {
-      return f(*static_cast<const tgi::MetaService *>(ts->data));
-    }
-  }
-  {
-    using tgi = TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>;
-    if ((ts = get_service_typesupport_handle(&untyped_typesupport, tgi::identifier))) {
-      return f(*static_cast<const tgi::MetaService *>(ts->data));
-    }
-  }
-
-  throw std::runtime_error("typesupport not recognized");
-}
-
-//////////////////
-template<TypeGenerator g>
-struct MessageRef;
-
-template<TypeGenerator g>
-struct MemberRef;
-
-template<TypeGenerator g>
-struct MessageRef
-{
-  const MetaMessage<g> & meta_message;
-  const void * data;
-
-  using MetaMember = decltype(*meta_message.members_);
-
-  MessageRef(const MetaMessage<g> & meta_message, void * data)
-  : meta_message(meta_message), data(data)
-  {
-    assert(data);
-  }
-
-  MessageRef() = delete;
-
-  size_t size() const {return meta_message.member_count_;}
-
-  MemberRef<g> at(size_t index) const;
+public:
+  using char_traits = std::char_traits<char>;
+  ROSIDL_TypeKind type_kind() const final {return ROSIDL_TypeKind::STRING;}
+  virtual TypedSpan<char_traits::char_type> data(void *) const = 0;
+  virtual TypedSpan<const char_traits::char_type> data(const void *) const = 0;
 };
 
-template<TypeGenerator g>
-struct MemberRef
+class AnyU16StringValueType : public AnyValueType
 {
-  const MetaMember<g> & meta_member;
-  void * data;
-
-  MemberRef(const MetaMember<g> & meta_member, void * data)
-  : meta_member(meta_member), data(data)
-  {
-    assert(data);
-  }
-
-  MemberRef() = delete;
-
-  MemberContainerType get_container_type() const
-  {
-    if (!meta_member.is_array_) {
-      return MemberContainerType::SingleValue;
-    }
-    if (  // unbounded sequence
-      meta_member.array_size_ == 0 ||
-      // bounded sequence
-      meta_member.is_upper_bound_)
-    {
-      return MemberContainerType::Sequence;
-    }
-    return MemberContainerType::Array;
-  }
-
-  template<typename UnaryFunction, typename Result = void>
-  Result with_single_value(UnaryFunction f);
-
-  template<typename UnaryFunction, typename Result = void>
-  Result with_array(UnaryFunction f);
-
-  template<typename UnaryFunction, typename Result = void>
-  Result with_sequence(UnaryFunction f);
-
-  bool is_submessage_type() {return ValueType(meta_member.type_id_) == ValueType::MESSAGE;}
-
-  bool is_primitive_type()
-  {
-    switch (ValueType(meta_member.type_id_)) {
-      case ValueType::MESSAGE:
-      case ValueType::WSTRING:
-      case ValueType::WCHAR:
-        return false;
-      default:
-        return true;
-    }
-  }
-
-  template<typename UnaryFunction>
-  auto with_submessage_typesupport(UnaryFunction f)
-  {
-    assert(is_submessage_type());
-    assert(meta_member.members_);
-    with_typesupport(*meta_member.members_, f);
-  }
-
-protected:
-  template<typename UnaryFunction, typename Result = void>
-  Result with_value_helper(UnaryFunction f);
+public:
+  using char_traits = std::char_traits<char16_t>;
+  ROSIDL_TypeKind type_kind() const final {return ROSIDL_TypeKind::WSTRING;}
+  virtual TypedSpan<char_traits::char_type> data(void *) const = 0;
+  virtual TypedSpan<const char_traits::char_type> data(const void *) const = 0;
 };
 
-static auto make_message_ref(const MetaMessage<TypeGenerator::ROSIDL_C> & meta, void * data)
+struct ROSIDLC_StringValueType : public AnyU8StringValueType
 {
-  return MessageRef<TypeGenerator::ROSIDL_C>{meta, data};
-}
-static auto make_message_ref(const MetaMessage<TypeGenerator::ROSIDL_Cpp> & meta, void * data)
-{
-  return MessageRef<TypeGenerator::ROSIDL_Cpp>{meta, data};
-}
-static auto make_message_ref(const MetaMessage<TypeGenerator::ROSIDL_C> & meta, const void * data)
-{
-  using ConstMessageRef = const MessageRef<TypeGenerator::ROSIDL_C>;
-  return ConstMessageRef{meta, const_cast<void *>(data)};
-}
-static auto make_message_ref(const MetaMessage<TypeGenerator::ROSIDL_Cpp> & meta, const void * data)
-{
-  using ConstMessageRef = const MessageRef<TypeGenerator::ROSIDL_Cpp>;
-  return ConstMessageRef{meta, const_cast<void *>(data)};
-}
+public:
+  using type = rosidl_generator_c__String;
 
-template<TypeGenerator g>
-auto make_member_ref(const MetaMember<g> & meta, void * data)
-{
-  return MemberRef<g>(meta, data);
-}
-
-template<TypeGenerator g>
-auto make_member_ref(const MetaMember<g> & meta, const void * data)
-{
-  using T = const MemberRef<g>;
-  return T(meta, const_cast<void *>(data));
-}
-
-template<typename UnaryFunction>
-auto with_message(
-  const rosidl_message_type_support_t * type_support, const void * data, UnaryFunction f)
-{
-  return with_typesupport(type_support, [&](auto meta) {return f(make_message_ref(meta, data));});
-}
-
-template<TypeGenerator g>
-auto make_service_request_ref(const MetaService<g> & meta, const void * data)
-{
-  return make_message_ref(meta.request_members_, data);
-}
-
-template<TypeGenerator g>
-auto make_service_response_ref(const MetaService<g> & meta, const void * data)
-{
-  return make_message_ref(meta.response_members_, data);
-}
-
-template<TypeGenerator g>
-MemberRef<g> MessageRef<g>::at(size_t index) const
-{
-  if (index >= meta_message.member_count_) {
-    throw std::out_of_range("index out of range");
+  TypedSpan<const char_traits::char_type> data(const void * ptr) const override
+  {
+    auto str = static_cast<const type *>(ptr);
+    return {str->data, str->size};
   }
-  auto & member = meta_message.members_[index];
-  return MemberRef<g>(member, const_cast<void *>(byte_offset(data, member.offset_)));
-}
+  TypedSpan<char_traits::char_type> data(void * ptr) const override
+  {
+    auto str = static_cast<type *>(ptr);
+    return {str->data, str->size};
+  }
+  size_t sizeof_type() const override {return sizeof(type);}
+};
 
+class ROSIDLC_WStringValueType : public AnyU16StringValueType
+{
+public:
+  using type = rosidl_generator_c__U16String;
+  TypedSpan<const char_traits::char_type> data(const void * ptr) const override
+  {
+    auto str = static_cast<const type *>(ptr);
+    return {reinterpret_cast<const char_traits::char_type *>(str->data), str->size};
+  }
+  TypedSpan<char_traits::char_type> data(void * ptr) const override
+  {
+    auto str = static_cast<type *>(ptr);
+    return {reinterpret_cast<char_traits::char_type *>(str->data), str->size};
+  }
+  size_t sizeof_type() const override {return sizeof(type);}
+};
+class ROSIDLCPP_StringValueType : public AnyU8StringValueType
+{
+public:
+  using type = std::string;
+
+  TypedSpan<const char_traits::char_type> data(const void * ptr) const override
+  {
+    auto str = static_cast<const type *>(ptr);
+    return {str->data(), str->size()};
+  }
+  TypedSpan<char_traits::char_type> data(void * ptr) const override
+  {
+    auto str = static_cast<type *>(ptr);
+    return {str->data(), str->size()};
+  }
+  size_t sizeof_type() const override {return sizeof(type);}
+};
+
+class ROSIDLCPP_U16StringValueType : public AnyU16StringValueType
+{
+public:
+  using type = std::u16string;
+
+  TypedSpan<const char_traits::char_type> data(const void * ptr) const override
+  {
+    auto str = static_cast<const type *>(ptr);
+    return {str->data(), str->size()};
+  }
+  TypedSpan<char_traits::char_type> data(void * ptr) const override
+  {
+    auto str = static_cast<type *>(ptr);
+    return {str->data(), str->size()};
+  }
+  size_t sizeof_type() const override {return sizeof(type);}
+};
 }  // namespace rmw_cyclonedds_cpp
-#include "TypeSupport2_impl.hpp"
-#endif  // TYPESUPPORT2_HPP_

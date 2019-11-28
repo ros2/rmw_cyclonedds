@@ -28,13 +28,11 @@ constexpr endian native_endian() {return endian(DDSRT_ENDIAN);}
 
 enum class byte : unsigned char {};
 
-template<typename Ptr, size_t N = sizeof(decltype(*Ptr(nullptr)))>
-auto byte_offset(Ptr ptr, ptrdiff_t n)
+template<typename Ptr, std::enable_if_t<std::is_void<std::remove_pointer_t<Ptr>>::value, int> = 0>
+auto ptrdiff(Ptr ptr, ptrdiff_t n)
 {
-  if (n % N != 0) {
-    throw std::invalid_argument("offset is not a multiple of the pointed-to object size");
-  }
-  return ptr + n / N;
+  void * p = const_cast<void *>(ptr);
+  return static_cast<Ptr>(static_cast<byte *>(p) + n);
 }
 
 template<typename Ptr, std::enable_if_t<std::is_void<std::remove_pointer_t<Ptr>>::value, int> = 0>
