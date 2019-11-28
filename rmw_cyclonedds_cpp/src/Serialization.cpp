@@ -72,7 +72,11 @@ struct SizeCursor : CDRCursor
   void advance(size_t n_bytes) final {m_offset += n_bytes;}
   void put_bytes(const void *, size_t n_bytes) final {advance(n_bytes);}
   bool ignores_data() const final {return true;}
-  void rebase(ptrdiff_t relative_origin) override {m_offset += relative_origin;}
+  void rebase(ptrdiff_t relative_origin) override
+  {
+    // we're moving the *origin* so this has to change in the *opposite* direction
+    m_offset -= relative_origin;
+  }
 };
 
 struct DataCursor : public CDRCursor
@@ -111,44 +115,45 @@ public:
   : eversion{EncodingVersion::CDR_Legacy}, max_align{8} {}
 
   void serialize_top_level(
-    CDRCursor & cursor, const void * data, const AnyStructValueType & support)
+    CDRCursor * cursor, const void * data, const AnyStructValueType & support)
   {
     put_rtps_header(cursor);
 
     if (eversion == EncodingVersion::CDR_Legacy) {
-      cursor.rebase(-4);
+      cursor->rebase(+4);
     }
 
     if (support.n_members() == 0 && eversion == EncodingVersion::CDR_Legacy) {
       char dummy = '\0';
-      cursor.put_bytes(&dummy, 1);
+      cursor->put_bytes(&dummy, 1);
     } else {
       serialize(cursor, data, support);
     }
 
     if (eversion == EncodingVersion::CDR_Legacy) {
-      cursor.rebase(+4);
+      cursor->rebase(-4);
     }
   }
 
   void serialize_top_level(
-    CDRCursor & cursor, const cdds_request_wrapper_t & request, const AnyStructValueType & support)
+    CDRCursor * cursor, const cdds_request_wrapper_t & request, const AnyStructValueType & support)
   {
     put_rtps_header(cursor);
     if (eversion == EncodingVersion::CDR_Legacy) {
-      cursor.rebase(-4);
+      cursor->rebase(+4);
     }
-    cursor.put_bytes(&request.header.guid, sizeof(request.header.guid));
-    cursor.put_bytes(&request.header.seq, sizeof(request.header.seq));
+
+    cursor->put_bytes(&request.header.guid, sizeof(request.header.guid));
+    cursor->put_bytes(&request.header.seq, sizeof(request.header.seq));
     serialize(cursor, request.data, support);
 
     if (eversion == EncodingVersion::CDR_Legacy) {
-      cursor.rebase(+4);
+      cursor->rebase(-4);
     }
   }
 
 protected:
-  void put_rtps_header(CDRCursor & c)
+  void put_rtps_header(CDRCursor * cursor)
   {
     // beginning of message
     char eversion_byte;
@@ -165,14 +170,14 @@ protected:
       (native_endian() == endian::little) ? '\1' : '\0',
       // options
       '\0', '\0'};
-    c.put_bytes(rtps_header.data(), rtps_header.size());
+    cursor->put_bytes(rtps_header.data(), rtps_header.size());
   }
 
-  void serialize_u32(CDRCursor & cursor, size_t value)
+  void serialize_u32(CDRCursor * cursor, size_t value)
   {
     assert(value <= std::numeric_limits<uint32_t>::max());
-    cursor.align(4);
-    cursor.put_bytes(&value, 4);
+    cursor->align(std::min(size_t(4), max_align));
+    cursor->put_bytes(&value, 4);
   }
 
   static size_t get_cdr_size_of_primitive(ROSIDL_TypeKind tk)
@@ -238,41 +243,44 @@ protected:
     }
   }
 
-  void serialize(CDRCursor & cursor, const void * data, const PrimitiveValueType & value_type)
+  void serialize(CDRCursor * cursor, const void * data, const PrimitiveValueType & value_type)
   {
-    cursor.align(get_cdr_alignof_primitive(value_type.type_kind()));
+    size_t align = get_cdr_alignof_primitive(value_type.type_kind());
+    size_t n_bytes = get_cdr_size_of_primitive(value_type.type_kind());
+
+    cursor->align(align);
     // todo: correct for endianness if the serialized size is different than the in-memory size
-    cursor.put_bytes(data, get_cdr_size_of_primitive(value_type.type_kind()));
+    cursor->put_bytes(data, n_bytes);
   }
 
-  void serialize(CDRCursor & cursor, const void * data, const AnyU8StringValueType & value_type)
+  void serialize(CDRCursor * cursor, const void * data, const AnyU8StringValueType & value_type)
   {
     auto str = value_type.data(data);
     serialize_u32(cursor, str.size() + 1);
-    cursor.put_bytes(str.data(), str.size_bytes());
+    cursor->put_bytes(str.data(), str.size());
     char terminator = '\0';
-    cursor.put_bytes(&terminator, 1);
+    cursor->put_bytes(&terminator, 1);
   }
 
-  void serialize(CDRCursor & cursor, const void * data, const AnyU16StringValueType & value_type)
+  void serialize(CDRCursor * cursor, const void * data, const AnyU16StringValueType & value_type)
   {
     auto str = value_type.data(data);
     if (eversion == EncodingVersion::CDR_Legacy) {
       serialize_u32(cursor, str.size());
-      if (cursor.ignores_data()) {
-        cursor.advance(sizeof(wchar_t) * str.size());
+      if (cursor->ignores_data()) {
+        cursor->advance(sizeof(wchar_t) * str.size());
       } else {
         for (wchar_t c : str) {
-          cursor.put_bytes(&c, sizeof(wchar_t));
+          cursor->put_bytes(&c, sizeof(wchar_t));
         }
       }
     } else {
       serialize_u32(cursor, str.size_bytes());
-      cursor.put_bytes(str.data(), str.size_bytes());
+      cursor->put_bytes(str.data(), str.size_bytes());
     }
   }
 
-  void serialize(CDRCursor & cursor, const void * data, const AnyValueType & value_type)
+  void serialize(CDRCursor * cursor, const void * data, const AnyValueType & value_type)
   {
     if (auto s = dynamic_cast<const PrimitiveValueType *>(&value_type)) {
       return serialize(cursor, data, *s);
@@ -290,57 +298,59 @@ protected:
   }
 
   void serialize_many(
-    CDRCursor & cursor, const UntypedSpan & span, size_t count, const AnyValueType & vt)
+    CDRCursor * cursor, const UntypedSpan & span, size_t count, const AnyValueType & vt)
   {
+    // nothing to do; not even alignment
+    if (count == 0) {return;}
+
     size_t maybe_value_size = get_cdr_size_of_primitive(vt.type_kind());
-    if (cursor.ignores_data() && maybe_value_size) {
-      cursor.align(get_cdr_alignof_primitive(vt.type_kind()));
-      cursor.advance(count * maybe_value_size);
+    size_t value_align = get_cdr_alignof_primitive(vt.type_kind());
+    if (cursor->ignores_data() && maybe_value_size) {
+      cursor->align(value_align);
+      cursor->advance(count * maybe_value_size);
       return;
     }
     if (is_value_type_trivially_serialized(vt)) {
-      cursor.align(get_cdr_alignof_primitive(vt.type_kind()));
-      cursor.put_bytes(span.data(), span.size_bytes());
+      cursor->align(value_align);
+      cursor->put_bytes(span.data(), count * maybe_value_size);
       return;
     }
-    // slow fallback:
     for (size_t i = 0; i < count; i++) {
-      serialize(cursor, byte_offset(span.data(), i * vt.sizeof_type()), vt);
+      auto element = byte_offset(span.data(), i * vt.sizeof_type());
+      serialize(cursor, element, vt);
     }
-    return;
   }
 
   void serialize(
-    CDRCursor & cursor, const void * struct_data, const AnyStructValueType & struct_info)
+    CDRCursor * cursor, const void * struct_data, const AnyStructValueType & struct_info)
   {
     for (size_t i = 0; i < struct_info.n_members(); i++) {
       auto member_info = struct_info.get_member(i);
       auto p_member_info = member_info.get();
       auto value_type = member_info->get_value_type();
+      auto p_value_type = value_type.get();
       if (auto c = dynamic_cast<const SingleValueMember *>(p_member_info)) {
-        serialize(cursor, c->get_member_data(struct_data), *value_type);
-        return;
+        serialize(cursor, c->get_member_data(struct_data), *p_value_type);
       } else if (auto c = dynamic_cast<const ArrayValueMember *>(p_member_info)) {
-        serialize_many(cursor, c->array_contents(struct_data), c->array_size(), *value_type);
-        return;
+        serialize_many(cursor, c->array_contents(struct_data), c->array_size(), *p_value_type);
       } else if (auto c = dynamic_cast<const SpanSequenceValueMember *>(p_member_info)) {
-        serialize_u32(cursor, c->sequence_size(struct_data));
-        serialize_many(
-          cursor, c->sequence_contents(struct_data), c->sequence_size(struct_data), *value_type);
-        return;
+        auto t = p_value_type->type_kind();
+        size_t count = c->sequence_size(struct_data);
+        serialize_u32(cursor, count);
+        serialize_many(cursor, c->sequence_contents(struct_data), count, *p_value_type);
       } else if (auto c = dynamic_cast<const ROSIDLCPP_BoolSequenceMember *>(p_member_info)) {
         auto & v = c->get_bool_vector(struct_data);
         size_t count = v.size();
-        size_t prim_size = get_cdr_size_of_primitive(c->value_type->type_kind());
-        serialize_u32(cursor, v.size());
-        if (cursor.ignores_data() && prim_size) {
-          cursor.advance(count * prim_size);
-          return;
+        serialize_u32(cursor, count);
+        if (cursor->ignores_data()) {
+          cursor->advance(count);
+        } else {
+          for (bool b : c->get_bool_vector(struct_data)) {
+            cursor->put_bytes(&b, 1);
+          }
         }
-        for (uint8_t b : c->get_bool_vector(struct_data)) {
-          cursor.put_bytes(&b, 1);
-          return;
-        }
+      } else {
+        throw std::logic_error("unrecognized member");
       }
     }
   }
@@ -350,7 +360,7 @@ void serialize(
   void * dest, size_t dest_size, const void * data, const rosidl_message_type_support_t & ts)
 {
   DataCursor cursor(dest);
-  CDRWriter().serialize_top_level(cursor, data, *from_rosidl(&ts));
+  CDRWriter().serialize_top_level(&cursor, data, *from_rosidl(&ts));
   auto o = cursor.offset();
   assert(o == dest_size);
 }
@@ -358,7 +368,7 @@ void serialize(
 size_t get_serialized_size(const void * data, const rosidl_message_type_support_t & ts)
 {
   SizeCursor cursor;
-  CDRWriter().serialize_top_level(cursor, data, *from_rosidl(&ts));
+  CDRWriter().serialize_top_level(&cursor, data, *from_rosidl(&ts));
   return cursor.offset();
 }
 
@@ -366,7 +376,7 @@ size_t get_serialized_size(
   const cdds_request_wrapper_t & request, const rosidl_message_type_support_t & ts)
 {
   SizeCursor cursor;
-  CDRWriter().serialize_top_level(cursor, request, *from_rosidl(&ts));
+  CDRWriter().serialize_top_level(&cursor, request, *from_rosidl(&ts));
   return cursor.offset();
 }
 
@@ -375,7 +385,7 @@ void serialize(
   const rosidl_message_type_support_t & ts)
 {
   DataCursor cursor(dest);
-  CDRWriter().serialize_top_level(cursor, request, *from_rosidl(&ts));
+  CDRWriter().serialize_top_level(&cursor, request, *from_rosidl(&ts));
   assert(cursor.offset() == dest_size);
 }
 }  // namespace rmw_cyclonedds_cpp

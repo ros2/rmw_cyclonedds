@@ -41,8 +41,6 @@ void serialize(
   void * dest, size_t dest_size,
   const cdds_request_wrapper_t & request,
   const rosidl_message_type_support_t & ts);
-
-
 }  // namespace rmw_cyclonedds_cpp
 
 #endif  // SERIALIZATION_HPP_

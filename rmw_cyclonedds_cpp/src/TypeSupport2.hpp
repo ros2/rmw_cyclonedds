@@ -257,12 +257,12 @@ struct PrimitiveValueType : public AnyValueType
 {
   const ROSIDL_TypeKind m_type_kind;
 
-  explicit PrimitiveValueType(ROSIDL_TypeKind value_type)
-  : m_type_kind(value_type)
+  explicit PrimitiveValueType(ROSIDL_TypeKind type_kind)
+  : m_type_kind(type_kind)
   {
-    assert(value_type != ROSIDL_TypeKind::STRING);
-    assert(value_type != ROSIDL_TypeKind::WSTRING);
-    assert(value_type != ROSIDL_TypeKind::MESSAGE);
+    assert(type_kind != ROSIDL_TypeKind::STRING);
+    assert(type_kind != ROSIDL_TypeKind::WSTRING);
+    assert(type_kind != ROSIDL_TypeKind::MESSAGE);
   }
   ROSIDL_TypeKind type_kind() const final {return m_type_kind;}
   size_t sizeof_type() const final
@@ -312,23 +312,25 @@ class AnyMember
 {
 public:
   virtual ~AnyMember() = default;
-  virtual const void * get_member_data(const void * message_data) const = 0;
+  virtual const void * get_member_data(const void * struct_data) const = 0;
   virtual std::unique_ptr<AnyValueType> get_value_type() const = 0;
 };
 
 class ROSIDLC_Member : public virtual AnyMember
 {
 protected:
-  const rosidl_typesupport_introspection_c__MessageMember & impl;
+  const rosidl_typesupport_introspection_c__MessageMember impl;
   size_t next_member_offset;
 
 public:
   ROSIDLC_Member(decltype(impl) impl, size_t next_member_offset)
-  : impl(impl), next_member_offset(next_member_offset) {}
+  : impl(impl), next_member_offset(next_member_offset)
+  {
+  }
 
   std::unique_ptr<AnyValueType> get_value_type() const final;
 
-  const void * get_member_data(const void * struct_data) const override
+  const void * get_member_data(const void * struct_data) const final
   {
     return byte_offset(struct_data, impl.offset_);
   }
@@ -339,15 +341,17 @@ public:
 class ROSIDLCPP_Member : public virtual AnyMember
 {
 protected:
-  const rosidl_typesupport_introspection_cpp::MessageMember & impl;
+  const rosidl_typesupport_introspection_cpp::MessageMember impl;
   size_t next_member_offset;
   std::unique_ptr<AnyValueType> get_value_type() const final;
 
 public:
   ROSIDLCPP_Member(decltype(impl) impl, size_t next_member_offset)
-  : impl(impl), next_member_offset(next_member_offset) {}
+  : impl(impl), next_member_offset(next_member_offset)
+  {
+  }
 
-  const void * get_member_data(const void * struct_data) const
+  const void * get_member_data(const void * struct_data) const final
   {
     return byte_offset(struct_data, impl.offset_);
   }
@@ -363,14 +367,14 @@ class ArrayValueMember : public virtual AnyMember
 {
 public:
   virtual size_t array_size() const = 0;
-  virtual UntypedSpan array_contents(const void * message_data) const = 0;
+  virtual UntypedSpan array_contents(const void * struct_data) const = 0;
 };
 
 class SpanSequenceValueMember : public virtual AnyMember
 {
 public:
-  virtual size_t sequence_size(const void * message_data) const = 0;
-  virtual UntypedSpan sequence_contents(const void * message_data) const = 0;
+  virtual size_t sequence_size(const void * struct_data) const = 0;
+  virtual UntypedSpan sequence_contents(const void * struct_data) const = 0;
 };
 
 class ROSIDLC_SingleValueMember : public virtual SingleValueMember, public ROSIDLC_Member
@@ -386,10 +390,10 @@ public:
   using ROSIDLC_Member::get_member_data;
   using ROSIDLC_Member::ROSIDLC_Member;
 
-  virtual size_t array_size() const {return impl.array_size_;}
-  virtual UntypedSpan array_contents(const void * message_data) const
+  size_t array_size() const final {return impl.array_size_;}
+  UntypedSpan array_contents(const void * struct_data) const final
   {
-    return {get_member_data(message_data), array_size()};
+    return {get_member_data(struct_data), array_size() * get_value_type()->sizeof_type()};
   }
 };
 
@@ -402,14 +406,14 @@ public:
   using ROSIDLC_Member::get_value_type;
   using ROSIDLC_Member::ROSIDLC_Member;
 
-  virtual size_t sequence_size(const void * message_data) const
+  size_t sequence_size(const void * struct_data) const final
   {
-    return impl.size_function(get_member_data(message_data));
+    return impl.size_function(get_member_data(struct_data));
   }
-  virtual UntypedSpan sequence_contents(const void * message_data) const
+  UntypedSpan sequence_contents(const void * struct_data) const final
   {
-    auto data = impl.get_const_function(get_member_data(message_data), 0);
-    return {data, sequence_size(message_data) * get_value_type()->sizeof_type()};
+    auto data = impl.get_const_function(get_member_data(struct_data), 0);
+    return {data, sequence_size(struct_data) * get_value_type()->sizeof_type()};
   }
 };
 
@@ -426,10 +430,10 @@ public:
   using ROSIDLCPP_Member::get_member_data;
   using ROSIDLCPP_Member::ROSIDLCPP_Member;
 
-  virtual size_t array_size() const {return impl.array_size_;}
-  virtual UntypedSpan array_contents(const void * message_data) const
+  size_t array_size() const final {return impl.array_size_;}
+  UntypedSpan array_contents(const void * struct_data) const final
   {
-    return {get_member_data(message_data), array_size()};
+    return {get_member_data(struct_data), array_size() * get_value_type()->sizeof_type()};
   }
 };
 
@@ -440,13 +444,13 @@ public:
   using ROSIDLCPP_Member::get_value_type;
   using ROSIDLCPP_Member::ROSIDLCPP_Member;
 
-  virtual size_t sequence_size(const void * message_data) const override
+  size_t sequence_size(const void * struct_data) const final
   {
-    return impl.size_function(get_member_data(message_data));
+    return impl.size_function(get_member_data(struct_data));
   }
-  UntypedSpan sequence_contents(const void * message_data) const override
+  UntypedSpan sequence_contents(const void * struct_data) const final
   {
-    auto member_data = get_member_data(message_data);
+    auto member_data = get_member_data(struct_data);
     auto size = impl.size_function(member_data);
     auto data = impl.get_const_function(member_data, 0);
     return {data, size * get_value_type()->sizeof_type()};

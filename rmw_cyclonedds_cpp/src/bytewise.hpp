@@ -28,18 +28,14 @@ constexpr endian native_endian() {return endian(DDSRT_ENDIAN);}
 
 enum class byte : unsigned char {};
 
-template<typename Ptr, std::enable_if_t<std::is_void<std::remove_pointer_t<Ptr>>::value, int> = 0>
-auto ptrdiff(Ptr ptr, ptrdiff_t n)
+static auto byte_offset(void * ptr, ptrdiff_t n)
 {
-  void * p = const_cast<void *>(ptr);
-  return static_cast<Ptr>(static_cast<byte *>(p) + n);
+  return static_cast<void *>(static_cast<byte *>(ptr) + n);
 }
 
-template<typename Ptr, std::enable_if_t<std::is_void<std::remove_pointer_t<Ptr>>::value, int> = 0>
-auto byte_offset(Ptr ptr, ptrdiff_t n)
+static auto byte_offset(const void * ptr, ptrdiff_t n)
 {
-  void * p = const_cast<void *>(ptr);
-  return static_cast<Ptr>(static_cast<byte *>(p) + n);
+  return static_cast<const void *>(static_cast<const byte *>(ptr) + n);
 }
 
 #endif  // BYTEWISE_HPP_
