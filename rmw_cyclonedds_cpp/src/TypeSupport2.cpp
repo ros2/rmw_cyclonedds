@@ -15,6 +15,7 @@
 
 #include <unordered_map>
 #include <utility>
+
 namespace rmw_cyclonedds_cpp
 {
 static std::unordered_map<
@@ -26,6 +27,14 @@ class ROSIDLC_StructValueType : public AnyStructValueType
   const rosidl_typesupport_introspection_c__MessageMembers impl;
   std::vector<Member> m_members;
   std::vector<std::unique_ptr<AnyValueType>> m_inner_value_types;
+  template<typename ConstructedType, typename ... Args>
+  ConstructedType * make_value_type(Args &&... args)
+  {
+    auto unique_ptr = std::make_unique<ConstructedType>(std::forward<Args>(args)...);
+    auto ptr = unique_ptr.get();
+    m_inner_value_types.push_back(std::move(unique_ptr));
+    return ptr;
+  }
 
 public:
   static constexpr TypeGenerator gen = TypeGenerator::ROSIDL_C;
@@ -40,6 +49,14 @@ class ROSIDLCPP_StructValueType : public AnyStructValueType
   const rosidl_typesupport_introspection_cpp::MessageMembers impl;
   std::vector<Member> m_members;
   std::vector<std::unique_ptr<AnyValueType>> m_inner_value_types;
+  template<typename ConstructedType, typename ... Args>
+  ConstructedType * make_value_type(Args &&... args)
+  {
+    auto unique_ptr = std::make_unique<ConstructedType>(std::forward<Args>(args)...);
+    auto ptr = unique_ptr.get();
+    m_inner_value_types.push_back(std::move(unique_ptr));
+    return ptr;
+  }
 
 public:
   static constexpr TypeGenerator gen = TypeGenerator::ROSIDL_Cpp;
@@ -115,37 +132,33 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(decltype(impl) impl)
 
     const AnyValueType * element_value_type;
     switch (ROSIDL_TypeKind(member_impl.type_id_)) {
-      case ROSIDL_TypeKind::STRING:
-        m_inner_value_types.emplace_back(std::make_unique<ROSIDLC_StringValueType>());
-        element_value_type = m_inner_value_types.back().get();
-        break;
-      case ROSIDL_TypeKind::WSTRING:
-        m_inner_value_types.emplace_back(std::make_unique<ROSIDLC_WStringValueType>());
-        element_value_type = m_inner_value_types.back().get();
-        break;
-      default:
-        m_inner_value_types.emplace_back(
-          std::make_unique<PrimitiveValueType>(ROSIDL_TypeKind(member_impl.type_id_)));
-        element_value_type = m_inner_value_types.back().get();
-        break;
       case ROSIDL_TypeKind::MESSAGE:
         element_value_type = from_rosidl(member_impl.members_);
         break;
+      case ROSIDL_TypeKind::STRING: {
+          element_value_type = make_value_type<ROSIDLC_StringValueType>();
+        } break;
+      case ROSIDL_TypeKind::WSTRING: {
+          element_value_type = make_value_type<ROSIDLC_WStringValueType>();
+        } break;
+      default: {
+          element_value_type =
+            make_value_type<PrimitiveValueType>(ROSIDL_TypeKind(member_impl.type_id_));
+        } break;
     }
+
     const AnyValueType * member_value_type;
     if (!member_impl.is_array_) {
       member_value_type = element_value_type;
     } else if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
-      m_inner_value_types.emplace_back(
-        std::make_unique<ArrayValueType>(element_value_type, member_impl.array_size_));
-      member_value_type = m_inner_value_types.back().get();
+      member_value_type = make_value_type<ArrayValueType>(element_value_type,
+          member_impl.array_size_);
     } else if (member_impl.size_function) {
-      m_inner_value_types.emplace_back(std::make_unique<CallbackSpanSequenceValueType>(
-          element_value_type, member_impl.size_function, member_impl.get_const_function));
-      member_value_type = m_inner_value_types.back().get();
+      member_value_type = make_value_type<CallbackSpanSequenceValueType>(element_value_type,
+          member_impl.size_function,
+          member_impl.get_const_function);
     } else {
-      m_inner_value_types.emplace_back(
-        std::make_unique<ROSIDLC_SpanSequenceValueType>(element_value_type));
+      member_value_type = make_value_type<ROSIDLC_SpanSequenceValueType>(element_value_type);
     }
     auto a_member = Member{
       member_impl.name_,
@@ -179,17 +192,14 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(decltype(impl) impl)
     const AnyValueType * element_value_type;
     switch (ROSIDL_TypeKind(member_impl.type_id_)) {
       case ROSIDL_TypeKind::STRING:
-        m_inner_value_types.emplace_back(std::make_unique<ROSIDLCPP_StringValueType>());
-        element_value_type = m_inner_value_types.back().get();
+        element_value_type = make_value_type<ROSIDLCPP_StringValueType>();
         break;
       case ROSIDL_TypeKind::WSTRING:
-        m_inner_value_types.emplace_back(std::make_unique<ROSIDLCPP_U16StringValueType>());
-        element_value_type = m_inner_value_types.back().get();
+        element_value_type = make_value_type<ROSIDLCPP_U16StringValueType>();
         break;
       default:
-        m_inner_value_types.emplace_back(
-          std::make_unique<PrimitiveValueType>(ROSIDL_TypeKind(member_impl.type_id_)));
-        element_value_type = m_inner_value_types.back().get();
+        element_value_type =
+          make_value_type<PrimitiveValueType>(ROSIDL_TypeKind(member_impl.type_id_));
         break;
       case ROSIDL_TypeKind::MESSAGE:
         element_value_type = from_rosidl(member_impl.members_);
@@ -199,16 +209,13 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(decltype(impl) impl)
     if (!member_impl.is_array_) {
       a_member.value_type = element_value_type;
     } else if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
-      m_inner_value_types.emplace_back(
-        std::make_unique<ArrayValueType>(element_value_type, member_impl.array_size_));
-      a_member.value_type = m_inner_value_types.back().get();
+      a_member.value_type = make_value_type<ArrayValueType>(element_value_type,
+          member_impl.array_size_);
     } else if (ROSIDL_TypeKind(member_impl.type_id_) == ROSIDL_TypeKind::BOOLEAN) {
-      m_inner_value_types.emplace_back(std::make_unique<BoolVectorValueType>());
-      a_member.value_type = m_inner_value_types.back().get();
+      a_member.value_type = make_value_type<BoolVectorValueType>();
     } else {
-      m_inner_value_types.emplace_back(std::make_unique<CallbackSpanSequenceValueType>(
-          element_value_type, member_impl.size_function, member_impl.get_const_function));
-      a_member.value_type = m_inner_value_types.back().get();
+      a_member.value_type = make_value_type<CallbackSpanSequenceValueType>(
+        element_value_type, member_impl.size_function, member_impl.get_const_function);
     }
     m_members.push_back(a_member);
   }
