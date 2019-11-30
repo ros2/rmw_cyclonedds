@@ -233,38 +233,141 @@ enum class ROSIDL_TypeKind : uint8_t
 class AnyStructValueType;
 const AnyStructValueType * from_rosidl(const rosidl_message_type_support_t * mts);
 
-class AnyMember;
-
 struct AnyValueType
 {
   // represents not just the IDL value but also its physical representation
+
   virtual ~AnyValueType() = default;
-  virtual ROSIDL_TypeKind type_kind() const = 0;
   virtual size_t sizeof_type() const = 0;
+};
+
+struct Member
+{
+  const char * name;
+  const AnyValueType * value_type;
+  size_t member_offset;
+  size_t next_member_offset;
+
+  const void * get_member_data(const void * ptr_to_struct)
+  {
+    return byte_offset(ptr_to_struct, member_offset);
+  }
 };
 
 class AnyStructValueType : public AnyValueType
 {
 public:
-  ROSIDL_TypeKind type_kind() const final {return ROSIDL_TypeKind::MESSAGE;}
+  ROSIDL_TypeKind type_kind() const {return ROSIDL_TypeKind::MESSAGE;}
   size_t sizeof_type() const final {return sizeof_struct();}
   virtual size_t sizeof_struct() const = 0;
   virtual size_t n_members() const = 0;
-  virtual const AnyMember * get_member(size_t) const = 0;
+  virtual const Member * get_member(size_t) const = 0;
+};
+
+class ArrayValueType : public AnyValueType
+{
+protected:
+  const AnyValueType * m_element_value_type;
+  size_t m_size;
+
+public:
+  ArrayValueType(const AnyValueType * element_value_type, size_t size)
+  : m_element_value_type(element_value_type), m_size(size)
+  {
+  }
+  const AnyValueType * element_value_type() const {return m_element_value_type;}
+  size_t sizeof_type() const final {return m_size * m_element_value_type->sizeof_type();}
+  size_t array_size() const {return m_size;}
+  const void * get_data(const void * ptr_to_array) const {return ptr_to_array;}
+};
+
+class SpanSequenceValueType : public AnyValueType
+{
+public:
+  using AnyValueType::sizeof_type;
+  virtual const AnyValueType * element_value_type() const = 0;
+  virtual size_t sequence_size(const void * ptr_to_sequence) const = 0;
+  virtual const void * sequence_contents(const void * ptr_to_sequence) const = 0;
+};
+
+class CallbackSpanSequenceValueType : public SpanSequenceValueType
+{
+protected:
+  const AnyValueType * m_element_value_type;
+  std::function<size_t(const void *)> m_size_function;
+  std::function<const void * (const void *, size_t index)> m_get_const_function;
+
+public:
+  CallbackSpanSequenceValueType(
+    const AnyValueType * element_value_type, decltype(m_size_function) size_function,
+    decltype(m_get_const_function) get_const_function)
+  : m_element_value_type(element_value_type),
+    m_size_function(size_function),
+    m_get_const_function(get_const_function)
+  {
+    assert(m_element_value_type);
+    assert(size_function);
+    assert(get_const_function);
+  }
+
+  size_t sizeof_type() const override {throw std::logic_error("not implemented");}
+  const AnyValueType * element_value_type() const override {return m_element_value_type;}
+  size_t sequence_size(const void * ptr_to_sequence) const override
+  {
+    return m_size_function(ptr_to_sequence);
+  }
+  const void * sequence_contents(const void * ptr_to_sequence) const override
+  {
+    return m_get_const_function(ptr_to_sequence, 0);
+  }
+};
+
+class ROSIDLC_SpanSequenceValueType : public SpanSequenceValueType
+{
+protected:
+  const AnyValueType * m_element_value_type;
+  struct ROSIDLC_SequenceObject
+  {
+    void * data;
+    size_t size;     /*!< The number of valid items in data */
+    size_t capacity; /*!< The number of allocated items in data */
+  };
+
+  const ROSIDLC_SequenceObject * get_value(const void * ptr_to_sequence) const
+  {
+    return static_cast<const ROSIDLC_SequenceObject *>(ptr_to_sequence);
+  }
+
+public:
+  ROSIDLC_SpanSequenceValueType(const AnyValueType * element_value_type)
+  : m_element_value_type(element_value_type)
+  {
+  }
+
+  size_t sizeof_type() const override {return sizeof(ROSIDLC_SequenceObject);}
+  const AnyValueType * element_value_type() const override {return m_element_value_type;}
+  size_t sequence_size(const void * ptr_to_sequence) const override
+  {
+    return get_value(ptr_to_sequence)->size;
+  }
+  const void * sequence_contents(const void * ptr_to_sequence) const final
+  {
+    return get_value(ptr_to_sequence)->data;
+  }
 };
 
 struct PrimitiveValueType : public AnyValueType
 {
   const ROSIDL_TypeKind m_type_kind;
 
-  explicit PrimitiveValueType(ROSIDL_TypeKind type_kind)
+  explicit constexpr PrimitiveValueType(ROSIDL_TypeKind type_kind)
   : m_type_kind(type_kind)
   {
     assert(type_kind != ROSIDL_TypeKind::STRING);
     assert(type_kind != ROSIDL_TypeKind::WSTRING);
     assert(type_kind != ROSIDL_TypeKind::MESSAGE);
   }
-  ROSIDL_TypeKind type_kind() const final {return m_type_kind;}
+  ROSIDL_TypeKind type_kind() const {return m_type_kind;}
   size_t sizeof_type() const final
   {
     switch (m_type_kind) {
@@ -308,203 +411,45 @@ struct PrimitiveValueType : public AnyValueType
   }
 };
 
-class AnyMember
-{
-public:
-  virtual ~AnyMember() = default;
-  virtual const void * get_member_data(const void * struct_data) const = 0;
-  virtual const AnyValueType * get_value_type() const = 0;
-};
-
-class ROSIDLC_Member : public virtual AnyMember
+class BoolVectorValueType : public AnyValueType
 {
 protected:
-  const rosidl_typesupport_introspection_c__MessageMember impl;
-  size_t next_member_offset;
-  std::unique_ptr<AnyValueType> m_value_type;
-
-public:
-  ROSIDLC_Member(const ROSIDLC_Member &) = delete;
-
-  ROSIDLC_Member(decltype(impl) impl, size_t next_member_offset);
-
-  const AnyValueType * get_value_type() const final
+  const std::vector<bool> * get_value(const void * ptr_to_sequence) const
   {
-    return m_value_type.get();
+    return static_cast<const std::vector<bool> *>(ptr_to_sequence);
   }
 
-  const void * get_member_data(const void * struct_data) const final
+  static std::unique_ptr<PrimitiveValueType> s_element_value_type;
+
+public:
+  size_t sizeof_type() const override {return sizeof(std::vector<bool>);}
+
+  static const AnyValueType * element_value_type()
   {
-    return byte_offset(struct_data, impl.offset_);
-  }
-
-  size_t sizeof_member_plus_padding() const {return next_member_offset - impl.offset_;}
-};
-
-class ROSIDLCPP_Member : public virtual AnyMember
-{
-protected:
-  const rosidl_typesupport_introspection_cpp::MessageMember impl;
-  size_t next_member_offset;
-  std::unique_ptr<AnyValueType> m_value_type;
-
-public:
-  ROSIDLCPP_Member(const ROSIDLCPP_Member &) = delete;
-
-  const AnyValueType * get_value_type() const final
-  {
-    return m_value_type.get();
-  }
-
-  ROSIDLCPP_Member(decltype(impl) impl, size_t next_member_offset);
-
-  const void * get_member_data(const void * struct_data) const final
-  {
-    return byte_offset(struct_data, impl.offset_);
-  }
-  size_t sizeof_member_plus_padding() const {return next_member_offset - impl.offset_;}
-};
-
-
-class SingleValueMember : public virtual AnyMember
-{
-public:
-};
-
-class ArrayValueMember : public virtual AnyMember
-{
-public:
-  virtual size_t array_size() const = 0;
-  virtual UntypedSpan array_contents(const void * struct_data) const = 0;
-};
-
-class SpanSequenceValueMember : public virtual AnyMember
-{
-public:
-  virtual size_t sequence_size(const void * struct_data) const = 0;
-  virtual UntypedSpan sequence_contents(const void * struct_data) const = 0;
-};
-
-class ROSIDLC_SingleValueMember : public virtual SingleValueMember, public ROSIDLC_Member
-{
-public:
-  using ROSIDLC_Member::get_member_data;
-  using ROSIDLC_Member::ROSIDLC_Member;
-};
-
-class ROSIDLC_ArrayMember : public ArrayValueMember, public ROSIDLC_Member
-{
-public:
-  using ROSIDLC_Member::get_member_data;
-  using ROSIDLC_Member::ROSIDLC_Member;
-
-  size_t array_size() const final {return impl.array_size_;}
-  UntypedSpan array_contents(const void * struct_data) const final
-  {
-    return {get_member_data(struct_data), array_size() * get_value_type()->sizeof_type()};
-  }
-};
-
-class ROSIDLC_SequenceMember : public SpanSequenceValueMember, public ROSIDLC_Member
-{
-protected:
-  using ROSIDLC_Member::get_member_data;
-  struct ROSIDLC_SequenceObject
-  {
-    void * data;
-    size_t size;     /*!< The number of valid items in data */
-    size_t capacity; /*!< The number of allocated items in data */
-  };
-
-public:
-  using ROSIDLC_Member::get_value_type;
-  using ROSIDLC_Member::ROSIDLC_Member;
-
-  size_t sequence_size(const void * struct_data) const final
-  {
-    if (impl.size_function) {
-      return impl.size_function(get_member_data(struct_data));
-    } else {
-      return static_cast<const ROSIDLC_SequenceObject *>(get_member_data(struct_data))->size;
+    if (!s_element_value_type) {
+      s_element_value_type = std::make_unique<PrimitiveValueType>(ROSIDL_TypeKind::BOOLEAN);
     }
+    return s_element_value_type.get();
   }
 
-  UntypedSpan sequence_contents(const void * struct_data) const final
+  std::vector<bool>::const_iterator begin(const void * ptr_to_sequence) const
   {
-    const void * data;
-    if (impl.get_const_function) {
-      data = impl.get_const_function(get_member_data(struct_data), 0);
-    } else {
-      data = static_cast<const ROSIDLC_SequenceObject *>(get_member_data(struct_data))->data;
-    }
-    return {data, sequence_size(struct_data) * get_value_type()->sizeof_type()};
+    return get_value(ptr_to_sequence)->begin();
   }
+  std::vector<bool>::const_iterator end(const void * ptr_to_sequence) const
+  {
+    return get_value(ptr_to_sequence)->end();
+  }
+  size_t size(const void * ptr_to_sequence) const {return get_value(ptr_to_sequence)->size();}
 };
 
-class ROSIDLCPP_SingleValueMember : public virtual SingleValueMember, public ROSIDLCPP_Member
-{
-public:
-  using ROSIDLCPP_Member::get_member_data;
-  using ROSIDLCPP_Member::ROSIDLCPP_Member;
-};
-
-class ROSIDLCPP_ArrayMember : public ArrayValueMember, public ROSIDLCPP_Member
-{
-public:
-  using ROSIDLCPP_Member::get_member_data;
-  using ROSIDLCPP_Member::ROSIDLCPP_Member;
-
-  size_t array_size() const final {return impl.array_size_;}
-  UntypedSpan array_contents(const void * struct_data) const final
-  {
-    return {get_member_data(struct_data), array_size() * get_value_type()->sizeof_type()};
-  }
-};
-
-class ROSIDLCPP_SpanSequenceMember : public SpanSequenceValueMember, public ROSIDLCPP_Member
-{
-public:
-  using ROSIDLCPP_Member::get_member_data;
-  using ROSIDLCPP_Member::get_value_type;
-  using ROSIDLCPP_Member::ROSIDLCPP_Member;
-
-  size_t sequence_size(const void * struct_data) const final
-  {
-    return impl.size_function(get_member_data(struct_data));
-  }
-  UntypedSpan sequence_contents(const void * struct_data) const final
-  {
-    auto member_data = get_member_data(struct_data);
-    auto size = impl.size_function(member_data);
-    auto data = impl.get_const_function(member_data, 0);
-    return {data, size * get_value_type()->sizeof_type()};
-  }
-};
-
-class ROSIDLCPP_BoolSequenceMember : public ROSIDLCPP_Member
-{
-public:
-  using ROSIDLCPP_Member::ROSIDLCPP_Member;
-
-  std::unique_ptr<AnyValueType> value_type;
-  size_t get_size(void * data) const {return static_cast<std::vector<bool> *>(data)->size();}
-  const std::vector<bool> & get_bool_vector(const void * struct_data) const
-  {
-    return *static_cast<const std::vector<bool> *>(get_member_data(struct_data));
-  }
-};
-
-
-class ROSIDLC_Member;
 class ROSIDLC_StructValueType;
-
-enum class MemberContainerType { Array, Sequence, SingleValue };
 
 class AnyU8StringValueType : public AnyValueType
 {
 public:
   using char_traits = std::char_traits<char>;
-  ROSIDL_TypeKind type_kind() const final {return ROSIDL_TypeKind::STRING;}
+  ROSIDL_TypeKind type_kind() const {return ROSIDL_TypeKind::STRING;}
   virtual TypedSpan<char_traits::char_type> data(void *) const = 0;
   virtual TypedSpan<const char_traits::char_type> data(const void *) const = 0;
 };
@@ -513,7 +458,7 @@ class AnyU16StringValueType : public AnyValueType
 {
 public:
   using char_traits = std::char_traits<char16_t>;
-  ROSIDL_TypeKind type_kind() const final {return ROSIDL_TypeKind::WSTRING;}
+  ROSIDL_TypeKind type_kind() const {return ROSIDL_TypeKind::WSTRING;}
   virtual TypedSpan<char_traits::char_type> data(void *) const = 0;
   virtual TypedSpan<const char_traits::char_type> data(const void *) const = 0;
 };

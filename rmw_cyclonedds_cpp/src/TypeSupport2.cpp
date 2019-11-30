@@ -24,29 +24,29 @@ s_struct_cache;
 class ROSIDLC_StructValueType : public AnyStructValueType
 {
   const rosidl_typesupport_introspection_c__MessageMembers impl;
-  std::vector<std::unique_ptr<ROSIDLC_Member>> m_members;
+  std::vector<Member> m_members;
+  std::vector<std::unique_ptr<AnyValueType>> m_inner_value_types;
 
 public:
   static constexpr TypeGenerator gen = TypeGenerator::ROSIDL_C;
-  using MemberType = ROSIDLC_Member;
   explicit ROSIDLC_StructValueType(decltype(impl) impl);
   size_t sizeof_struct() const override {return impl.size_of_;}
   size_t n_members() const override {return impl.member_count_;}
-  const AnyMember * get_member(size_t index) const override {return m_members.at(index).get();}
+  const Member * get_member(size_t index) const override {return &m_members.at(index);}
 };
 
 class ROSIDLCPP_StructValueType : public AnyStructValueType
 {
   const rosidl_typesupport_introspection_cpp::MessageMembers impl;
-  std::vector<std::unique_ptr<ROSIDLCPP_Member>> m_members;
+  std::vector<Member> m_members;
+  std::vector<std::unique_ptr<AnyValueType>> m_inner_value_types;
 
 public:
   static constexpr TypeGenerator gen = TypeGenerator::ROSIDL_Cpp;
-  using MemberType = ROSIDLCPP_Member;
   explicit ROSIDLCPP_StructValueType(decltype(impl) impl);
   size_t sizeof_struct() const override {return impl.size_of_;}
   size_t n_members() const override {return impl.member_count_;}
-  const AnyMember * get_member(size_t index) const final {return m_members.at(index).get();}
+  const Member * get_member(size_t index) const final {return &m_members.at(index);}
 };
 
 const AnyStructValueType * from_rosidl(const rosidl_message_type_support_t * mts)
@@ -106,22 +106,54 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(decltype(impl) impl)
 {
   for (size_t index = 0; index < impl.member_count_; index++) {
     size_t next_member_offset;
-
     if (index + 1 == impl.member_count_) {
       next_member_offset = impl.size_of_;
     } else {
       next_member_offset = impl.members_[index + 1].offset_;
     }
     auto member_impl = impl.members_[index];
-    std::unique_ptr<ROSIDLC_Member> a_member;
-    if (!member_impl.is_array_) {
-      a_member = std::make_unique<ROSIDLC_SingleValueMember>(member_impl, next_member_offset);
-    } else if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
-      a_member = std::make_unique<ROSIDLC_ArrayMember>(member_impl, next_member_offset);
-    } else {
-      a_member = std::make_unique<ROSIDLC_SequenceMember>(member_impl, next_member_offset);
+
+    const AnyValueType * element_value_type;
+    switch (ROSIDL_TypeKind(member_impl.type_id_)) {
+      case ROSIDL_TypeKind::STRING:
+        m_inner_value_types.emplace_back(std::make_unique<ROSIDLC_StringValueType>());
+        element_value_type = m_inner_value_types.back().get();
+        break;
+      case ROSIDL_TypeKind::WSTRING:
+        m_inner_value_types.emplace_back(std::make_unique<ROSIDLC_WStringValueType>());
+        element_value_type = m_inner_value_types.back().get();
+        break;
+      default:
+        m_inner_value_types.emplace_back(
+          std::make_unique<PrimitiveValueType>(ROSIDL_TypeKind(member_impl.type_id_)));
+        element_value_type = m_inner_value_types.back().get();
+        break;
+      case ROSIDL_TypeKind::MESSAGE:
+        element_value_type = from_rosidl(member_impl.members_);
+        break;
     }
-    m_members.push_back(std::move(a_member));
+    const AnyValueType * member_value_type;
+    if (!member_impl.is_array_) {
+      member_value_type = element_value_type;
+    } else if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
+      m_inner_value_types.emplace_back(
+        std::make_unique<ArrayValueType>(element_value_type, member_impl.array_size_));
+      member_value_type = m_inner_value_types.back().get();
+    } else if (member_impl.size_function) {
+      m_inner_value_types.emplace_back(std::make_unique<CallbackSpanSequenceValueType>(
+          element_value_type, member_impl.size_function, member_impl.get_const_function));
+      member_value_type = m_inner_value_types.back().get();
+    } else {
+      m_inner_value_types.emplace_back(
+        std::make_unique<ROSIDLC_SpanSequenceValueType>(element_value_type));
+    }
+    auto a_member = Member{
+      member_impl.name_,
+      member_value_type,
+      member_impl.offset_,
+      next_member_offset,
+    };
+    m_members.push_back(a_member);
   }
 }
 
@@ -129,6 +161,8 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(decltype(impl) impl)
 : impl(impl)
 {
   for (size_t index = 0; index < impl.member_count_; index++) {
+    Member a_member;
+
     size_t next_member_offset;
 
     if (index + 1 == impl.member_count_) {
@@ -136,19 +170,47 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(decltype(impl) impl)
     } else {
       next_member_offset = impl.members_[index + 1].offset_;
     }
-    auto member_impl = impl.members_[index];
+    a_member.next_member_offset = next_member_offset;
 
-    std::unique_ptr<ROSIDLCPP_Member> a_member;
-    if (!member_impl.is_array_) {
-      a_member = std::make_unique<ROSIDLCPP_SingleValueMember>(member_impl, next_member_offset);
-    } else if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
-      a_member = std::make_unique<ROSIDLCPP_ArrayMember>(member_impl, next_member_offset);
-    } else if (ROSIDL_TypeKind(member_impl.type_id_) == ROSIDL_TypeKind::BOOLEAN) {
-      a_member = std::make_unique<ROSIDLCPP_BoolSequenceMember>(member_impl, next_member_offset);
-    } else {
-      a_member = std::make_unique<ROSIDLCPP_SpanSequenceMember>(member_impl, next_member_offset);
+    auto member_impl = impl.members_[index];
+    a_member.member_offset = member_impl.offset_;
+    a_member.name = member_impl.name_;
+
+    const AnyValueType * element_value_type;
+    switch (ROSIDL_TypeKind(member_impl.type_id_)) {
+      case ROSIDL_TypeKind::STRING:
+        m_inner_value_types.emplace_back(std::make_unique<ROSIDLCPP_StringValueType>());
+        element_value_type = m_inner_value_types.back().get();
+        break;
+      case ROSIDL_TypeKind::WSTRING:
+        m_inner_value_types.emplace_back(std::make_unique<ROSIDLCPP_U16StringValueType>());
+        element_value_type = m_inner_value_types.back().get();
+        break;
+      default:
+        m_inner_value_types.emplace_back(
+          std::make_unique<PrimitiveValueType>(ROSIDL_TypeKind(member_impl.type_id_)));
+        element_value_type = m_inner_value_types.back().get();
+        break;
+      case ROSIDL_TypeKind::MESSAGE:
+        element_value_type = from_rosidl(member_impl.members_);
+        break;
     }
-    m_members.push_back(std::move(a_member));
+
+    if (!member_impl.is_array_) {
+      a_member.value_type = element_value_type;
+    } else if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
+      m_inner_value_types.emplace_back(
+        std::make_unique<ArrayValueType>(element_value_type, member_impl.array_size_));
+      a_member.value_type = m_inner_value_types.back().get();
+    } else if (ROSIDL_TypeKind(member_impl.type_id_) == ROSIDL_TypeKind::BOOLEAN) {
+      m_inner_value_types.emplace_back(std::make_unique<BoolVectorValueType>());
+      a_member.value_type = m_inner_value_types.back().get();
+    } else {
+      m_inner_value_types.emplace_back(std::make_unique<CallbackSpanSequenceValueType>(
+          element_value_type, member_impl.size_function, member_impl.get_const_function));
+      a_member.value_type = m_inner_value_types.back().get();
+    }
+    m_members.push_back(a_member);
   }
 }
 
@@ -169,57 +231,4 @@ TypeGenerator identify_typesupport(const char * identifier)
   throw std::runtime_error(std::string("unrecognized typesupport") + identifier);
 }
 
-ROSIDLC_Member::ROSIDLC_Member(decltype(impl) impl, size_t next_member_offset)
-: impl(impl), next_member_offset(next_member_offset)
-{
-  auto value_type = ROSIDL_TypeKind(impl.type_id_);
-  switch (value_type) {
-    case ROSIDL_TypeKind::STRING:
-      m_value_type = std::make_unique<ROSIDLC_StringValueType>();
-      break;
-    case ROSIDL_TypeKind::WSTRING:
-      m_value_type = std::make_unique<ROSIDLC_WStringValueType>();
-      break;
-    case ROSIDL_TypeKind::MESSAGE: {
-        auto m = impl.members_;
-        assert(m);
-        assert(identify_typesupport(m->typesupport_identifier) == TypeGenerator::ROSIDL_C);
-        auto mm =
-          static_cast<const TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::MetaMessage *>(m->data);
-        m_value_type = std::make_unique<ROSIDLC_StructValueType>(*mm);
-      }
-      break;
-    default:
-      m_value_type = std::make_unique<PrimitiveValueType>(value_type);
-      break;
-  }
-}
-
-ROSIDLCPP_Member::ROSIDLCPP_Member(decltype(impl) impl, size_t next_member_offset)
-: impl(impl), next_member_offset(next_member_offset)
-{
-  auto type_kind = ROSIDL_TypeKind(impl.type_id_);
-  switch (type_kind) {
-    case ROSIDL_TypeKind::STRING:
-      m_value_type = std::make_unique<ROSIDLCPP_StringValueType>();
-      break;
-    case ROSIDL_TypeKind::WSTRING:
-      m_value_type = std::make_unique<ROSIDLCPP_U16StringValueType>();
-      break;
-    case ROSIDL_TypeKind::MESSAGE: {
-        auto m = impl.members_;
-        assert(m);
-        assert(identify_typesupport(m->typesupport_identifier) == TypeGenerator::ROSIDL_Cpp);
-        auto mm =
-          static_cast<const TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::MetaMessage *>(m->data);
-        m_value_type = std::make_unique<ROSIDLCPP_StructValueType>(*mm);
-      }
-      break;
-
-    default:
-      m_value_type = std::make_unique<PrimitiveValueType>(type_kind);
-      break;
-
-  }
-}
 }  // namespace rmw_cyclonedds_cpp
