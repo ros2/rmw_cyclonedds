@@ -121,28 +121,6 @@ struct TypeGeneratorInfo<TypeGenerator::ROSIDL_C>
   using MetaMessage = rosidl_typesupport_introspection_c__MessageMembers;
   using MetaMember = rosidl_typesupport_introspection_c__MessageMember;
   using MetaService = rosidl_typesupport_introspection_c__ServiceMembers;
-
-  // wrappers to make these more stringlike
-  struct String : protected rosidl_generator_c__String
-  {
-    using traits_type = std::char_traits<char>;
-    auto data() const {return rosidl_generator_c__String::data;}
-    auto size() const {return rosidl_generator_c__String::size;}
-  };
-
-  static_assert(
-    sizeof(String) == sizeof(rosidl_generator_c__String), "String should not add any new members");
-
-  struct WString : protected rosidl_generator_c__U16String
-  {
-    using traits_type = std::char_traits<char16_t>;
-    auto data() const {return rosidl_generator_c__U16String::data;}
-    auto size() const {return rosidl_generator_c__U16String::size;}
-  };
-
-  static_assert(
-    sizeof(WString) == sizeof(rosidl_generator_c__U16String),
-    "WString should not add any new members");
 };
 
 template<>
@@ -153,8 +131,6 @@ struct TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>
   using MetaMessage = rosidl_typesupport_introspection_cpp::MessageMembers;
   using MetaMember = rosidl_typesupport_introspection_cpp::MessageMember;
   using MetaService = rosidl_typesupport_introspection_cpp::ServiceMembers;
-  using String = std::string;
-  using WString = std::u16string;
 };
 
 constexpr const char * get_identifier(TypeGenerator g)
@@ -230,15 +206,38 @@ enum class ROSIDL_TypeKind : uint8_t
   MESSAGE = tsi_enum::ROS_TYPE_MESSAGE,
 };
 
-class AnyStructValueType;
-const AnyStructValueType * from_rosidl(const rosidl_message_type_support_t * mts);
+class StructValueType;
+const StructValueType * from_rosidl(const rosidl_message_type_support_t * mts);
+
+enum class EValueType
+{
+  // the logical value type
+  PrimitiveValueType,
+  U8StringValueType,
+  U16StringValueType,
+  StructValueType,
+  ArrayValueType,
+  SpanSequenceValueType,
+  BoolVectorValueType,
+};
 
 struct AnyValueType
 {
   // represents not just the IDL value but also its physical representation
-
   virtual ~AnyValueType() = default;
+
+  // how many bytes this value type takes up
   virtual size_t sizeof_type() const = 0;
+
+  // represents the logical value type and supports the 'apply' function
+  virtual EValueType e_value_type() const = 0;
+
+  // faster alternative to dynamic cast
+  template<typename UnaryFunction>
+  auto apply(UnaryFunction f) const;
+
+  template<typename UnaryFunction>
+  auto apply(UnaryFunction f);
 };
 
 struct Member
@@ -254,7 +253,7 @@ struct Member
   }
 };
 
-class AnyStructValueType : public AnyValueType
+class StructValueType : public AnyValueType
 {
 public:
   ROSIDL_TypeKind type_kind() const {return ROSIDL_TypeKind::MESSAGE;}
@@ -262,6 +261,7 @@ public:
   virtual size_t sizeof_struct() const = 0;
   virtual size_t n_members() const = 0;
   virtual const Member * get_member(size_t) const = 0;
+  EValueType e_value_type() const final {return EValueType::StructValueType;}
 };
 
 class ArrayValueType : public AnyValueType
@@ -279,6 +279,7 @@ public:
   size_t sizeof_type() const final {return m_size * m_element_value_type->sizeof_type();}
   size_t array_size() const {return m_size;}
   const void * get_data(const void * ptr_to_array) const {return ptr_to_array;}
+  EValueType e_value_type() const final {return EValueType::ArrayValueType;}
 };
 
 class SpanSequenceValueType : public AnyValueType
@@ -288,6 +289,7 @@ public:
   virtual const AnyValueType * element_value_type() const = 0;
   virtual size_t sequence_size(const void * ptr_to_sequence) const = 0;
   virtual const void * sequence_contents(const void * ptr_to_sequence) const = 0;
+  EValueType e_value_type() const final {return EValueType::SpanSequenceValueType;}
 };
 
 class CallbackSpanSequenceValueType : public SpanSequenceValueType
@@ -409,6 +411,7 @@ struct PrimitiveValueType : public AnyValueType
                 std::to_string(std::underlying_type_t<ROSIDL_TypeKind>(m_type_kind)));
     }
   }
+  virtual EValueType e_value_type() const {return EValueType::PrimitiveValueType;}
 };
 
 class BoolVectorValueType : public AnyValueType
@@ -441,29 +444,32 @@ public:
     return get_value(ptr_to_sequence)->end();
   }
   size_t size(const void * ptr_to_sequence) const {return get_value(ptr_to_sequence)->size();}
+  EValueType e_value_type() const final {return EValueType::BoolVectorValueType;}
 };
 
 class ROSIDLC_StructValueType;
 
-class AnyU8StringValueType : public AnyValueType
+class U8StringValueType : public AnyValueType
 {
 public:
   using char_traits = std::char_traits<char>;
   ROSIDL_TypeKind type_kind() const {return ROSIDL_TypeKind::STRING;}
   virtual TypedSpan<char_traits::char_type> data(void *) const = 0;
   virtual TypedSpan<const char_traits::char_type> data(const void *) const = 0;
+  EValueType e_value_type() const final {return EValueType::U8StringValueType;}
 };
 
-class AnyU16StringValueType : public AnyValueType
+class U16StringValueType : public AnyValueType
 {
 public:
   using char_traits = std::char_traits<char16_t>;
   ROSIDL_TypeKind type_kind() const {return ROSIDL_TypeKind::WSTRING;}
   virtual TypedSpan<char_traits::char_type> data(void *) const = 0;
   virtual TypedSpan<const char_traits::char_type> data(const void *) const = 0;
+  EValueType e_value_type() const final {return EValueType::U16StringValueType;}
 };
 
-struct ROSIDLC_StringValueType : public AnyU8StringValueType
+struct ROSIDLC_StringValueType : public U8StringValueType
 {
 public:
   using type = rosidl_generator_c__String;
@@ -481,7 +487,7 @@ public:
   size_t sizeof_type() const override {return sizeof(type);}
 };
 
-class ROSIDLC_WStringValueType : public AnyU16StringValueType
+class ROSIDLC_WStringValueType : public U16StringValueType
 {
 public:
   using type = rosidl_generator_c__U16String;
@@ -499,7 +505,7 @@ public:
   size_t sizeof_type() const override {return sizeof(type);}
 };
 
-class ROSIDLCPP_StringValueType : public AnyU8StringValueType
+class ROSIDLCPP_StringValueType : public U8StringValueType
 {
 public:
   using type = std::string;
@@ -517,7 +523,7 @@ public:
   size_t sizeof_type() const override {return sizeof(type);}
 };
 
-class ROSIDLCPP_U16StringValueType : public AnyU16StringValueType
+class ROSIDLCPP_U16StringValueType : public U16StringValueType
 {
 public:
   using type = std::u16string;
@@ -534,4 +540,47 @@ public:
   }
   size_t sizeof_type() const override {return sizeof(type);}
 };
+
+template<typename UnaryFunction>
+auto AnyValueType::apply(UnaryFunction f) const
+{
+  switch (e_value_type()) {
+    case EValueType::PrimitiveValueType:
+      return f(*static_cast<const PrimitiveValueType *>(this));
+    case EValueType::U8StringValueType:
+      return f(*static_cast<const U8StringValueType *>(this));
+    case EValueType::U16StringValueType:
+      return f(*static_cast<const U16StringValueType *>(this));
+    case EValueType::StructValueType:
+      return f(*static_cast<const StructValueType *>(this));
+    case EValueType::ArrayValueType:
+      return f(*static_cast<const ArrayValueType *>(this));
+    case EValueType::SpanSequenceValueType:
+      return f(*static_cast<const SpanSequenceValueType *>(this));
+    case EValueType::BoolVectorValueType:
+      return f(*static_cast<const BoolVectorValueType *>(this));
+  }
+}
+
+template<typename UnaryFunction>
+auto AnyValueType::apply(UnaryFunction f)
+{
+  switch (e_value_type()) {
+    case EValueType::PrimitiveValueType:
+      return f(*static_cast<PrimitiveValueType *>(this));
+    case EValueType::U8StringValueType:
+      return f(*static_cast<U8StringValueType *>(this));
+    case EValueType::U16StringValueType:
+      return f(*static_cast<U16StringValueType *>(this));
+    case EValueType::StructValueType:
+      return f(*static_cast<StructValueType *>(this));
+    case EValueType::ArrayValueType:
+      return f(*static_cast<ArrayValueType *>(this));
+    case EValueType::SpanSequenceValueType:
+      return f(*static_cast<SpanSequenceValueType *>(this));
+    case EValueType::BoolVectorValueType:
+      return f(*static_cast<BoolVectorValueType *>(this));
+  }
+}
+
 }  // namespace rmw_cyclonedds_cpp

@@ -115,7 +115,7 @@ public:
   : eversion{EncodingVersion::CDR_Legacy}, max_align{8} {}
 
   void serialize_top_level(
-    CDRCursor * cursor, const void * data, const AnyStructValueType & support)
+    CDRCursor * cursor, const void * data, const StructValueType & support)
   {
     put_rtps_header(cursor);
 
@@ -136,7 +136,7 @@ public:
   }
 
   void serialize_top_level(
-    CDRCursor * cursor, const cdds_request_wrapper_t & request, const AnyStructValueType & support)
+    CDRCursor * cursor, const cdds_request_wrapper_t & request, const StructValueType & support)
   {
     put_rtps_header(cursor);
     if (eversion == EncodingVersion::CDR_Legacy) {
@@ -253,7 +253,7 @@ protected:
     cursor->put_bytes(data, n_bytes);
   }
 
-  void serialize(CDRCursor * cursor, const void * data, const AnyU8StringValueType & value_type)
+  void serialize(CDRCursor * cursor, const void * data, const U8StringValueType & value_type)
   {
     auto str = value_type.data(data);
     serialize_u32(cursor, str.size() + 1);
@@ -262,7 +262,7 @@ protected:
     cursor->put_bytes(&terminator, 1);
   }
 
-  void serialize(CDRCursor * cursor, const void * data, const AnyU16StringValueType & value_type)
+  void serialize(CDRCursor * cursor, const void * data, const U16StringValueType & value_type)
   {
     auto str = value_type.data(data);
     if (eversion == EncodingVersion::CDR_Legacy) {
@@ -310,29 +310,31 @@ protected:
 
   void serialize(CDRCursor * cursor, const void * data, const AnyValueType * value_type)
   {
-    if (auto s = dynamic_cast<const PrimitiveValueType *>(value_type)) {
-      return serialize(cursor, data, *s);
-    }
-    if (auto s = dynamic_cast<const AnyU8StringValueType *>(value_type)) {
-      return serialize(cursor, data, *s);
-    }
-    if (auto s = dynamic_cast<const AnyU16StringValueType *>(value_type)) {
-      return serialize(cursor, data, *s);
-    }
-    if (auto s = dynamic_cast<const AnyStructValueType *>(value_type)) {
-      return serialize(cursor, data, *s);
-    }
-    if (auto s = dynamic_cast<const ArrayValueType *>(value_type)) {
-      return serialize(cursor, data, *s);
-    }
-    if (auto s = dynamic_cast<const SpanSequenceValueType *>(value_type)) {
-      return serialize(cursor, data, *s);
-    }
-    if (auto s = dynamic_cast<const BoolVectorValueType *>(value_type)) {
-      return serialize(cursor, data, *s);
-    }
-
-    throw std::logic_error("Unhandled case");
+    value_type->apply([&](const auto & vt) {
+        return serialize(cursor, data, vt);
+      });
+//    if (auto s = dynamic_cast<const PrimitiveValueType *>(value_type)) {
+//      return serialize(cursor, data, *s);
+//    }
+//    if (auto s = dynamic_cast<const AnyU8StringValueType *>(value_type)) {
+//      return serialize(cursor, data, *s);
+//    }
+//    if (auto s = dynamic_cast<const AnyU16StringValueType *>(value_type)) {
+//      return serialize(cursor, data, *s);
+//    }
+//    if (auto s = dynamic_cast<const AnyStructValueType *>(value_type)) {
+//      return serialize(cursor, data, *s);
+//    }
+//    if (auto s = dynamic_cast<const ArrayValueType *>(value_type)) {
+//      return serialize(cursor, data, *s);
+//    }
+//    if (auto s = dynamic_cast<const SpanSequenceValueType *>(value_type)) {
+//      return serialize(cursor, data, *s);
+//    }
+//    if (auto s = dynamic_cast<const BoolVectorValueType *>(value_type)) {
+//      return serialize(cursor, data, *s);
+//    }
+//    throw std::logic_error("Unhandled case");
   }
 
   void serialize_many(
@@ -400,7 +402,7 @@ protected:
   }
 
   void serialize(
-    CDRCursor * cursor, const void * struct_data, const AnyStructValueType & struct_info)
+    CDRCursor * cursor, const void * struct_data, const StructValueType & struct_info)
   {
     for (size_t i = 0; i < struct_info.n_members(); i++) {
       auto member_info = struct_info.get_member(i);

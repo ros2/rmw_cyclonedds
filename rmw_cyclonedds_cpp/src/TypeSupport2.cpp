@@ -19,10 +19,10 @@
 namespace rmw_cyclonedds_cpp
 {
 static std::unordered_map<
-  const rosidl_message_type_support_t *, std::unique_ptr<AnyStructValueType>>
+  const rosidl_message_type_support_t *, std::unique_ptr<StructValueType>>
 s_struct_cache;
 
-class ROSIDLC_StructValueType : public AnyStructValueType
+class ROSIDLC_StructValueType : public StructValueType
 {
   const rosidl_typesupport_introspection_c__MessageMembers impl;
   std::vector<Member> m_members;
@@ -44,7 +44,7 @@ public:
   const Member * get_member(size_t index) const override {return &m_members.at(index);}
 };
 
-class ROSIDLCPP_StructValueType : public AnyStructValueType
+class ROSIDLCPP_StructValueType : public StructValueType
 {
   const rosidl_typesupport_introspection_cpp::MessageMembers impl;
   std::vector<Member> m_members;
@@ -66,7 +66,7 @@ public:
   const Member * get_member(size_t index) const final {return &m_members.at(index);}
 };
 
-const AnyStructValueType * from_rosidl(const rosidl_message_type_support_t * mts)
+const StructValueType * from_rosidl(const rosidl_message_type_support_t * mts)
 {
   auto iter = s_struct_cache.find(mts);
   if (iter == s_struct_cache.end()) {
