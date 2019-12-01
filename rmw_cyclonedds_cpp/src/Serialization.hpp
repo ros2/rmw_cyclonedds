@@ -25,22 +25,16 @@ namespace rmw_cyclonedds_cpp
 std::pair<rosidl_message_type_support_t, rosidl_message_type_support_t>
 get_svc_request_response_typesupports(const rosidl_service_type_support_t & svc);
 
-size_t get_serialized_size(
-  const void * data,
-  const rosidl_message_type_support_t & ts);
+size_t get_serialized_size(const void * data, const rosidl_message_type_support_t & ts);
 
-void serialize(
-  void * dest, size_t dest_size,
-  const void * data,
-  const rosidl_message_type_support_t & ts);
+void serialize(void * dest, const void * data, const rosidl_message_type_support_t & ts);
 
 size_t get_serialized_size(
   const cdds_request_wrapper_t & request,
   const rosidl_message_type_support_t & ts);
 
 void serialize(
-  void * dest, size_t dest_size,
-  const cdds_request_wrapper_t & request,
+  void * dest, const cdds_request_wrapper_t & request,
   const rosidl_message_type_support_t & ts);
 }  // namespace rmw_cyclonedds_cpp
 

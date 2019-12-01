@@ -481,12 +481,10 @@ size_t get_serialized_size(const void * data, const rosidl_message_type_support_
 }
 
 void serialize(
-  void * dest, size_t dest_size, const void * data, const rosidl_message_type_support_t & ts)
+  void * dest, const void * data, const rosidl_message_type_support_t & ts)
 {
   DataCursor cursor(dest);
   CDRWriter().serialize_top_level(&cursor, data, *from_rosidl(&ts));
-  auto o = cursor.offset();
-  assert(o == dest_size);
 }
 
 size_t get_serialized_size(
@@ -498,11 +496,10 @@ size_t get_serialized_size(
 }
 
 void serialize(
-  void * dest, size_t dest_size, const cdds_request_wrapper_t & request,
+  void * dest, const cdds_request_wrapper_t & request,
   const rosidl_message_type_support_t & ts)
 {
   DataCursor cursor(dest);
   CDRWriter().serialize_top_level(&cursor, request, *from_rosidl(&ts));
-  assert(cursor.offset() == dest_size);
 }
 }  // namespace rmw_cyclonedds_cpp

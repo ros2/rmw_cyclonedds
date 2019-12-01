@@ -171,7 +171,7 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
     } else if (!topic->is_request_header) {
       auto sz = rmw_cyclonedds_cpp::get_serialized_size(sample, topic->message_type_support);
       d->data.resize(sz);
-      rmw_cyclonedds_cpp::serialize(d->data.data(), sz, sample, topic->message_type_support);
+      rmw_cyclonedds_cpp::serialize(d->data.data(), sample, topic->message_type_support);
     } else {
       /* inject the service invocation header data into the CDR stream --
        * I haven't checked how it is done in the official RMW implementations, so it is
@@ -180,7 +180,7 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
 
       auto sz = rmw_cyclonedds_cpp::get_serialized_size(wrap, topic->message_type_support);
       d->data.resize(sz);
-      rmw_cyclonedds_cpp::serialize(d->data.data(), sz, wrap, topic->message_type_support);
+      rmw_cyclonedds_cpp::serialize(d->data.data(), wrap, topic->message_type_support);
     }
     /* FIXME: CDR padding in DDSI makes me do this to avoid reading beyond the bounds of the vector
       when copying data to network.  Should fix Cyclone to handle that more elegantly.  */
