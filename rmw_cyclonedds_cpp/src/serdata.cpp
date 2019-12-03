@@ -158,6 +158,13 @@ static struct ddsi_serdata * serdata_rmw_from_keyhash(
   return rmw_serdata_new(topic, SDK_KEY);
 }
 
+size_t next_multiple_of_4(size_t n_bytes)
+{
+  /* FIXME: CDR padding in DDSI makes me do this to avoid reading beyond the bounds of the vector
+  when copying data to network.  Should fix Cyclone to handle that more elegantly.  */
+  return n_bytes + (-n_bytes) % 4;
+}
+
 static struct ddsi_serdata * serdata_rmw_from_sample(
   const struct ddsi_sertopic * topiccmn,
   enum ddsi_serdata_kind kind,
@@ -169,8 +176,8 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
     if (kind != SDK_DATA) {
       /* ROS2 doesn't do keys, so SDK_KEY is trivial */
     } else if (!topic->is_request_header) {
-      auto sz = rmw_cyclonedds_cpp::get_serialized_size(sample, topic->message_type_support);
-      d->data.resize(sz);
+      size_t sz = rmw_cyclonedds_cpp::get_serialized_size(sample, topic->message_type_support);
+      d->data.resize(next_multiple_of_4(sz));
       rmw_cyclonedds_cpp::serialize(d->data.data(), sample, topic->message_type_support);
     } else {
       /* inject the service invocation header data into the CDR stream --
@@ -178,14 +185,9 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
        * probably incompatible. */
       auto wrap = *static_cast<const cdds_request_wrapper_t *>(sample);
 
-      auto sz = rmw_cyclonedds_cpp::get_serialized_size(wrap, topic->message_type_support);
-      d->data.resize(sz);
+      size_t sz = rmw_cyclonedds_cpp::get_serialized_size(wrap, topic->message_type_support);
+      d->data.resize(next_multiple_of_4(sz));
       rmw_cyclonedds_cpp::serialize(d->data.data(), wrap, topic->message_type_support);
-    }
-    /* FIXME: CDR padding in DDSI makes me do this to avoid reading beyond the bounds of the vector
-      when copying data to network.  Should fix Cyclone to handle that more elegantly.  */
-    while (d->data.size() % 4) {
-      d->data.push_back(0);
     }
     return d;
   } catch (std::exception & e) {
@@ -200,13 +202,8 @@ struct ddsi_serdata * serdata_rmw_from_serialized_message(
 {
   const struct sertopic_rmw * topic = static_cast<const struct sertopic_rmw *>(topiccmn);
   struct serdata_rmw * d = rmw_serdata_new(topic, SDK_DATA);
-  /* FIXME: CDR padding in DDSI makes me do this to avoid reading beyond the bounds of the vector
-     when copying data to network.  Should fix Cyclone to handle that more elegantly. */
-  d->data.resize(size);
+  d->data.resize(next_multiple_of_4(size));
   memcpy(d->data.data(), raw, size);
-  while (d->data.size() % 4) {
-    d->data.push_back(0);
-  }
   return d;
 }
 
