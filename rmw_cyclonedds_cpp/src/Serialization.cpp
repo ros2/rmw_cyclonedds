@@ -476,7 +476,7 @@ protected:
 size_t get_serialized_size(const void * data, const rosidl_message_type_support_t & ts)
 {
   SizeCursor cursor;
-  CDRWriter().serialize_top_level(&cursor, data, *from_rosidl(&ts));
+  CDRWriter().serialize_top_level(&cursor, data, *struct_type_from_rosidl(&ts));
   return cursor.offset();
 }
 
@@ -484,14 +484,14 @@ void serialize(
   void * dest, const void * data, const rosidl_message_type_support_t & ts)
 {
   DataCursor cursor(dest);
-  CDRWriter().serialize_top_level(&cursor, data, *from_rosidl(&ts));
+  CDRWriter().serialize_top_level(&cursor, data, *struct_type_from_rosidl(&ts));
 }
 
 size_t get_serialized_size(
   const cdds_request_wrapper_t & request, const rosidl_message_type_support_t & ts)
 {
   SizeCursor cursor;
-  CDRWriter().serialize_top_level(&cursor, request, *from_rosidl(&ts));
+  CDRWriter().serialize_top_level(&cursor, request, *struct_type_from_rosidl(&ts));
   return cursor.offset();
 }
 
@@ -500,6 +500,6 @@ void serialize(
   const rosidl_message_type_support_t & ts)
 {
   DataCursor cursor(dest);
-  CDRWriter().serialize_top_level(&cursor, request, *from_rosidl(&ts));
+  CDRWriter().serialize_top_level(&cursor, request, *struct_type_from_rosidl(&ts));
 }
 }  // namespace rmw_cyclonedds_cpp

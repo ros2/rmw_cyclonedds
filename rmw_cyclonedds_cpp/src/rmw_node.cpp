@@ -2324,7 +2324,7 @@ static rmw_ret_t rmw_init_cs(
 
   if (is_service) {
     std::tie(sub_msg_ts, pub_msg_ts) = rmw_cyclonedds_cpp::get_svc_request_response_typesupports(
-      *type_supports);
+      type_supports);
 
     sub_type_support = create_request_type_support(type_support->data,
         type_support->typesupport_identifier);
@@ -2335,7 +2335,7 @@ static rmw_ret_t rmw_init_cs(
     pubtopic_name = make_fqtopic(ros_service_response_prefix, service_name, "Reply", qos_policies);
   } else {
     std::tie(pub_msg_ts, sub_msg_ts) = rmw_cyclonedds_cpp::get_svc_request_response_typesupports(
-      *type_supports);
+      type_supports);
 
     pub_type_support = create_request_type_support(type_support->data,
         type_support->typesupport_identifier);

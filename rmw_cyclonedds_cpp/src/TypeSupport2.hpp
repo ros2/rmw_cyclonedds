@@ -30,17 +30,6 @@
 
 namespace rmw_cyclonedds_cpp
 {
-enum class TypeGenerator
-{
-  ROSIDL_C,
-  ROSIDL_Cpp,
-};
-
-TypeGenerator identify_typesupport(const char * identifier);
-
-template<TypeGenerator>
-struct TypeGeneratorInfo;
-
 struct AnyValueType;
 
 /// contiguous storage objects
@@ -113,10 +102,20 @@ auto make_typed_span(const NativeType * m_data, size_t size)
   return TypedSpan<NativeType>{m_data, size};
 }
 
+enum class TypeGenerator
+{
+  ROSIDL_C,
+  ROSIDL_Cpp,
+};
+
+template<TypeGenerator>
+struct TypeGeneratorInfo;
+
 template<>
 struct TypeGeneratorInfo<TypeGenerator::ROSIDL_C>
 {
   static constexpr auto enum_value = TypeGenerator::ROSIDL_C;
+
   static constexpr auto & identifier = rosidl_typesupport_introspection_c__identifier;
   using MetaMessage = rosidl_typesupport_introspection_c__MessageMembers;
   using MetaMember = rosidl_typesupport_introspection_c__MessageMember;
@@ -132,46 +131,6 @@ struct TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>
   using MetaMember = rosidl_typesupport_introspection_cpp::MessageMember;
   using MetaService = rosidl_typesupport_introspection_cpp::ServiceMembers;
 };
-
-constexpr const char * get_identifier(TypeGenerator g)
-{
-  switch (g) {
-    case TypeGenerator::ROSIDL_C:
-      return TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::identifier;
-    case TypeGenerator::ROSIDL_Cpp:
-      return TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::identifier;
-  }
-}
-
-template<typename UnaryFunction>
-void with_typesupport_info(const char * identifier, UnaryFunction f)
-{
-  {
-    using tgi = TypeGeneratorInfo<TypeGenerator::ROSIDL_C>;
-    if (identifier == tgi::identifier) {
-      return f(tgi{});
-    }
-  }
-  {
-    using tgi = TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>;
-    if (identifier == tgi::identifier) {
-      return f(tgi{});
-    }
-  }
-  {
-    using tgi = TypeGeneratorInfo<TypeGenerator::ROSIDL_C>;
-    if (std::strcmp(identifier, tgi::identifier) == 0) {
-      return f(tgi{});
-    }
-  }
-  {
-    using tgi = TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>;
-    if (std::strcmp(identifier, tgi::identifier) == 0) {
-      return f(tgi{});
-    }
-  }
-  throw std::runtime_error("typesupport not recognized");
-}
 
 template<TypeGenerator g>
 using MetaMessage = typename TypeGeneratorInfo<g>::MetaMessage;
@@ -207,7 +166,7 @@ enum class ROSIDL_TypeKind : uint8_t
 };
 
 class StructValueType;
-const StructValueType * from_rosidl(const rosidl_message_type_support_t * mts);
+const StructValueType * struct_type_from_rosidl(const rosidl_message_type_support_t * mts);
 
 enum class EValueType
 {

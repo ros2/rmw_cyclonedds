@@ -380,15 +380,15 @@ private:
     int n = vsnprintf(*buf, *bufsize, fmt, ap);
     va_end(ap);
     if (n < 0) {
-      ** buf = 0;
+      **buf = 0;
       return false;
     } else if ((size_t) n <= *bufsize) {
-      * buf += (size_t) n;
-      * bufsize -= (size_t) n;
+      *buf += (size_t) n;
+      *bufsize -= (size_t) n;
       return *bufsize > 0;
     } else {
-      * buf += *bufsize;
-      * bufsize = 0;
+      *buf += *bufsize;
+      *bufsize = 0;
       return false;
     }
   }
