@@ -11,11 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#pragma once
+#ifndef TYPESUPPORT2_HPP_
+#define TYPESUPPORT2_HPP_
 
 #include <cassert>
+#include <memory>
 #include <regex>
 #include <string>
+#include <vector>
 
 #include "bytewise.hpp"
 #include "rosidl_generator_c/string_functions.h"
@@ -204,9 +207,8 @@ struct Member
   const char * name;
   const AnyValueType * value_type;
   size_t member_offset;
-  size_t next_member_offset;
 
-  const void * get_member_data(const void * ptr_to_struct)
+  const void * get_member_data(const void * ptr_to_struct) const
   {
     return byte_offset(ptr_to_struct, member_offset);
   }
@@ -256,7 +258,7 @@ class CallbackSpanSequenceValueType : public SpanSequenceValueType
 protected:
   const AnyValueType * m_element_value_type;
   std::function<size_t(const void *)> m_size_function;
-  std::function<const void * (const void *, size_t index)> m_get_const_function;
+  std::function<const void *(const void *, size_t index)> m_get_const_function;
 
 public:
   CallbackSpanSequenceValueType(
@@ -300,7 +302,7 @@ protected:
   }
 
 public:
-  ROSIDLC_SpanSequenceValueType(const AnyValueType * element_value_type)
+  explicit ROSIDLC_SpanSequenceValueType(const AnyValueType * element_value_type)
   : m_element_value_type(element_value_type)
   {
   }
@@ -370,7 +372,7 @@ struct PrimitiveValueType : public AnyValueType
                 std::to_string(std::underlying_type_t<ROSIDL_TypeKind>(m_type_kind)));
     }
   }
-  virtual EValueType e_value_type() const {return EValueType::PrimitiveValueType;}
+  EValueType e_value_type() const override {return EValueType::PrimitiveValueType;}
 };
 
 class BoolVectorValueType : public AnyValueType
@@ -543,3 +545,4 @@ auto AnyValueType::apply(UnaryFunction f)
 }
 
 }  // namespace rmw_cyclonedds_cpp
+#endif  // TYPESUPPORT2_HPP_

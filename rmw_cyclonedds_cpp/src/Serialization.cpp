@@ -15,7 +15,7 @@
 
 #include <algorithm>
 #include <limits>
-#include <utility>
+#include <unordered_map>
 #include <vector>
 
 #include "TypeSupport2.hpp"
@@ -124,7 +124,7 @@ public:
       size_t operator()(const CacheKey & k) const
       {
         return std::hash<decltype(align)>{} (k.align) ^
-               (std::hash<decltype(value_type)>{} (k.value_type) << 1);
+               ((std::hash<decltype(value_type)>{} (k.value_type)) << 1U);
       }
     };
   };

@@ -13,8 +13,11 @@
 // limitations under the License.
 #include "TypeSupport2.hpp"
 
+#include <memory>
+#include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace rmw_cyclonedds_cpp
 {
@@ -24,9 +27,10 @@ s_struct_cache;
 
 class ROSIDLC_StructValueType : public StructValueType
 {
-  const rosidl_typesupport_introspection_c__MessageMembers impl;
+  const rosidl_typesupport_introspection_c__MessageMembers * impl;
   std::vector<Member> m_members;
   std::vector<std::unique_ptr<AnyValueType>> m_inner_value_types;
+
   template<typename ConstructedType, typename ... Args>
   ConstructedType * make_value_type(Args && ... args)
   {
@@ -38,15 +42,15 @@ class ROSIDLC_StructValueType : public StructValueType
 
 public:
   static constexpr TypeGenerator gen = TypeGenerator::ROSIDL_C;
-  explicit ROSIDLC_StructValueType(decltype(impl) impl);
-  size_t sizeof_struct() const override {return impl.size_of_;}
-  size_t n_members() const override {return impl.member_count_;}
+  explicit ROSIDLC_StructValueType(const rosidl_typesupport_introspection_c__MessageMembers * impl);
+  size_t sizeof_struct() const override {return impl->size_of_;}
+  size_t n_members() const override {return impl->member_count_;}
   const Member * get_member(size_t index) const override {return &m_members.at(index);}
 };
 
 class ROSIDLCPP_StructValueType : public StructValueType
 {
-  const rosidl_typesupport_introspection_cpp::MessageMembers impl;
+  const rosidl_typesupport_introspection_cpp::MessageMembers * impl;
   std::vector<Member> m_members;
   std::vector<std::unique_ptr<AnyValueType>> m_inner_value_types;
   template<typename ConstructedType, typename ... Args>
@@ -60,9 +64,10 @@ class ROSIDLCPP_StructValueType : public StructValueType
 
 public:
   static constexpr TypeGenerator gen = TypeGenerator::ROSIDL_Cpp;
-  explicit ROSIDLCPP_StructValueType(decltype(impl) impl);
-  size_t sizeof_struct() const override {return impl.size_of_;}
-  size_t n_members() const override {return impl.member_count_;}
+  explicit ROSIDLCPP_StructValueType(
+    const rosidl_typesupport_introspection_cpp::MessageMembers * impl);
+  size_t sizeof_struct() const override {return impl->size_of_;}
+  size_t n_members() const override {return impl->member_count_;}
   const Member * get_member(size_t index) const final {return &m_members.at(index);}
 };
 
@@ -76,10 +81,10 @@ const StructValueType * struct_type_from_rosidl(const rosidl_message_type_suppor
   {
     if (auto ts = mts->func(mts, TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::identifier)) {
       auto members = static_cast<const MetaMessage<TypeGenerator::ROSIDL_C> *>(ts->data);
-      result = std::make_unique<ROSIDLC_StructValueType>(*members);
+      result = std::make_unique<ROSIDLC_StructValueType>(members);
     } else if (auto ts = mts->func(mts, TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::identifier)) {
       auto members = static_cast<const MetaMessage<TypeGenerator::ROSIDL_Cpp> *>(ts->data);
-      result = std::make_unique<ROSIDLCPP_StructValueType>(*members);
+      result = std::make_unique<ROSIDLCPP_StructValueType>(members);
     } else {
       throw std::runtime_error(
               "could not identify message typesupport " + std::string(mts->typesupport_identifier));
@@ -99,38 +104,34 @@ get_svc_request_response_typesupports(const rosidl_service_type_support_t * svc_
   request.typesupport_identifier = response.typesupport_identifier = svc_ts->typesupport_identifier;
   request.func = response.func = get_message_typesupport_handle_function;
 
-  if (auto ts = svc_ts->func(svc_ts, TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::identifier)) {
+  if (auto tsc = svc_ts->func(svc_ts, TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::identifier)) {
     auto typed =
-      static_cast<const TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::MetaService *>(ts->data);
+      static_cast<const TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::MetaService *>(tsc->data);
     request.data = typed->request_members_;
     response.data = typed->response_members_;
-  } else if (auto ts = svc_ts->func(svc_ts,
-    TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::identifier))
-  {
-    auto typed =
-      static_cast<const TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::MetaService *>(ts->data);
-    request.data = typed->request_members_;
-    response.data = typed->response_members_;
-  } else {
-    throw std::runtime_error("Unidentified service type support: " +
-            std::string(svc_ts->typesupport_identifier));
+    return {request, response};
   }
 
-  return {request, response};
+  if (auto tscpp =
+    svc_ts->func(svc_ts, TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::identifier))
+  {
+    auto typed =
+      static_cast<const TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::MetaService *>(tscpp->data);
+    request.data = typed->request_members_;
+    response.data = typed->response_members_;
+    return {request, response};
+  }
+
+  throw std::runtime_error(
+          "Unidentified service type support: " + std::string(svc_ts->typesupport_identifier));
 }
 
-
-ROSIDLC_StructValueType::ROSIDLC_StructValueType(decltype(impl) impl)
-: impl(impl)
+ROSIDLC_StructValueType::ROSIDLC_StructValueType(
+  const rosidl_typesupport_introspection_c__MessageMembers * impl)
+: impl{impl}, m_members{}, m_inner_value_types{}
 {
-  for (size_t index = 0; index < impl.member_count_; index++) {
-    size_t next_member_offset;
-    if (index + 1 == impl.member_count_) {
-      next_member_offset = impl.size_of_;
-    } else {
-      next_member_offset = impl.members_[index + 1].offset_;
-    }
-    auto member_impl = impl.members_[index];
+  for (size_t index = 0; index < impl->member_count_; index++) {
+    auto member_impl = impl->members_[index];
 
     const AnyValueType * element_value_type;
     switch (ROSIDL_TypeKind(member_impl.type_id_)) {
@@ -162,34 +163,20 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(decltype(impl) impl)
     } else {
       member_value_type = make_value_type<ROSIDLC_SpanSequenceValueType>(element_value_type);
     }
-    auto a_member = Member{
-      member_impl.name_,
-      member_value_type,
-      member_impl.offset_,
-      next_member_offset,
-    };
-    m_members.push_back(a_member);
+    m_members.push_back(Member{
+        member_impl.name_,
+        member_value_type,
+        member_impl.offset_,
+      });
   }
 }
 
-ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(decltype(impl) impl)
+ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
+  const rosidl_typesupport_introspection_cpp::MessageMembers * impl)
 : impl(impl)
 {
-  for (size_t index = 0; index < impl.member_count_; index++) {
-    Member a_member;
-
-    size_t next_member_offset;
-
-    if (index + 1 == impl.member_count_) {
-      next_member_offset = impl.size_of_;
-    } else {
-      next_member_offset = impl.members_[index + 1].offset_;
-    }
-    a_member.next_member_offset = next_member_offset;
-
-    auto member_impl = impl.members_[index];
-    a_member.member_offset = member_impl.offset_;
-    a_member.name = member_impl.name_;
+  for (size_t index = 0; index < impl->member_count_; index++) {
+    auto member_impl = impl->members_[index];
 
     const AnyValueType * element_value_type;
     switch (ROSIDL_TypeKind(member_impl.type_id_)) {
@@ -208,18 +195,24 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(decltype(impl) impl)
         break;
     }
 
+    const AnyValueType * member_value_type;
     if (!member_impl.is_array_) {
-      a_member.value_type = element_value_type;
+      member_value_type = element_value_type;
     } else if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
-      a_member.value_type = make_value_type<ArrayValueType>(element_value_type,
+      member_value_type = make_value_type<ArrayValueType>(element_value_type,
           member_impl.array_size_);
     } else if (ROSIDL_TypeKind(member_impl.type_id_) == ROSIDL_TypeKind::BOOLEAN) {
-      a_member.value_type = make_value_type<BoolVectorValueType>();
+      member_value_type = make_value_type<BoolVectorValueType>();
     } else {
-      a_member.value_type = make_value_type<CallbackSpanSequenceValueType>(
+      member_value_type = make_value_type<CallbackSpanSequenceValueType>(
         element_value_type, member_impl.size_function, member_impl.get_const_function);
     }
-    m_members.push_back(a_member);
+    m_members.push_back(
+      Member {
+        member_impl.name_,
+        member_value_type,
+        member_impl.offset_,
+      });
   }
 }
 }  // namespace rmw_cyclonedds_cpp
