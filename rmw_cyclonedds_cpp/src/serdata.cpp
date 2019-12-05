@@ -11,23 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <string.h>
+#include "rmw_cyclonedds_cpp/serdata.hpp"
 
-#include <vector>
+#include <cstring>
+#include <memory>
 #include <regex>
 #include <sstream>
 #include <string>
+#include <utility>
 
+#include "TypeSupport2.hpp"
+#include "Serialization.hpp"
+#include "dds/ddsi/q_radmin.h"
 #include "rmw/error_handling.h"
-
 #include "rmw_cyclonedds_cpp/MessageTypeSupport.hpp"
 #include "rmw_cyclonedds_cpp/ServiceTypeSupport.hpp"
-
 #include "rmw_cyclonedds_cpp/serdes.hpp"
-#include "rmw_cyclonedds_cpp/serdata.hpp"
-
-#include "dds/ddsi/ddsi_iid.h"
-#include "dds/ddsi/q_radmin.h"
 
 using MessageTypeSupport_c =
   rmw_cyclonedds_cpp::MessageTypeSupport<rosidl_typesupport_introspection_c__MessageMembers>;
@@ -161,6 +160,13 @@ static struct ddsi_serdata * serdata_rmw_from_keyhash(
   return rmw_serdata_new(topic, SDK_KEY);
 }
 
+size_t next_multiple_of_4(size_t n_bytes)
+{
+  /* FIXME: CDR padding in DDSI makes me do this to avoid reading beyond the bounds of the vector
+  when copying data to network.  Should fix Cyclone to handle that more elegantly.  */
+  return n_bytes + (-n_bytes) % 4;
+}
+
 static struct ddsi_serdata * serdata_rmw_from_sample(
   const struct ddsi_sertopic * topiccmn,
   enum ddsi_serdata_kind kind,
@@ -172,43 +178,21 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
     if (kind != SDK_DATA) {
       /* ROS2 doesn't do keys, so SDK_KEY is trivial */
     } else if (!topic->is_request_header) {
-      cycser sd(d->data);
-      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
-        (void) typed_typesupport->serializeROSmessage(sample, sd);
-      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
-        (void) typed_typesupport->serializeROSmessage(sample, sd);
-      }
+      size_t sz = rmw_cyclonedds_cpp::get_serialized_size(sample, topic->value_type.get());
+      d->data.resize(next_multiple_of_4(sz));
+      rmw_cyclonedds_cpp::serialize(d->data.data(), sample, topic->value_type.get());
     } else {
-      /* The "prefix" lambda is there to inject the service invocation header data into the CDR
-        stream -- I haven't checked how it is done in the official RMW implementations, so it is
-        probably incompatible. */
-      const cdds_request_wrapper_t * wrap = static_cast<const cdds_request_wrapper_t *>(sample);
-      auto prefix = [wrap](cycser & ser) {ser << wrap->header.guid; ser << wrap->header.seq;};
-      cycser sd(d->data);
-      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
-        (void) typed_typesupport->serializeROSmessage(wrap->data, sd, prefix);
-      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
-        (void) typed_typesupport->serializeROSmessage(wrap->data, sd, prefix);
-      }
-    }
-    /* FIXME: CDR padding in DDSI makes me do this to avoid reading beyond the bounds of the vector
-      when copying data to network.  Should fix Cyclone to handle that more elegantly.  */
-    while (d->data.size() % 4) {
-      d->data.push_back(0);
+      /* inject the service invocation header data into the CDR stream --
+       * I haven't checked how it is done in the official RMW implementations, so it is
+       * probably incompatible. */
+      auto wrap = *static_cast<const cdds_request_wrapper_t *>(sample);
+
+      size_t sz = rmw_cyclonedds_cpp::get_serialized_size(wrap, topic->value_type.get());
+      d->data.resize(next_multiple_of_4(sz));
+      rmw_cyclonedds_cpp::serialize(d->data.data(), wrap, topic->value_type.get());
     }
     return d;
-  } catch (rmw_cyclonedds_cpp::Exception & e) {
-    RMW_SET_ERROR_MSG(e.what());
-    return nullptr;
-  } catch (std::runtime_error & e) {
+  } catch (std::exception & e) {
     RMW_SET_ERROR_MSG(e.what());
     return nullptr;
   }
@@ -220,13 +204,8 @@ struct ddsi_serdata * serdata_rmw_from_serialized_message(
 {
   const struct sertopic_rmw * topic = static_cast<const struct sertopic_rmw *>(topiccmn);
   struct serdata_rmw * d = rmw_serdata_new(topic, SDK_DATA);
-  /* FIXME: CDR padding in DDSI makes me do this to avoid reading beyond the bounds of the vector
-     when copying data to network.  Should fix Cyclone to handle that more elegantly. */
-  d->data.resize(size);
+  d->data.resize(next_multiple_of_4(size));
   memcpy(d->data.data(), raw, size);
-  while (d->data.size() % 4) {
-    d->data.push_back(0);
-  }
   return d;
 }
 
@@ -493,7 +472,8 @@ static std::string get_type_name(const char * type_support_identifier, void * ty
 
 struct sertopic_rmw * create_sertopic(
   const char * topicname, const char * type_support_identifier,
-  void * type_support, bool is_request_header)
+  void * type_support, bool is_request_header,
+  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type)
 {
   struct sertopic_rmw * st = new struct sertopic_rmw;
 #if DDSI_SERTOPIC_HAS_TOPICKIND_NO_KEY
@@ -517,5 +497,6 @@ struct sertopic_rmw * create_sertopic(
   st->type_support.typesupport_identifier_ = type_support_identifier;
   st->type_support.type_support_ = type_support;
   st->is_request_header = is_request_header;
+  st->value_type = std::move(message_type);
   return st;
 }

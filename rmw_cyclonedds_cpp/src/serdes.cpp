@@ -12,25 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <exception>
-#include <vector>
 
 #include "dds/ddsrt/endian.h"
 #include "rmw_cyclonedds_cpp/serdes.hpp"
-
-cycser::cycser(std::vector<unsigned char> & dst_)
-: dst(dst_),
-  off(0)
-{
-  dst.reserve(4);
-
-  /* endianness: 0x0000 for BE, 0x0001 for LE */
-  dst.push_back(0x00);
-  dst.push_back((DDSRT_ENDIAN == DDSRT_LITTLE_ENDIAN) ? 0x01 : 0x00);
-
-  /* options: defaults to 0x0000 */
-  dst.push_back(0);
-  dst.push_back(0);
-}
 
 cycdeserbase::cycdeserbase(const char * data_, size_t size_)
 : data(data_),
