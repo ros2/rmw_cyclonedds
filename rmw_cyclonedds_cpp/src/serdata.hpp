@@ -11,23 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef RMW_CYCLONEDDS_CPP__SERDATA_HPP_
-#define RMW_CYCLONEDDS_CPP__SERDATA_HPP_
+#ifndef SERDATA_HPP_
+#define SERDATA_HPP_
 
 #include <memory>
 #include <string>
-#include <vector>
 
+#include "bytewise.hpp"
 #include "dds/ddsi/ddsi_serdata.h"
 #include "dds/ddsi/ddsi_sertopic.h"
+#include "TypeSupport2.hpp"
 
 struct CddsTypeSupport
 {
   void * type_support_;
   const char * typesupport_identifier_;
 };
-
-namespace rmw_cyclonedds_cpp {class StructValueType;}
 
 struct sertopic_rmw : ddsi_sertopic
 {
@@ -41,11 +40,19 @@ struct sertopic_rmw : ddsi_sertopic
   std::unique_ptr<const rmw_cyclonedds_cpp::StructValueType> value_type;
 };
 
-struct serdata_rmw : ddsi_serdata
+class serdata_rmw : public ddsi_serdata
 {
+protected:
+  uint32_t m_size {0};
   /* first two bytes of data is CDR encoding
      second two bytes are encoding options */
-  std::vector<unsigned char> data;
+  std::unique_ptr<byte[]> m_data {nullptr};
+
+public:
+  serdata_rmw(const ddsi_sertopic * topic, ddsi_serdata_kind kind);
+  void resize(uint32_t requested_size);
+  uint32_t size() const {return m_size;}
+  void * data() const {return m_data.get();}
 };
 
 typedef struct cdds_request_header
@@ -79,4 +86,4 @@ struct ddsi_serdata * serdata_rmw_from_serialized_message(
   const struct ddsi_sertopic * topiccmn,
   const void * raw, size_t size);
 
-#endif  // RMW_CYCLONEDDS_CPP__SERDATA_HPP_
+#endif  // SERDATA_HPP_

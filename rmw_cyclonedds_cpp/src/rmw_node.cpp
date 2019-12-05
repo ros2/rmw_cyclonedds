@@ -54,7 +54,7 @@
 #include "dds/dds.h"
 #include "dds/ddsi/ddsi_sertopic.h"
 #include "rmw_cyclonedds_cpp/serdes.hpp"
-#include "rmw_cyclonedds_cpp/serdata.hpp"
+#include "serdata.hpp"
 
 /* Proper multi-domain support requires eliminating the "extra" participant, which in turn relies on
    the promotion of the Cyclone DDS library instance and the daomsin to full-fledged entities.  The
@@ -1651,15 +1651,15 @@ static rmw_ret_t rmw_take_ser_int(
         memcpy(message_info->publisher_gid.data, &info.publication_handle,
           sizeof(info.publication_handle));
       }
-      auto d = static_cast<struct serdata_rmw *>(dcmn);
+      auto d = static_cast<serdata_rmw *>(dcmn);
       /* FIXME: what about the header - should be included or not? */
-      if (rmw_serialized_message_resize(serialized_message, d->data.size()) != RMW_RET_OK) {
+      if (rmw_serialized_message_resize(serialized_message, d->size()) != RMW_RET_OK) {
         ddsi_serdata_unref(dcmn);
         *taken = false;
         return RMW_RET_ERROR;
       }
-      memcpy(serialized_message->buffer, d->data.data(), d->data.size());
-      serialized_message->buffer_length = d->data.size();
+      memcpy(serialized_message->buffer, d->data(), d->size());
+      serialized_message->buffer_length = d->size();
       ddsi_serdata_unref(dcmn);
       *taken = true;
       return RMW_RET_OK;
