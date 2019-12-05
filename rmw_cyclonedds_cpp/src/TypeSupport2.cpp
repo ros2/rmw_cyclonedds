@@ -15,16 +15,11 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
 namespace rmw_cyclonedds_cpp
 {
-static std::unordered_map<const rosidl_message_type_support_t *,
-  std::unique_ptr<const StructValueType>>
-s_struct_cache;
-
 class ROSIDLC_StructValueType : public StructValueType
 {
   const rosidl_typesupport_introspection_c__MessageMembers * impl;
