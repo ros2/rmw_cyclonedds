@@ -28,12 +28,12 @@ constexpr endian native_endian() {return endian(DDSRT_ENDIAN);}
 
 enum class byte : unsigned char {};
 
-static auto byte_offset(void * ptr, ptrdiff_t n)
+static inline auto byte_offset(void * ptr, ptrdiff_t n)
 {
   return static_cast<void *>(static_cast<byte *>(ptr) + n);
 }
 
-static auto byte_offset(const void * ptr, ptrdiff_t n)
+static inline auto byte_offset(const void * ptr, ptrdiff_t n)
 {
   return static_cast<const void *>(static_cast<const byte *>(ptr) + n);
 }

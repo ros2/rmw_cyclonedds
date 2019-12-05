@@ -29,7 +29,7 @@ class ROSIDLC_StructValueType : public StructValueType
 {
   const rosidl_typesupport_introspection_c__MessageMembers * impl;
   std::vector<Member> m_members;
-  std::vector<std::unique_ptr<AnyValueType>> m_inner_value_types;
+  std::vector<std::unique_ptr<const AnyValueType>> m_inner_value_types;
 
   template<typename ConstructedType, typename ... Args>
   ConstructedType * make_value_type(Args && ... args)
@@ -52,7 +52,7 @@ class ROSIDLCPP_StructValueType : public StructValueType
 {
   const rosidl_typesupport_introspection_cpp::MessageMembers * impl;
   std::vector<Member> m_members;
-  std::vector<std::unique_ptr<AnyValueType>> m_inner_value_types;
+  std::vector<std::unique_ptr<const AnyValueType>> m_inner_value_types;
   template<typename ConstructedType, typename ... Args>
   ConstructedType * make_value_type(Args && ... args)
   {
@@ -71,45 +71,30 @@ public:
   const Member * get_member(size_t index) const final {return &m_members.at(index);}
 };
 
-const StructValueType * struct_type_from_rosidl(const rosidl_message_type_support_t * mts)
+std::unique_ptr<StructValueType> make_message_value_type(const rosidl_message_type_support_t * mts)
 {
-  auto iter = s_struct_cache.find(mts);
-  if (iter != s_struct_cache.end()) {
-    return iter->second.get();
+  if (auto ts_c = mts->func(mts, TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::identifier)) {
+    auto members = static_cast<const MetaMessage<TypeGenerator::ROSIDL_C> *>(ts_c->data);
+    return std::make_unique<ROSIDLC_StructValueType>(members);
   }
-  std::unique_ptr<const StructValueType> result;
-  {
-    if (auto ts = mts->func(mts, TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::identifier)) {
-      auto members = static_cast<const MetaMessage<TypeGenerator::ROSIDL_C> *>(ts->data);
-      result = std::make_unique<ROSIDLC_StructValueType>(members);
-    } else if (auto ts = mts->func(mts, TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::identifier)) {
-      auto members = static_cast<const MetaMessage<TypeGenerator::ROSIDL_Cpp> *>(ts->data);
-      result = std::make_unique<ROSIDLCPP_StructValueType>(members);
-    } else {
-      throw std::runtime_error(
-              "could not identify message typesupport " + std::string(mts->typesupport_identifier));
-    }
-    auto ret = result.get();
-    s_struct_cache[mts] = std::move(result);
-    return ret;
+  if (auto ts_cpp = mts->func(mts, TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::identifier)) {
+    auto members = static_cast<const MetaMessage<TypeGenerator::ROSIDL_Cpp> *>(ts_cpp->data);
+    return std::make_unique<ROSIDLCPP_StructValueType>(members);
   }
+  throw std::runtime_error(
+          "could not identify message typesupport " + std::string(mts->typesupport_identifier));
 }
 
-std::pair<rosidl_message_type_support_t, rosidl_message_type_support_t>
-get_svc_request_response_typesupports(const rosidl_service_type_support_t * svc_ts)
+std::pair<std::unique_ptr<StructValueType>, std::unique_ptr<StructValueType>>
+make_request_response_value_types(const rosidl_service_type_support_t * svc_ts)
 {
-  rosidl_message_type_support_t request;
-  rosidl_message_type_support_t response;
-
-  request.typesupport_identifier = response.typesupport_identifier = svc_ts->typesupport_identifier;
-  request.func = response.func = get_message_typesupport_handle_function;
-
   if (auto tsc = svc_ts->func(svc_ts, TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::identifier)) {
     auto typed =
       static_cast<const TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::MetaService *>(tsc->data);
-    request.data = typed->request_members_;
-    response.data = typed->response_members_;
-    return {request, response};
+    return {
+      std::make_unique<ROSIDLC_StructValueType>(typed->request_members_),
+      std::make_unique<ROSIDLC_StructValueType>(typed->response_members_)
+    };
   }
 
   if (auto tscpp =
@@ -117,9 +102,10 @@ get_svc_request_response_typesupports(const rosidl_service_type_support_t * svc_
   {
     auto typed =
       static_cast<const TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::MetaService *>(tscpp->data);
-    request.data = typed->request_members_;
-    response.data = typed->response_members_;
-    return {request, response};
+    return {
+      std::make_unique<ROSIDLCPP_StructValueType>(typed->request_members_),
+      std::make_unique<ROSIDLCPP_StructValueType>(typed->response_members_)
+    };
   }
 
   throw std::runtime_error(
@@ -136,18 +122,19 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
     const AnyValueType * element_value_type;
     switch (ROSIDL_TypeKind(member_impl.type_id_)) {
       case ROSIDL_TypeKind::MESSAGE:
-        element_value_type = struct_type_from_rosidl(member_impl.members_);
+        m_inner_value_types.push_back(make_message_value_type(member_impl.members_));
+        element_value_type = m_inner_value_types.back().get();
         break;
-      case ROSIDL_TypeKind::STRING: {
-          element_value_type = make_value_type<ROSIDLC_StringValueType>();
-        } break;
-      case ROSIDL_TypeKind::WSTRING: {
-          element_value_type = make_value_type<ROSIDLC_WStringValueType>();
-        } break;
-      default: {
-          element_value_type =
-            make_value_type<PrimitiveValueType>(ROSIDL_TypeKind(member_impl.type_id_));
-        } break;
+      case ROSIDL_TypeKind::STRING:
+        element_value_type = make_value_type<ROSIDLC_StringValueType>();
+        break;
+      case ROSIDL_TypeKind::WSTRING:
+        element_value_type = make_value_type<ROSIDLC_WStringValueType>();
+        break;
+      default:
+        element_value_type =
+          make_value_type<PrimitiveValueType>(ROSIDL_TypeKind(member_impl.type_id_));
+        break;
     }
 
     const AnyValueType * member_value_type;
@@ -181,7 +168,8 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
     const AnyValueType * element_value_type;
     switch (ROSIDL_TypeKind(member_impl.type_id_)) {
       case ROSIDL_TypeKind::MESSAGE:
-        element_value_type = struct_type_from_rosidl(member_impl.members_);
+        m_inner_value_types.push_back(make_message_value_type(member_impl.members_));
+        element_value_type = m_inner_value_types.back().get();
         break;
       case ROSIDL_TypeKind::STRING:
         element_value_type = make_value_type<ROSIDLCPP_StringValueType>();

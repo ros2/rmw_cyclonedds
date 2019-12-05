@@ -19,6 +19,7 @@
 #include <set>
 #include <functional>
 #include <atomic>
+#include <memory>
 #include <vector>
 #include <string>
 #include <utility>
@@ -860,14 +861,15 @@ extern "C" rmw_ret_t rmw_serialize(
   rmw_serialized_message_t * serialized_message)
 {
   rmw_ret_t ret;
-
   try {
-    auto size = rmw_cyclonedds_cpp::get_serialized_size(ros_message, *type_support);
+    auto ts = rmw_cyclonedds_cpp::make_message_value_type(type_support);
+
+    auto size = rmw_cyclonedds_cpp::get_serialized_size(ros_message, ts.get());
     if ((ret = rmw_serialized_message_resize(serialized_message, size) != RMW_RET_OK)) {
       RMW_SET_ERROR_MSG("rmw_serialize: failed to allocate space for message");
       return ret;
     }
-    rmw_cyclonedds_cpp::serialize(serialized_message->buffer, ros_message, *type_support);
+    rmw_cyclonedds_cpp::serialize(serialized_message->buffer, ros_message, ts.get());
     serialized_message->buffer_length = size;
     return RMW_RET_OK;
   } catch (std::exception & e) {
@@ -1213,7 +1215,7 @@ static CddsPublisher * create_cdds_publisher(
   auto sertopic = create_sertopic(
     fqtopic_name.c_str(), type_support->typesupport_identifier,
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
-    *type_supports);
+    rmw_cyclonedds_cpp::make_message_value_type(type_supports));
   if ((topic =
     dds_create_topic_arbitrary(node_impl->pp, sertopic, nullptr, nullptr, nullptr)) < 0)
   {
@@ -1435,7 +1437,7 @@ static CddsSubscription * create_cdds_subscription(
   auto sertopic = create_sertopic(
     fqtopic_name.c_str(), type_support->typesupport_identifier,
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
-    *type_supports);
+    rmw_cyclonedds_cpp::make_message_value_type(type_supports));
   if ((topic =
     dds_create_topic_arbitrary(node_impl->pp, sertopic, nullptr, nullptr, nullptr)) < 0)
   {
@@ -2320,11 +2322,11 @@ static rmw_ret_t rmw_init_cs(
   std::string subtopic_name, pubtopic_name;
   void * pub_type_support, * sub_type_support;
 
-  rosidl_message_type_support_t pub_msg_ts, sub_msg_ts;
+  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> pub_msg_ts, sub_msg_ts;
 
   if (is_service) {
-    std::tie(sub_msg_ts, pub_msg_ts) = rmw_cyclonedds_cpp::get_svc_request_response_typesupports(
-      type_supports);
+    std::tie(sub_msg_ts, pub_msg_ts) =
+      rmw_cyclonedds_cpp::make_request_response_value_types(type_supports);
 
     sub_type_support = create_request_type_support(type_support->data,
         type_support->typesupport_identifier);
@@ -2334,8 +2336,8 @@ static rmw_ret_t rmw_init_cs(
       make_fqtopic(ros_service_requester_prefix, service_name, "Request", qos_policies);
     pubtopic_name = make_fqtopic(ros_service_response_prefix, service_name, "Reply", qos_policies);
   } else {
-    std::tie(pub_msg_ts, sub_msg_ts) = rmw_cyclonedds_cpp::get_svc_request_response_typesupports(
-      type_supports);
+    std::tie(pub_msg_ts, sub_msg_ts) =
+      rmw_cyclonedds_cpp::make_request_response_value_types(type_supports);
 
     pub_type_support = create_request_type_support(type_support->data,
         type_support->typesupport_identifier);
@@ -2356,10 +2358,10 @@ static rmw_ret_t rmw_init_cs(
 
   auto pub_st = create_sertopic(
     pubtopic_name.c_str(), type_support->typesupport_identifier, pub_type_support, true,
-    pub_msg_ts);
+    std::move(pub_msg_ts));
   auto sub_st = create_sertopic(
     subtopic_name.c_str(), type_support->typesupport_identifier, sub_type_support, true,
-    sub_msg_ts);
+    std::move(sub_msg_ts));
 
   dds_qos_t * qos;
   if ((pubtopic =

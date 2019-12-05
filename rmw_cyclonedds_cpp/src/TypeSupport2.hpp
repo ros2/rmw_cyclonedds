@@ -18,6 +18,7 @@
 #include <memory>
 #include <regex>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "bytewise.hpp"
@@ -38,7 +39,6 @@ struct AnyValueType;
 /// contiguous storage objects
 template<typename T>
 class TypedSpan;
-class UntypedSpan;
 
 template<typename T>
 class TypedSpan
@@ -48,7 +48,9 @@ class TypedSpan
 
 public:
   TypedSpan(const T * data, size_t size)
-  : m_data(data), m_size(size) {}
+  : m_data(data), m_size(size)
+  {
+  }
 
   size_t size() const {return m_size;}
   size_t size_bytes() const {return size() * sizeof(T);}
@@ -56,47 +58,6 @@ public:
 
   auto begin() {return m_data;}
   auto end() {return m_data + size();}
-};
-
-class UntypedSpan
-{
-protected:
-  const void * m_data;
-  size_t m_size_bytes;
-
-public:
-  UntypedSpan(const void * data, size_t size_bytes)
-  : m_data(data), m_size_bytes(size_bytes) {}
-
-  template<typename T>
-  TypedSpan<T> cast() const
-  {
-    assert(m_size_bytes % sizeof(T) == 0);
-    return {static_cast<T *>(m_data), m_size_bytes / sizeof(T)};
-  }
-  size_t size_bytes() const {return m_size_bytes;}
-  const void * data() const {return m_data;}
-};
-
-class ChunkedIterator
-{
-protected:
-  void * m_data;
-  size_t m_size_bytes;
-
-public:
-  ChunkedIterator & operator++()
-  {
-    m_data = byte_offset(m_data, m_size_bytes);
-    return *this;
-  }
-  UntypedSpan operator*() const {return {m_data, m_size_bytes};}
-  bool operator==(const ChunkedIterator & other) const
-  {
-    assert(m_size_bytes == other.m_size_bytes);
-    return m_data == other.m_data;
-  }
-  bool operator!=(const ChunkedIterator & other) const {return !(*this == other);}
 };
 
 template<typename NativeType>
@@ -168,8 +129,12 @@ enum class ROSIDL_TypeKind : uint8_t
   MESSAGE = tsi_enum::ROS_TYPE_MESSAGE,
 };
 
+
 class StructValueType;
-const StructValueType * struct_type_from_rosidl(const rosidl_message_type_support_t * mts);
+std::unique_ptr<StructValueType> make_message_value_type(const rosidl_message_type_support_t * mts);
+
+std::pair<std::unique_ptr<StructValueType>, std::unique_ptr<StructValueType>>
+make_request_response_value_types(const rosidl_service_type_support_t * svc);
 
 enum class EValueType
 {
@@ -207,11 +172,6 @@ struct Member
   const char * name;
   const AnyValueType * value_type;
   size_t member_offset;
-
-  const void * get_member_data(const void * ptr_to_struct) const
-  {
-    return byte_offset(ptr_to_struct, member_offset);
-  }
 };
 
 class StructValueType : public AnyValueType
@@ -258,7 +218,7 @@ class CallbackSpanSequenceValueType : public SpanSequenceValueType
 protected:
   const AnyValueType * m_element_value_type;
   std::function<size_t(const void *)> m_size_function;
-  std::function<const void *(const void *, size_t index)> m_get_const_function;
+  std::function<const void * (const void *, size_t index)> m_get_const_function;
 
 public:
   CallbackSpanSequenceValueType(
@@ -414,7 +374,6 @@ class U8StringValueType : public AnyValueType
 {
 public:
   using char_traits = std::char_traits<char>;
-  ROSIDL_TypeKind type_kind() const {return ROSIDL_TypeKind::STRING;}
   virtual TypedSpan<char_traits::char_type> data(void *) const = 0;
   virtual TypedSpan<const char_traits::char_type> data(const void *) const = 0;
   EValueType e_value_type() const final {return EValueType::U8StringValueType;}
@@ -424,7 +383,6 @@ class U16StringValueType : public AnyValueType
 {
 public:
   using char_traits = std::char_traits<char16_t>;
-  ROSIDL_TypeKind type_kind() const {return ROSIDL_TypeKind::WSTRING;}
   virtual TypedSpan<char_traits::char_type> data(void *) const = 0;
   virtual TypedSpan<const char_traits::char_type> data(const void *) const = 0;
   EValueType e_value_type() const final {return EValueType::U16StringValueType;}
@@ -438,11 +396,15 @@ public:
   TypedSpan<const char_traits::char_type> data(const void * ptr) const override
   {
     auto str = static_cast<const type *>(ptr);
+    assert(str->capacity == str->size + 1);
+    assert(str->data[str->size] == '\0');
     return {str->data, str->size};
   }
   TypedSpan<char_traits::char_type> data(void * ptr) const override
   {
     auto str = static_cast<type *>(ptr);
+    assert(str->capacity == str->size + 1);
+    assert(str->data[str->size + 1] == 0);
     return {str->data, str->size};
   }
   size_t sizeof_type() const override {return sizeof(type);}

@@ -14,8 +14,7 @@
 #ifndef RMW_CYCLONEDDS_CPP__SERDATA_HPP_
 #define RMW_CYCLONEDDS_CPP__SERDATA_HPP_
 
-#include <rosidl_generator_c/message_type_support_struct.h>
-
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -28,6 +27,8 @@ struct CddsTypeSupport
   const char * typesupport_identifier_;
 };
 
+namespace rmw_cyclonedds_cpp {class StructValueType;}
+
 struct sertopic_rmw : ddsi_sertopic
 {
   CddsTypeSupport type_support;
@@ -37,7 +38,7 @@ struct sertopic_rmw : ddsi_sertopic
   std::string cpp_type_name;
   std::string cpp_name_type_name;
 #endif
-  rosidl_message_type_support_t message_type_support;
+  std::unique_ptr<const rmw_cyclonedds_cpp::StructValueType> value_type;
 };
 
 struct serdata_rmw : ddsi_serdata
@@ -71,7 +72,8 @@ void * create_response_type_support(
 
 struct sertopic_rmw * create_sertopic(
   const char * topicname, const char * type_support_identifier,
-  void * type_support, bool is_request_header, rosidl_message_type_support_t message_type_support);
+  void * type_support, bool is_request_header,
+  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type_support);
 
 struct ddsi_serdata * serdata_rmw_from_serialized_message(
   const struct ddsi_sertopic * topiccmn,

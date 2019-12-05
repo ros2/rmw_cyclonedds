@@ -14,11 +14,13 @@
 #include "rmw_cyclonedds_cpp/serdata.hpp"
 
 #include <cstring>
-
+#include <memory>
 #include <regex>
 #include <sstream>
 #include <string>
+#include <utility>
 
+#include "TypeSupport2.hpp"
 #include "Serialization.hpp"
 #include "dds/ddsi/q_radmin.h"
 #include "rmw/error_handling.h"
@@ -176,18 +178,18 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
     if (kind != SDK_DATA) {
       /* ROS2 doesn't do keys, so SDK_KEY is trivial */
     } else if (!topic->is_request_header) {
-      size_t sz = rmw_cyclonedds_cpp::get_serialized_size(sample, topic->message_type_support);
+      size_t sz = rmw_cyclonedds_cpp::get_serialized_size(sample, topic->value_type.get());
       d->data.resize(next_multiple_of_4(sz));
-      rmw_cyclonedds_cpp::serialize(d->data.data(), sample, topic->message_type_support);
+      rmw_cyclonedds_cpp::serialize(d->data.data(), sample, topic->value_type.get());
     } else {
       /* inject the service invocation header data into the CDR stream --
        * I haven't checked how it is done in the official RMW implementations, so it is
        * probably incompatible. */
       auto wrap = *static_cast<const cdds_request_wrapper_t *>(sample);
 
-      size_t sz = rmw_cyclonedds_cpp::get_serialized_size(wrap, topic->message_type_support);
+      size_t sz = rmw_cyclonedds_cpp::get_serialized_size(wrap, topic->value_type.get());
       d->data.resize(next_multiple_of_4(sz));
-      rmw_cyclonedds_cpp::serialize(d->data.data(), wrap, topic->message_type_support);
+      rmw_cyclonedds_cpp::serialize(d->data.data(), wrap, topic->value_type.get());
     }
     return d;
   } catch (std::exception & e) {
@@ -471,7 +473,7 @@ static std::string get_type_name(const char * type_support_identifier, void * ty
 struct sertopic_rmw * create_sertopic(
   const char * topicname, const char * type_support_identifier,
   void * type_support, bool is_request_header,
-  const rosidl_message_type_support_t message_type_support)
+  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type)
 {
   struct sertopic_rmw * st = new struct sertopic_rmw;
 #if DDSI_SERTOPIC_HAS_TOPICKIND_NO_KEY
@@ -495,6 +497,6 @@ struct sertopic_rmw * create_sertopic(
   st->type_support.typesupport_identifier_ = type_support_identifier;
   st->type_support.type_support_ = type_support;
   st->is_request_header = is_request_header;
-  st->message_type_support = message_type_support;
+  st->value_type = std::move(message_type);
   return st;
 }

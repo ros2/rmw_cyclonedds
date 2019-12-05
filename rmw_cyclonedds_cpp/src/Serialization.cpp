@@ -55,7 +55,10 @@ struct CDRCursor
     assert(offset() - start_offset < n_bytes);
     assert(offset() % n_bytes == 0);
   }
-  ptrdiff_t operator-(const CDRCursor & other) const {return offset() - other.offset();}
+  ptrdiff_t operator-(const CDRCursor & other) const
+  {
+    return static_cast<ptrdiff_t>(offset()) - static_cast<ptrdiff_t>(other.offset());
+  }
 };
 
 struct SizeCursor : CDRCursor
@@ -91,6 +94,9 @@ struct DataCursor : public CDRCursor
   void advance(size_t n_bytes) final {position = byte_offset(position, n_bytes);}
   void put_bytes(const void * bytes, size_t n_bytes) final
   {
+    if (n_bytes == 0) {
+      return;
+    }
     std::memcpy(position, bytes, n_bytes);
     advance(n_bytes);
   }
@@ -135,7 +141,7 @@ public:
   CDRWriter()
   : eversion{EncodingVersion::CDR_Legacy}, max_align{8}, trivially_serialized_cache{} {}
 
-  void serialize_top_level(CDRCursor * cursor, const void * data, const StructValueType & support)
+  void serialize_top_level(CDRCursor * cursor, const void * data, const StructValueType * support)
   {
     put_rtps_header(cursor);
 
@@ -143,7 +149,7 @@ public:
       cursor->rebase(+4);
     }
 
-    if (support.n_members() == 0 && eversion == EncodingVersion::CDR_Legacy) {
+    if (support->n_members() == 0 && eversion == EncodingVersion::CDR_Legacy) {
       char dummy = '\0';
       cursor->put_bytes(&dummy, 1);
     } else {
@@ -156,15 +162,15 @@ public:
   }
 
   void serialize_top_level(
-    CDRCursor * cursor, const cdds_request_wrapper_t & request, const StructValueType & support)
+    CDRCursor * cursor, const cdds_request_wrapper_t & request, const StructValueType * support)
   {
     put_rtps_header(cursor);
     if (eversion == EncodingVersion::CDR_Legacy) {
       cursor->rebase(+4);
     }
-
     cursor->put_bytes(&request.header.guid, sizeof(request.header.guid));
     cursor->put_bytes(&request.header.seq, sizeof(request.header.seq));
+
     serialize(cursor, request.data, support);
 
     if (eversion == EncodingVersion::CDR_Legacy) {
@@ -196,7 +202,7 @@ protected:
   void serialize_u32(CDRCursor * cursor, size_t value)
   {
     assert(value <= std::numeric_limits<uint32_t>::max());
-    cursor->align(std::min(size_t(4), max_align));
+    cursor->align(4);
     cursor->put_bytes(&value, 4);
   }
 
@@ -283,6 +289,7 @@ protected:
           result = is_trivially_serialized(align, *static_cast<const PrimitiveValueType *>(p));
           break;
         case EValueType::StructValueType:
+          result = false;
           result = is_trivially_serialized(align, *static_cast<const StructValueType *>(p));
           break;
         case EValueType::ArrayValueType:
@@ -335,12 +342,12 @@ protected:
       case ROSIDL_TypeKind::UINT32:
       case ROSIDL_TypeKind::INT32:
       case ROSIDL_TypeKind::UINT64:
-      case ROSIDL_TypeKind::INT64: {
-          auto bytes = static_cast<const byte *>(data);
-          if (native_endian() == endian::big) {
-            bytes += value_type.sizeof_type() - n_bytes;
-          }
-          cursor->put_bytes(bytes, n_bytes);
+      case ROSIDL_TypeKind::INT64:
+        if (value_type.sizeof_type() == n_bytes || native_endian() == endian::little) {
+          cursor->put_bytes(data, n_bytes);
+        } else {
+          const void * offset_data = byte_offset(data, value_type.sizeof_type() - n_bytes);
+          cursor->put_bytes(offset_data, n_bytes);
         }
         return;
       case ROSIDL_TypeKind::STRING:
@@ -410,29 +417,29 @@ protected:
     if (is_trivially_serialized(cursor->offset(), value_type)) {
       cursor->put_bytes(data, value_type->sizeof_type());
     } else {
-      value_type->apply([&](const auto & vt) {return serialize(cursor, data, vt);});
-      //    if (auto s = dynamic_cast<const PrimitiveValueType *>(value_type)) {
-      //      return serialize(cursor, data, *s);
-      //    }
-      //    if (auto s = dynamic_cast<const AnyU8StringValueType *>(value_type)) {
-      //      return serialize(cursor, data, *s);
-      //    }
-      //    if (auto s = dynamic_cast<const AnyU16StringValueType *>(value_type)) {
-      //      return serialize(cursor, data, *s);
-      //    }
-      //    if (auto s = dynamic_cast<const AnyStructValueType *>(value_type)) {
-      //      return serialize(cursor, data, *s);
-      //    }
-      //    if (auto s = dynamic_cast<const ArrayValueType *>(value_type)) {
-      //      return serialize(cursor, data, *s);
-      //    }
-      //    if (auto s = dynamic_cast<const SpanSequenceValueType *>(value_type)) {
-      //      return serialize(cursor, data, *s);
-      //    }
-      //    if (auto s = dynamic_cast<const BoolVectorValueType *>(value_type)) {
-      //      return serialize(cursor, data, *s);
-      //    }
-      //    throw std::logic_error("Unhandled case");
+//      value_type->apply([&](const auto & vt) {return serialize(cursor, data, vt);});
+      if (auto s = dynamic_cast<const PrimitiveValueType *>(value_type)) {
+        return serialize(cursor, data, *s);
+      }
+      if (auto s = dynamic_cast<const U8StringValueType *>(value_type)) {
+        return serialize(cursor, data, *s);
+      }
+      if (auto s = dynamic_cast<const U16StringValueType *>(value_type)) {
+        return serialize(cursor, data, *s);
+      }
+      if (auto s = dynamic_cast<const StructValueType *>(value_type)) {
+        return serialize(cursor, data, *s);
+      }
+      if (auto s = dynamic_cast<const ArrayValueType *>(value_type)) {
+        return serialize(cursor, data, *s);
+      }
+      if (auto s = dynamic_cast<const SpanSequenceValueType *>(value_type)) {
+        return serialize(cursor, data, *s);
+      }
+      if (auto s = dynamic_cast<const BoolVectorValueType *>(value_type)) {
+        return serialize(cursor, data, *s);
+      }
+      throw std::logic_error("Unhandled case");
     }
   }
 
@@ -473,33 +480,29 @@ protected:
   }
 };
 
-size_t get_serialized_size(const void * data, const rosidl_message_type_support_t & ts)
+size_t get_serialized_size(const void * data, const StructValueType * ts)
 {
   SizeCursor cursor;
-  CDRWriter().serialize_top_level(&cursor, data, *struct_type_from_rosidl(&ts));
+  CDRWriter().serialize_top_level(&cursor, data, ts);
   return cursor.offset();
 }
 
-void serialize(
-  void * dest, const void * data, const rosidl_message_type_support_t & ts)
+void serialize(void * dest, const void * data, const StructValueType * ts)
 {
   DataCursor cursor(dest);
-  CDRWriter().serialize_top_level(&cursor, data, *struct_type_from_rosidl(&ts));
+  CDRWriter().serialize_top_level(&cursor, data, ts);
 }
 
-size_t get_serialized_size(
-  const cdds_request_wrapper_t & request, const rosidl_message_type_support_t & ts)
+size_t get_serialized_size(const cdds_request_wrapper_t & request, const StructValueType * ts)
 {
   SizeCursor cursor;
-  CDRWriter().serialize_top_level(&cursor, request, *struct_type_from_rosidl(&ts));
+  CDRWriter().serialize_top_level(&cursor, request, ts);
   return cursor.offset();
 }
 
-void serialize(
-  void * dest, const cdds_request_wrapper_t & request,
-  const rosidl_message_type_support_t & ts)
+void serialize(void * dest, const cdds_request_wrapper_t & request, const StructValueType * ts)
 {
   DataCursor cursor(dest);
-  CDRWriter().serialize_top_level(&cursor, request, *struct_type_from_rosidl(&ts));
+  CDRWriter().serialize_top_level(&cursor, request, ts);
 }
 }  // namespace rmw_cyclonedds_cpp
