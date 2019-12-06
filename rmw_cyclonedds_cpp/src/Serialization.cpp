@@ -91,14 +91,18 @@ struct DataCursor : public CDRCursor
   : origin(position), position(position) {}
 
   size_t offset() const final {return (const byte *)position - (const byte *)origin;}
-  void advance(size_t n_bytes) final {position = byte_offset(position, n_bytes);}
+  void advance(size_t n_bytes) final
+  {
+    std::memset(position, '\0', n_bytes);
+    position = byte_offset(position, n_bytes);
+  }
   void put_bytes(const void * bytes, size_t n_bytes) final
   {
     if (n_bytes == 0) {
       return;
     }
     std::memcpy(position, bytes, n_bytes);
-    advance(n_bytes);
+    position = byte_offset(position, n_bytes);
   }
   bool ignores_data() const final {return false;}
   void rebase(ptrdiff_t relative_origin) final {origin = byte_offset(origin, relative_origin);}

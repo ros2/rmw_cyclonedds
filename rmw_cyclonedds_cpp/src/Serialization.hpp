@@ -15,8 +15,8 @@
 #define SERIALIZATION_HPP_
 
 #include "TypeSupport2.hpp"
-#include "rmw_cyclonedds_cpp/serdata.hpp"
 #include "rosidl_generator_c/service_type_support_struct.h"
+#include "serdata.hpp"
 
 namespace rmw_cyclonedds_cpp
 {
