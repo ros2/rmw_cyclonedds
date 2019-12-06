@@ -13,7 +13,6 @@
 // limitations under the License.
 #include "Serialization.hpp"
 
-#include <algorithm>
 #include <limits>
 #include <unordered_map>
 #include <vector>
@@ -315,11 +314,12 @@ protected:
     return result;
   }
 
-  size_t get_cdr_alignof_primitive(ROSIDL_TypeKind vt)
+  size_t get_cdr_alignof_primitive(ROSIDL_TypeKind tk)
   {
     /// return 0 if the value type is not primitive
     /// else returns the number of bytes it should align to
-    return std::min(get_cdr_size_of_primitive(vt), max_align);
+    size_t sizeof_ = get_cdr_size_of_primitive(tk);
+    return sizeof_ < max_align ? sizeof_ : max_align;
   }
 
   void serialize(CDRCursor * cursor, const void * data, const PrimitiveValueType & value_type)
