@@ -35,12 +35,16 @@ protected:
   std::string m_message;
 };
 
-/// A function to stub out code that should never be reachable by design.
+/// Stub for code that should never be reachable by design.
 /// If it is possible to reach the code due to bad data or other runtime conditions,
 /// use a runtime_error instead
 [[noreturn]] inline void unreachable()
 {
+#if defined(__has_builtin)
 #if __has_builtin(__builtin_unreachable)
+  __builtin_unreachable();
+#endif
+#elif (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 5))
   __builtin_unreachable();
 #endif
   throw std::logic_error("This code should be unreachable.");
