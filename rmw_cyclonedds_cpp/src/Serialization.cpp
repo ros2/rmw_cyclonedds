@@ -27,6 +27,8 @@
 #include <utility>
 #include <vector>
 
+#include "CDR.hpp"
+#include "CDRCursor.hpp"
 #include "TypeSupport2.hpp"
 #include "bytewise.hpp"
 

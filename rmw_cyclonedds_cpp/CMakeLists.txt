@@ -57,7 +57,7 @@ add_library(rmw_cyclonedds_cpp
   src/exception.cpp
   src/deserialization_exception.cpp
   src/Serialization.cpp
-  src/TypeSupport2.cpp)
+  src/TypeSupport2.cpp src/Deserialization.cpp src/Deserialization.hpp src/CDRCursor.hpp src/CDR.hpp)
 
 target_include_directories(rmw_cyclonedds_cpp PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

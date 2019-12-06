@@ -187,6 +187,8 @@ public:
   virtual size_t n_members() const = 0;
   virtual const Member * get_member(size_t) const = 0;
   EValueType e_value_type() const final {return EValueType::StructValueType;}
+  virtual void ctor (void * obj) const = 0;
+  virtual void dtor (void * obj) const = 0;
 };
 
 class ArrayValueType : public AnyValueType
