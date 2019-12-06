@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "bytewise.hpp"
+#include "rmw_cyclonedds_cpp/exception.hpp"
 #include "rosidl_generator_c/string_functions.h"
 #include "rosidl_generator_c/u16string_functions.h"
 #include "rosidl_typesupport_introspection_c/identifier.h"
@@ -327,9 +328,8 @@ struct PrimitiveValueType : public AnyValueType
       case ROSIDL_TypeKind::STRING:
       case ROSIDL_TypeKind::WSTRING:
       case ROSIDL_TypeKind::MESSAGE:
-        throw std::runtime_error(
-                "not a primitive value type: " +
-                std::to_string(std::underlying_type_t<ROSIDL_TypeKind>(m_type_kind)));
+      default:
+        unreachable();
     }
   }
   EValueType e_value_type() const override {return EValueType::PrimitiveValueType;}
@@ -482,6 +482,8 @@ auto AnyValueType::apply(UnaryFunction f) const
       return f(*static_cast<const SpanSequenceValueType *>(this));
     case EValueType::BoolVectorValueType:
       return f(*static_cast<const BoolVectorValueType *>(this));
+    default:
+      unreachable();
   }
 }
 
@@ -503,6 +505,8 @@ auto AnyValueType::apply(UnaryFunction f)
       return f(*static_cast<SpanSequenceValueType *>(this));
     case EValueType::BoolVectorValueType:
       return f(*static_cast<BoolVectorValueType *>(this));
+    default:
+      unreachable();
   }
 }
 

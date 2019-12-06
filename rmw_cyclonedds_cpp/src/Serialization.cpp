@@ -194,6 +194,8 @@ protected:
       case EncodingVersion::CDR1:
         eversion_byte = '\1';
         break;
+      default:
+        unreachable();
     }
     std::array<char, 4> rtps_header{eversion_byte,
       // encoding format = PLAIN_CDR
@@ -304,6 +306,9 @@ protected:
         case EValueType::SpanSequenceValueType:
         case EValueType::BoolVectorValueType:
           result = false;
+          break;
+        default:
+          unreachable();
       }
       trivially_serialized_cache.emplace(key, result);
     }
@@ -357,7 +362,8 @@ protected:
       case ROSIDL_TypeKind::STRING:
       case ROSIDL_TypeKind::WSTRING:
       case ROSIDL_TypeKind::MESSAGE:
-        throw std::logic_error("not a primitive");
+      default:
+        unreachable();
     }
   }
 
@@ -443,7 +449,7 @@ protected:
       if (auto s = dynamic_cast<const BoolVectorValueType *>(value_type)) {
         return serialize(cursor, data, *s);
       }
-      throw std::logic_error("Unhandled case");
+      unreachable();
     }
   }
 
