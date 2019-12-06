@@ -1,4 +1,4 @@
-// Copyright 2016 Proyectos y Sistemas de Mantenimiento SL (eProsima).
+// Copyright 2019 ADLINK Technology Limited.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,20 +15,8 @@
 #ifndef NAMESPACE_PREFIX_HPP_
 #define NAMESPACE_PREFIX_HPP_
 
-#include <vector>
-#include <string>
-
-extern "C"
-{
-extern const char * const ros_topic_prefix;
-extern const char * const ros_service_requester_prefix;
-extern const char * const ros_service_response_prefix;
-
-extern const std::vector<std::string> _ros_prefixes;
-}  // extern "C"
-
-/// Return the ROS specific prefix if it exists, otherwise "".
-std::string
-_get_ros_prefix_if_exists(const std::string & topic_name);
+static const char ROS_TOPIC_PREFIX[] = "rt";
+static const char ROS_SERVICE_REQUESTER_PREFIX[] = "rq";
+static const char ROS_SERVICE_RESPONSE_PREFIX[] = "rr";
 
 #endif  // NAMESPACE_PREFIX_HPP_

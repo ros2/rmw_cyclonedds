@@ -1210,7 +1210,7 @@ static CddsPublisher * create_cdds_publisher(
   dds_entity_t topic;
   dds_qos_t * qos;
 
-  std::string fqtopic_name = make_fqtopic(ros_topic_prefix, topic_name, "", qos_policies);
+  std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
 
   auto sertopic = create_sertopic(
     fqtopic_name.c_str(), type_support->typesupport_identifier,
@@ -1432,7 +1432,7 @@ static CddsSubscription * create_cdds_subscription(
   dds_entity_t topic;
   dds_qos_t * qos;
 
-  std::string fqtopic_name = make_fqtopic(ros_topic_prefix, topic_name, "", qos_policies);
+  std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
 
   auto sertopic = create_sertopic(
     fqtopic_name.c_str(), type_support->typesupport_identifier,
@@ -2333,8 +2333,8 @@ static rmw_ret_t rmw_init_cs(
     pub_type_support = create_response_type_support(type_support->data,
         type_support->typesupport_identifier);
     subtopic_name =
-      make_fqtopic(ros_service_requester_prefix, service_name, "Request", qos_policies);
-    pubtopic_name = make_fqtopic(ros_service_response_prefix, service_name, "Reply", qos_policies);
+      make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", qos_policies);
+    pubtopic_name = make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", qos_policies);
   } else {
     std::tie(pub_msg_ts, sub_msg_ts) =
       rmw_cyclonedds_cpp::make_request_response_value_types(type_supports);
@@ -2344,8 +2344,8 @@ static rmw_ret_t rmw_init_cs(
     sub_type_support = create_response_type_support(type_support->data,
         type_support->typesupport_identifier);
     pubtopic_name =
-      make_fqtopic(ros_service_requester_prefix, service_name, "Request", qos_policies);
-    subtopic_name = make_fqtopic(ros_service_response_prefix, service_name, "Reply", qos_policies);
+      make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", qos_policies);
+    subtopic_name = make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", qos_policies);
   }
 
   RCUTILS_LOG_DEBUG_NAMED("rmw_cyclonedds_cpp", "************ %s Details *********",
@@ -2781,7 +2781,7 @@ static rmw_ret_t get_endpoint_names_and_types_by_node(
     return ret;
   }
   const auto re_tp =
-    std::regex("^" + std::string(ros_topic_prefix) + "(/.*)", std::regex::extended);
+    std::regex("^" + std::string(ROS_TOPIC_PREFIX) + "(/.*)", std::regex::extended);
   const auto re_typ = std::regex("^(.*::)dds_::(.*)_$", std::regex::extended);
   const auto filter_and_map =
     [re_tp, re_typ, guids, node_name, no_demangle](const dds_builtintopic_endpoint_t & sample,
@@ -2872,8 +2872,8 @@ static rmw_ret_t get_cs_names_and_types_by_node(
     return ret;
   }
   const auto re_tp = std::regex(
-    "^(" + std::string(ros_service_requester_prefix) + "|" +
-    std::string(ros_service_response_prefix) + ")(/.*)(Request|Reply)$",
+    "^(" + std::string(ROS_SERVICE_REQUESTER_PREFIX) + "|" +
+    std::string(ROS_SERVICE_RESPONSE_PREFIX) + ")(/.*)(Request|Reply)$",
     std::regex::extended);
   const auto re_typ = std::regex("^(.*::)dds_::(.*)_(Response|Request)_$", std::regex::extended);
   const auto filter_and_map = [re_tp, re_typ, guids, node_name, looking_for_services](
@@ -2966,7 +2966,7 @@ static rmw_ret_t rmw_count_pubs_or_subs(
   RET_WRONG_IMPLID(node);
   auto node_impl = static_cast<CddsNode *>(node->data);
 
-  std::string fqtopic_name = make_fqtopic(ros_topic_prefix, topic_name, "", false);
+  std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", false);
   dds_entity_t rd;
   if ((rd = dds_create_reader(node_impl->pp, builtin_topic, NULL, NULL)) < 0) {
     RMW_SET_ERROR_MSG("rmw_count_pubs_or_subs failed to create reader");
