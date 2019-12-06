@@ -15,6 +15,7 @@
 #define TYPESUPPORT2_HPP_
 
 #include <cassert>
+#include <functional>
 #include <memory>
 #include <regex>
 #include <string>
