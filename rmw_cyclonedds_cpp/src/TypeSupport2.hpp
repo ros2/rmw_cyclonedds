@@ -81,8 +81,7 @@ template<>
 struct TypeGeneratorInfo<TypeGenerator::ROSIDL_C>
 {
   static constexpr auto enum_value = TypeGenerator::ROSIDL_C;
-
-  static constexpr auto & identifier = rosidl_typesupport_introspection_c__identifier;
+  static const auto & get_identifier() {return rosidl_typesupport_introspection_c__identifier;}
   using MetaMessage = rosidl_typesupport_introspection_c__MessageMembers;
   using MetaMember = rosidl_typesupport_introspection_c__MessageMember;
   using MetaService = rosidl_typesupport_introspection_c__ServiceMembers;
@@ -92,7 +91,10 @@ template<>
 struct TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>
 {
   static constexpr auto enum_value = TypeGenerator::ROSIDL_Cpp;
-  static constexpr auto & identifier = rosidl_typesupport_introspection_cpp::typesupport_identifier;
+  static const auto & get_identifier()
+  {
+    return rosidl_typesupport_introspection_cpp::typesupport_identifier;
+  }
   using MetaMessage = rosidl_typesupport_introspection_cpp::MessageMembers;
   using MetaMember = rosidl_typesupport_introspection_cpp::MessageMember;
   using MetaService = rosidl_typesupport_introspection_cpp::ServiceMembers;
