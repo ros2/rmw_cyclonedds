@@ -68,11 +68,13 @@ public:
 
 std::unique_ptr<StructValueType> make_message_value_type(const rosidl_message_type_support_t * mts)
 {
-  if (auto ts_c = mts->func(mts, TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::identifier)) {
+  if (auto ts_c = mts->func(mts, TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::get_identifier())) {
     auto members = static_cast<const MetaMessage<TypeGenerator::ROSIDL_C> *>(ts_c->data);
     return std::make_unique<ROSIDLC_StructValueType>(members);
   }
-  if (auto ts_cpp = mts->func(mts, TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::identifier)) {
+  if (auto ts_cpp =
+    mts->func(mts, TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::get_identifier()))
+  {
     auto members = static_cast<const MetaMessage<TypeGenerator::ROSIDL_Cpp> *>(ts_cpp->data);
     return std::make_unique<ROSIDLCPP_StructValueType>(members);
   }
@@ -83,7 +85,9 @@ std::unique_ptr<StructValueType> make_message_value_type(const rosidl_message_ty
 std::pair<std::unique_ptr<StructValueType>, std::unique_ptr<StructValueType>>
 make_request_response_value_types(const rosidl_service_type_support_t * svc_ts)
 {
-  if (auto tsc = svc_ts->func(svc_ts, TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::identifier)) {
+  if (auto tsc =
+    svc_ts->func(svc_ts, TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::get_identifier()))
+  {
     auto typed =
       static_cast<const TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::MetaService *>(tsc->data);
     return {
@@ -93,7 +97,7 @@ make_request_response_value_types(const rosidl_service_type_support_t * svc_ts)
   }
 
   if (auto tscpp =
-    svc_ts->func(svc_ts, TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::identifier))
+    svc_ts->func(svc_ts, TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::get_identifier()))
   {
     auto typed =
       static_cast<const TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::MetaService *>(tscpp->data);

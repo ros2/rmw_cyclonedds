@@ -18,6 +18,9 @@
 
 #include "dds/ddsrt/endian.h"
 
+using std::size_t;
+using std::ptrdiff_t;
+
 enum class endian
 {
   little = DDSRT_LITTLE_ENDIAN,

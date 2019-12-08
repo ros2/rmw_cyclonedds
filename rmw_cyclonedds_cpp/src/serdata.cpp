@@ -111,7 +111,10 @@ void * create_response_type_support(
 
 static uint32_t serdata_rmw_size(const struct ddsi_serdata * dcmn)
 {
-  return static_cast<const serdata_rmw *>(dcmn)->size();
+  size_t size = static_cast<const serdata_rmw *>(dcmn)->size();
+  uint32_t size_u32(size);
+  assert(size == size_u32);
+  return size_u32;
 }
 
 static void serdata_rmw_free(struct ddsi_serdata * dcmn)
@@ -142,7 +145,7 @@ static struct ddsi_serdata * serdata_rmw_from_ser(
       memcpy(cursor, src, n_bytes);
       cursor = byte_offset(cursor, n_bytes);
       off = fragchain->maxp1;
-      assert(off < size);
+      assert(off <= size);
     }
     fragchain = fragchain->nextfrag;
   }
@@ -491,7 +494,7 @@ struct sertopic_rmw * create_sertopic(
   return st;
 }
 
-void serdata_rmw::resize(uint32_t requested_size)
+void serdata_rmw::resize(size_t requested_size)
 {
   if (!requested_size) {
     m_size = 0;

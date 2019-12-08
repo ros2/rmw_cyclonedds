@@ -43,15 +43,15 @@ struct sertopic_rmw : ddsi_sertopic
 class serdata_rmw : public ddsi_serdata
 {
 protected:
-  uint32_t m_size {0};
+  size_t m_size {0};
   /* first two bytes of data is CDR encoding
      second two bytes are encoding options */
   std::unique_ptr<byte[]> m_data {nullptr};
 
 public:
   serdata_rmw(const ddsi_sertopic * topic, ddsi_serdata_kind kind);
-  void resize(uint32_t requested_size);
-  uint32_t size() const {return m_size;}
+  void resize(size_t requested_size);
+  size_t size() const {return m_size;}
   void * data() const {return m_data.get();}
 };
 

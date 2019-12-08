@@ -1031,6 +1031,8 @@ static dds_qos_t * create_readwrite_qos(
     case RMW_QOS_POLICY_HISTORY_KEEP_ALL:
       dds_qset_history(qos, DDS_HISTORY_KEEP_ALL, DDS_LENGTH_UNLIMITED);
       break;
+    default:
+      rmw_cyclonedds_cpp::unreachable();
   }
   switch (qos_policies->reliability) {
     case RMW_QOS_POLICY_RELIABILITY_SYSTEM_DEFAULT:
@@ -1041,6 +1043,8 @@ static dds_qos_t * create_readwrite_qos(
     case RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT:
       dds_qset_reliability(qos, DDS_RELIABILITY_BEST_EFFORT, 0);
       break;
+    default:
+      rmw_cyclonedds_cpp::unreachable();
   }
   switch (qos_policies->durability) {
     case RMW_QOS_POLICY_DURABILITY_SYSTEM_DEFAULT:
@@ -1060,6 +1064,8 @@ static dds_qos_t * create_readwrite_qos(
           DDS_LENGTH_UNLIMITED, DDS_LENGTH_UNLIMITED);
         break;
       }
+    default:
+      rmw_cyclonedds_cpp::unreachable();
   }
   /* deadline, lifespan, liveliness are not yet supported */
   if (ignore_local_publications) {
@@ -1092,6 +1098,8 @@ static bool get_readwrite_qos(dds_entity_t handle, rmw_qos_profile_t * qos_polic
         qos_policies->history = RMW_QOS_POLICY_HISTORY_KEEP_ALL;
         qos_policies->depth = (uint32_t) depth;
         break;
+      default:
+        rmw_cyclonedds_cpp::unreachable();
     }
   }
 
@@ -1109,6 +1117,8 @@ static bool get_readwrite_qos(dds_entity_t handle, rmw_qos_profile_t * qos_polic
       case DDS_RELIABILITY_RELIABLE:
         qos_policies->reliability = RMW_QOS_POLICY_RELIABILITY_RELIABLE;
         break;
+      default:
+        rmw_cyclonedds_cpp::unreachable();
     }
   }
 
@@ -1129,6 +1139,8 @@ static bool get_readwrite_qos(dds_entity_t handle, rmw_qos_profile_t * qos_polic
       case DDS_DURABILITY_PERSISTENT:
         qos_policies->durability = RMW_QOS_POLICY_DURABILITY_UNKNOWN;
         break;
+      default:
+        rmw_cyclonedds_cpp::unreachable();
     }
   }
 
@@ -1176,6 +1188,8 @@ static bool get_readwrite_qos(dds_entity_t handle, rmw_qos_profile_t * qos_polic
       case DDS_LIVELINESS_MANUAL_BY_TOPIC:
         qos_policies->liveliness = RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC;
         break;
+      default:
+        rmw_cyclonedds_cpp::unreachable();
     }
     if (lease_duration == DDS_INFINITY) {
       qos_policies->liveliness_lease_duration.sec = qos_policies->liveliness_lease_duration.nsec =
@@ -1823,6 +1837,9 @@ extern "C" rmw_ret_t rmw_take_event(
     case RMW_EVENT_INVALID: {
         break;
       }
+
+    default:
+      rmw_cyclonedds_cpp::unreachable();
   }
   *taken = false;
   return RMW_RET_ERROR;
