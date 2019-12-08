@@ -13,13 +13,13 @@
 // limitations under the License.
 #include "Serialization.hpp"
 
+#include <array>
 #include <limits>
 #include <unordered_map>
 #include <vector>
 
 #include "TypeSupport2.hpp"
 #include "bytewise.hpp"
-#include "rmw_cyclonedds_cpp/TypeSupport_impl.hpp"
 
 namespace rmw_cyclonedds_cpp
 {
