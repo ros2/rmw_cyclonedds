@@ -11,6 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+// suppress definition of min/max macros on Windows.
+// TODO(dan@digilabs.io): Move this closer to where Windows.h/Windef.h is included
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include "Serialization.hpp"
 
 #include <array>
