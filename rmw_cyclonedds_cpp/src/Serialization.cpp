@@ -50,7 +50,7 @@ struct CDRCursor
     if (n_bytes == 1 || start_offset % n_bytes == 0) {
       return;
     }
-    advance((-start_offset) % n_bytes);
+    advance(n_bytes - start_offset % n_bytes);
     assert(offset() - start_offset < n_bytes);
     assert(offset() % n_bytes == 0);
   }
