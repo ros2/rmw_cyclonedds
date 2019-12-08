@@ -142,7 +142,7 @@ static struct ddsi_serdata * serdata_rmw_from_ser(
       memcpy(cursor, src, n_bytes);
       cursor = byte_offset(cursor, n_bytes);
       off = fragchain->maxp1;
-      assert(off < size);
+      assert(off <= size);
     }
     fragchain = fragchain->nextfrag;
   }
