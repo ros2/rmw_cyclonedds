@@ -491,7 +491,7 @@ struct sertopic_rmw * create_sertopic(
   return st;
 }
 
-void serdata_rmw::resize(uint32_t requested_size)
+void serdata_rmw::resize(size_t requested_size)
 {
   if (!requested_size) {
     m_size = 0;
