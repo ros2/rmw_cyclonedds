@@ -862,14 +862,15 @@ extern "C" rmw_ret_t rmw_serialize(
 {
   rmw_ret_t ret;
   try {
-    auto ts = rmw_cyclonedds_cpp::make_message_value_type(type_support);
+    auto writer = rmw_cyclonedds_cpp::make_cdr_writer(
+      rmw_cyclonedds_cpp::make_message_value_type(type_support));
 
-    auto size = rmw_cyclonedds_cpp::get_serialized_size(ros_message, ts.get());
+    auto size = writer->get_serialized_size(ros_message);
     if ((ret = rmw_serialized_message_resize(serialized_message, size) != RMW_RET_OK)) {
       RMW_SET_ERROR_MSG("rmw_serialize: failed to allocate space for message");
       return ret;
     }
-    rmw_cyclonedds_cpp::serialize(serialized_message->buffer, ros_message, ts.get());
+    writer->serialize(serialized_message->buffer, ros_message);
     serialized_message->buffer_length = size;
     return RMW_RET_OK;
   } catch (std::exception & e) {

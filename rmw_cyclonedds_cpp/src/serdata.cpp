@@ -172,18 +172,17 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
     if (kind != SDK_DATA) {
       /* ROS2 doesn't do keys, so SDK_KEY is trivial */
     } else if (!topic->is_request_header) {
-      size_t sz = rmw_cyclonedds_cpp::get_serialized_size(sample, topic->value_type.get());
+      size_t sz = topic->cdr_writer->get_serialized_size(sample);
       d->resize(sz);
-      rmw_cyclonedds_cpp::serialize(d->data(), sample, topic->value_type.get());
+      topic->cdr_writer->serialize(d->data(), sample);
     } else {
       /* inject the service invocation header data into the CDR stream --
        * I haven't checked how it is done in the official RMW implementations, so it is
        * probably incompatible. */
       auto wrap = *static_cast<const cdds_request_wrapper_t *>(sample);
-
-      size_t sz = rmw_cyclonedds_cpp::get_serialized_size(wrap, topic->value_type.get());
+      size_t sz = topic->cdr_writer->get_serialized_size(wrap);
       d->resize(sz);
-      rmw_cyclonedds_cpp::serialize(d->data(), wrap, topic->value_type.get());
+      topic->cdr_writer->serialize(d->data(), wrap);
     }
     return d.release();
   } catch (std::exception & e) {
@@ -490,7 +489,7 @@ struct sertopic_rmw * create_sertopic(
   st->type_support.typesupport_identifier_ = type_support_identifier;
   st->type_support.type_support_ = type_support;
   st->is_request_header = is_request_header;
-  st->value_type = std::move(message_type);
+  st->cdr_writer = rmw_cyclonedds_cpp::make_cdr_writer(std::move(message_type));
   return st;
 }
 
