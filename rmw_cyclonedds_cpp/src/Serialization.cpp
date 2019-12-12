@@ -288,11 +288,11 @@ protected:
       default:
         unreachable();
     }
-    std::array<char, 4> rtps_header{eversion_byte,
+    std::array<char, 4> rtps_header{{eversion_byte,
       // encoding format = PLAIN_CDR
       (native_endian() == endian::little) ? '\1' : '\0',
       // options
-      '\0', '\0'};
+      '\0', '\0'}};
     cursor->put_bytes(rtps_header.data(), rtps_header.size());
   }
 
