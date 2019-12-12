@@ -362,12 +362,25 @@ protected:
     return v.sizeof_type() == get_cdr_size_of_primitive(v.type_kind());
   }
 
-  bool compute_trivially_serialized(size_t align, const ArrayValueType & v) const
+  bool lookup_many_trivially_serialized(size_t align, const AnyValueType * evt) const
   {
     align %= max_align;
-    // if the first element is aligned, we take advantage of the foreknowledge that all future
-    // elements will be aligned as well
-    return compute_trivially_serialized(align, v.element_value_type());
+    // CLEVERNESS ALERT
+    // we take advantage of the fact that if something is aligned at offset A and at offset A+N
+    // then the alignment requirement of its elements divides A+k*N for all k
+    return lookup_trivially_serialized(align, evt) &&
+           lookup_trivially_serialized((align + evt->sizeof_type()) % max_align, evt);
+  }
+
+  bool compute_trivially_serialized(size_t align, const ArrayValueType & v) const
+  {
+    auto evt = v.element_value_type();
+    align %= max_align;
+    // CLEVERNESS ALERT
+    // we take advantage of the fact that if something is aligned at offset A and at offset A+N
+    // then the alignment requirement of its elements divides A+k*N for all k
+    return compute_trivially_serialized(align, evt) &&
+           compute_trivially_serialized((align + evt->sizeof_type()) % max_align, evt);
   }
 
   /// Returns true if a memcpy is all it takes to serialize this value
@@ -557,22 +570,28 @@ protected:
       return;
     }
 
-    if (auto p = dynamic_cast<const PrimitiveValueType *>(vt)) {
-      cursor->align(get_cdr_alignof_primitive(p->type_kind()));
-      size_t value_size = get_cdr_size_of_primitive(p->type_kind());
-      assert(value_size);
-      if (cursor->ignores_data()) {
-        cursor->advance(count * value_size);
-        return;
-      }
-      if (lookup_trivially_serialized(cursor->offset(), p)) {
-        cursor->put_bytes(data, count * value_size);
-        return;
-      }
+    // Serialize the first element.
+    serialize(cursor, data, vt);
+
+    // If the value type is primitive, we are now aligned.
+    // It might be that the first element is not trivially serialized but the rest are;
+    // e.g. if any element in a struct has CDR alignment more stringent than the first element.
+
+    data = byte_offset(data, vt->sizeof_type());
+    --count;
+    if (count == 0) {
+      return;
     }
-    for (size_t i = 0; i < count; i++) {
-      auto element = byte_offset(data, i * vt->sizeof_type());
-      serialize(cursor, element, vt);
+
+    if (lookup_many_trivially_serialized(cursor->offset(), vt)) {
+      size_t value_size = vt->sizeof_type();
+      cursor->put_bytes(data, count * value_size);
+      return;
+    } else {
+      for (size_t i = 0; i < count; i++) {
+        auto element = byte_offset(data, i * vt->sizeof_type());
+        serialize(cursor, element, vt);
+      }
     }
   }
 
