@@ -17,10 +17,15 @@
 #include <memory>
 #include <string>
 
+#include "TypeSupport2.hpp"
 #include "bytewise.hpp"
 #include "dds/ddsi/ddsi_serdata.h"
 #include "dds/ddsi/ddsi_sertopic.h"
-#include "TypeSupport2.hpp"
+
+namespace rmw_cyclonedds_cpp
+{
+class BaseCDRWriter;
+}
 
 struct CddsTypeSupport
 {
@@ -37,7 +42,7 @@ struct sertopic_rmw : ddsi_sertopic
   std::string cpp_type_name;
   std::string cpp_name_type_name;
 #endif
-  std::unique_ptr<const rmw_cyclonedds_cpp::StructValueType> value_type;
+  std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRWriter> cdr_writer;
 };
 
 class serdata_rmw : public ddsi_serdata

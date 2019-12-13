@@ -14,19 +14,26 @@
 #ifndef SERIALIZATION_HPP_
 #define SERIALIZATION_HPP_
 
+#include <memory>
+
 #include "TypeSupport2.hpp"
 #include "rosidl_generator_c/service_type_support_struct.h"
 #include "serdata.hpp"
 
 namespace rmw_cyclonedds_cpp
 {
-size_t get_serialized_size(const void * data, const StructValueType * ts);
 
-void serialize(void * dest, const void * data, const StructValueType * ts);
+class BaseCDRWriter
+{
+public:
+  virtual size_t get_serialized_size(const void * data) const = 0;
+  virtual void serialize(void * dest, const void * data) const = 0;
+  virtual size_t get_serialized_size(const cdds_request_wrapper_t & request) const = 0;
+  virtual void serialize(void * dest, const cdds_request_wrapper_t & request) const = 0;
+  virtual ~BaseCDRWriter() = default;
+};
 
-size_t get_serialized_size(const cdds_request_wrapper_t & request, const StructValueType * ts);
-
-void serialize(void * dest, const cdds_request_wrapper_t & request, const StructValueType * ts);
+std::unique_ptr<BaseCDRWriter> make_cdr_writer(std::unique_ptr<StructValueType> value_type);
 }  // namespace rmw_cyclonedds_cpp
 
 #endif  // SERIALIZATION_HPP_
