@@ -2103,10 +2103,10 @@ extern "C" rmw_ret_t rmw_wait(
   }
 
   ws->trigs.resize(ws->nelems + 1);
-  const dds_duration_t timeout =
+  const dds_time_t timeout =
     (wait_timeout == NULL) ?
     DDS_NEVER :
-    (dds_duration_t) wait_timeout->sec * 1000000000 + wait_timeout->nsec;
+    (dds_time_t) wait_timeout->sec * 1000000000 + wait_timeout->nsec;
   ws->trigs.resize(ws->nelems + 1);
   const dds_return_t ntrig = dds_waitset_wait(ws->waitseth, ws->trigs.data(),
       ws->trigs.size(), timeout);
