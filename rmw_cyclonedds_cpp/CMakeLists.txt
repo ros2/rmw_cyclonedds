@@ -50,7 +50,7 @@ ament_export_dependencies(rosidl_typesupport_introspection_cpp)
 
 add_library(rmw_cyclonedds_cpp
   src/rmw_node.cpp
-  src/rmw_get_topic_info.cpp
+  src/rmw_get_topic_endpoint_info.cpp
   src/serdata.cpp
   src/serdes.cpp
   src/graphrhc.cpp
