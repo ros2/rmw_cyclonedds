@@ -1025,6 +1025,7 @@ static dds_qos_t * create_readwrite_qos(
   const rmw_qos_profile_t * qos_policies,
   bool ignore_local_publications)
 {
+  dds_duration_t ldur;
   dds_qos_t * qos = dds_create_qos();
   switch (qos_policies->history) {
     case RMW_QOS_POLICY_HISTORY_SYSTEM_DEFAULT:
@@ -1080,23 +1081,26 @@ static dds_qos_t * create_readwrite_qos(
   if (qos_policies->deadline.sec > 0 || qos_policies->deadline.nsec > 0) {
     dds_qset_deadline(qos, DDS_SECS(qos_policies->deadline.sec) + qos_policies->deadline.nsec);
   }
+
+  if (qos_policies->liveliness_lease_duration.sec == 0 &&
+    qos_policies->liveliness_lease_duration.nsec == 0)
+  {
+    ldur = DDS_INFINITY;
+  } else {
+    ldur = DDS_SECS(qos_policies->liveliness_lease_duration.sec) +
+      qos_policies->liveliness_lease_duration.nsec;
+  }
   switch (qos_policies->liveliness) {
     case RMW_QOS_POLICY_LIVELINESS_SYSTEM_DEFAULT:
     case RMW_QOS_POLICY_LIVELINESS_AUTOMATIC:
     case RMW_QOS_POLICY_LIVELINESS_UNKNOWN:
-      dds_qset_liveliness(qos, DDS_LIVELINESS_AUTOMATIC,
-        DDS_SECS(qos_policies->liveliness_lease_duration.sec) +
-        qos_policies->liveliness_lease_duration.nsec);
+      dds_qset_liveliness(qos, DDS_LIVELINESS_AUTOMATIC, ldur);
       break;
     case RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_NODE:
-      dds_qset_liveliness(qos, DDS_LIVELINESS_MANUAL_BY_PARTICIPANT,
-        DDS_SECS(qos_policies->liveliness_lease_duration.sec) +
-        qos_policies->liveliness_lease_duration.nsec);
+      dds_qset_liveliness(qos, DDS_LIVELINESS_MANUAL_BY_PARTICIPANT, ldur);
       break;
     case RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC:
-      dds_qset_liveliness(qos, DDS_LIVELINESS_MANUAL_BY_TOPIC,
-        DDS_SECS(qos_policies->liveliness_lease_duration.sec) +
-        qos_policies->liveliness_lease_duration.nsec);
+      dds_qset_liveliness(qos, DDS_LIVELINESS_MANUAL_BY_TOPIC, ldur);
       break;
   }
   if (ignore_local_publications) {
@@ -1175,12 +1179,8 @@ static bool get_readwrite_qos(dds_entity_t handle, rmw_qos_profile_t * qos_polic
       RMW_SET_ERROR_MSG("get_readwrite_qos: deadline not set");
       goto error;
     }
-    if (deadline == DDS_INFINITY) {
-      qos_policies->deadline.sec = qos_policies->deadline.nsec = 0;
-    } else {
-      qos_policies->deadline.sec = (uint64_t) deadline / 1000000000;
-      qos_policies->deadline.nsec = (uint64_t) deadline % 1000000000;
-    }
+    qos_policies->deadline.sec = (uint64_t) deadline / 1000000000;
+    qos_policies->deadline.nsec = (uint64_t) deadline % 1000000000;
   }
 
   {
@@ -1188,12 +1188,8 @@ static bool get_readwrite_qos(dds_entity_t handle, rmw_qos_profile_t * qos_polic
     if (!dds_qget_lifespan(qos, &lifespan)) {
       lifespan = DDS_INFINITY;
     }
-    if (lifespan == DDS_INFINITY) {
-      qos_policies->lifespan.sec = qos_policies->lifespan.nsec = 0;
-    } else {
-      qos_policies->lifespan.sec = (uint64_t) lifespan / 1000000000;
-      qos_policies->lifespan.nsec = (uint64_t) lifespan % 1000000000;
-    }
+    qos_policies->lifespan.sec = (uint64_t) lifespan / 1000000000;
+    qos_policies->lifespan.nsec = (uint64_t) lifespan % 1000000000;
   }
 
   {
@@ -1214,13 +1210,8 @@ static bool get_readwrite_qos(dds_entity_t handle, rmw_qos_profile_t * qos_polic
         qos_policies->liveliness = RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC;
         break;
     }
-    if (lease_duration == DDS_INFINITY) {
-      qos_policies->liveliness_lease_duration.sec = qos_policies->liveliness_lease_duration.nsec =
-        0;
-    } else {
-      qos_policies->liveliness_lease_duration.sec = (uint64_t) lease_duration / 1000000000;
-      qos_policies->liveliness_lease_duration.nsec = (uint64_t) lease_duration % 1000000000;
-    }
+    qos_policies->liveliness_lease_duration.sec = (uint64_t) lease_duration / 1000000000;
+    qos_policies->liveliness_lease_duration.nsec = (uint64_t) lease_duration % 1000000000;
   }
 
   dds_delete_qos(qos);
@@ -2110,7 +2101,7 @@ static bool is_event_supported(const rmw_event_type_t event_t)
 }
 
 static rmw_ret_t gather_event_entities(
-  rmw_events_t * events,
+  const rmw_events_t * events,
   std::unordered_set<dds_entity_t> & entities)
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(events, RMW_RET_INVALID_ARGUMENT);
@@ -2218,11 +2209,9 @@ extern "C" rmw_ret_t rmw_wait(
       if (ret_code != RMW_RET_OK) {
         return ret_code;
       }
-      if (!event_entities.empty()) {
-        for (auto e : event_entities) {
-          dds_waitset_attach(ws->waitseth, e, nelems);
-          nelems++;
-        }
+      for (auto e : event_entities) {
+        dds_waitset_attach(ws->waitseth, e, nelems);
+        nelems++;
       }
       ws->evs.reserve(evs->event_count);
       for (size_t i = 0; i < evs->event_count; i++) {
