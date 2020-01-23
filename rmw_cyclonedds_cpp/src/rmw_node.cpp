@@ -46,6 +46,7 @@
 
 #include "TypeSupport2.hpp"
 
+#include "rmw_cyclonedds_cpp/rmw_version_test.hpp"
 #include "rmw_cyclonedds_cpp/MessageTypeSupport.hpp"
 #include "rmw_cyclonedds_cpp/ServiceTypeSupport.hpp"
 
@@ -65,13 +66,6 @@
 #else
 #define MULTIDOMAIN 0
 #endif
-
-/* True if the version of RMW is at least major.minor.patch */
-#define RMW_VERSION_GTE(major, minor, patch) ( \
-    major < RMW_VERSION_MAJOR || ( \
-      major == RMW_VERSION_MAJOR && ( \
-        minor < RMW_VERSION_MINOR || ( \
-          minor == RMW_VERSION_MINOR && patch <= RMW_VERSION_PATCH))))
 
 #if RMW_VERSION_GTE(0, 8, 1) && MULTIDOMAIN
 #define SUPPORT_LOCALHOST 1
