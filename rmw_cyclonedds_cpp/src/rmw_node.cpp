@@ -1027,6 +1027,7 @@ static dds_qos_t * create_readwrite_qos(
 {
   dds_duration_t ldur;
   dds_qos_t * qos = dds_create_qos();
+  dds_qset_writer_data_lifecycle (qos, false); /* disable autodispose */
   switch (qos_policies->history) {
     case RMW_QOS_POLICY_HISTORY_SYSTEM_DEFAULT:
     case RMW_QOS_POLICY_HISTORY_UNKNOWN:
