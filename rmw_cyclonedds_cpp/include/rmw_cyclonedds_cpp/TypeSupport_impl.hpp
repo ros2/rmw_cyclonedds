@@ -368,15 +368,17 @@ inline void deserialize_field<std::string>(
       deser >> cpp_string_vector;
 
       auto & string_array_field = *reinterpret_cast<rosidl_generator_c__String__Sequence *>(field);
-      if (!rosidl_generator_c__String__Sequence__init(&string_array_field,
-        cpp_string_vector.size()))
+      if (
+        !rosidl_generator_c__String__Sequence__init(
+          &string_array_field, cpp_string_vector.size()))
       {
         throw std::runtime_error("unable to initialize rosidl_generator_c__String array");
       }
 
       for (size_t i = 0; i < cpp_string_vector.size(); ++i) {
-        if (!rosidl_generator_c__String__assign(&string_array_field.data[i],
-          cpp_string_vector[i].c_str()))
+        if (
+          !rosidl_generator_c__String__assign(
+            &string_array_field.data[i], cpp_string_vector[i].c_str()))
         {
           throw std::runtime_error("unable to assign rosidl_generator_c__String");
         }

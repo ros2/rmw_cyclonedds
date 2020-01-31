@@ -185,7 +185,8 @@ public:
           pos += sizeof(T); \
         } \
       } else { \
-        memcpy(reinterpret_cast<void *>(x), reinterpret_cast<const void *>(data + pos), \
+        memcpy( \
+          reinterpret_cast<void *>(x), reinterpret_cast<const void *>(data + pos), \
           cnt * sizeof(T)); \
         pos += cnt * sizeof(T); \
       } \

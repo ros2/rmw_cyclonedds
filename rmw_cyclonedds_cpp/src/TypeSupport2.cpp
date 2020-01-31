@@ -140,16 +140,16 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
     if (!member_impl.is_array_) {
       member_value_type = element_value_type;
     } else if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
-      member_value_type = make_value_type<ArrayValueType>(element_value_type,
-          member_impl.array_size_);
+      member_value_type = make_value_type<ArrayValueType>(
+        element_value_type, member_impl.array_size_);
     } else if (member_impl.size_function) {
-      member_value_type = make_value_type<CallbackSpanSequenceValueType>(element_value_type,
-          member_impl.size_function,
-          member_impl.get_const_function);
+      member_value_type = make_value_type<CallbackSpanSequenceValueType>(
+        element_value_type, member_impl.size_function, member_impl.get_const_function);
     } else {
       member_value_type = make_value_type<ROSIDLC_SpanSequenceValueType>(element_value_type);
     }
-    m_members.push_back(Member{
+    m_members.push_back(
+      Member{
         member_impl.name_,
         member_value_type,
         member_impl.offset_,
@@ -186,8 +186,8 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
     if (!member_impl.is_array_) {
       member_value_type = element_value_type;
     } else if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
-      member_value_type = make_value_type<ArrayValueType>(element_value_type,
-          member_impl.array_size_);
+      member_value_type = make_value_type<ArrayValueType>(
+        element_value_type, member_impl.array_size_);
     } else if (ROSIDL_TypeKind(member_impl.type_id_) == ROSIDL_TypeKind::BOOLEAN) {
       member_value_type = make_value_type<BoolVectorValueType>();
     } else {
