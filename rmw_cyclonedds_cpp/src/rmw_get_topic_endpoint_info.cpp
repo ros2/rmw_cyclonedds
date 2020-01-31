@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "rmw_cyclonedds_cpp/rmw_version_test.hpp"
+
+#if RMW_VERSION_GTE(0, 8, 2)
+
 #include "rmw/error_handling.h"
 #include "rmw/get_topic_endpoint_info.h"
 #include "rmw/topic_endpoint_info_array.h"
@@ -40,3 +44,5 @@ rmw_get_subscriptions_info_by_topic(
   return RMW_RET_UNSUPPORTED;
 }
 }  // extern "C"
+
+#endif
