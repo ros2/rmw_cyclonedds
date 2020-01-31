@@ -14,7 +14,7 @@
 
 #include "rmw_cyclonedds_cpp/rmw_version_test.hpp"
 
-#if RMW_VERSION_GTE(0, 8, 1)
+#if RMW_VERSION_GTE(0, 8, 2)
 
 #include "rmw/error_handling.h"
 #include "rmw/get_topic_endpoint_info.h"
