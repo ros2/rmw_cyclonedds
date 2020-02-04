@@ -470,7 +470,8 @@ struct sertopic_rmw * create_sertopic(
   struct sertopic_rmw * st = new struct sertopic_rmw;
 #if DDSI_SERTOPIC_HAS_TOPICKIND_NO_KEY
   std::string type_name = get_type_name(type_support_identifier, type_support);
-  ddsi_sertopic_init(static_cast<struct ddsi_sertopic *>(st), topicname,
+  ddsi_sertopic_init(
+    static_cast<struct ddsi_sertopic *>(st), topicname,
     type_name.c_str(), &sertopic_rmw_ops, &serdata_rmw_ops, true);
 #else
   memset(st, 0, sizeof(struct ddsi_sertopic));

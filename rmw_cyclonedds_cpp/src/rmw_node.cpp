@@ -494,8 +494,8 @@ static bool builtin_readers_init(builtin_readers & brd, dds_entity_t pp, rmw_gua
 #if MULTIDOMAIN
       dds_rhc_free(rhc);
 #endif
-      RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp",
-        "rmw_create_node: failed to create DDS built-in reader");
+      RCUTILS_LOG_ERROR_NAMED(
+        "rmw_cyclonedds_cpp", "rmw_create_node: failed to create DDS built-in reader");
       goto fail;
     }
     brd.rds[i] = rd;
@@ -577,7 +577,8 @@ static bool check_create_domain_locked(dds_domainid_t did, bool localhost_only)
       dom.n_nodes++;
       return true;
     } else {
-      RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp",
+      RCUTILS_LOG_ERROR_NAMED(
+        "rmw_cyclonedds_cpp",
         "rmw_create_node: attempt at creating localhost-only and non-localhost-only nodes "
         "in the same domain");
       return false;
@@ -603,7 +604,8 @@ static bool check_create_domain_locked(dds_domainid_t did, bool localhost_only)
     if ((get_env_error = rcutils_get_env("CYCLONEDDS_URI", &config_from_env)) == nullptr) {
       config += std::string(config_from_env);
     } else {
-      RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp",
+      RCUTILS_LOG_ERROR_NAMED(
+        "rmw_cyclonedds_cpp",
         "rmw_create_node: failed to retrieve CYCLONEDDS_URI environment variable, error %s",
         get_env_error);
       node_gone_from_domain_locked(did);
@@ -611,7 +613,8 @@ static bool check_create_domain_locked(dds_domainid_t did, bool localhost_only)
     }
 
     if ((dom.domain_handle = dds_create_domain(did, config.c_str())) < 0) {
-      RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp",
+      RCUTILS_LOG_ERROR_NAMED(
+        "rmw_cyclonedds_cpp",
         "rmw_create_node: failed to create domain, error %s", dds_strretcode(dom.domain_handle));
       node_gone_from_domain_locked(did);
       return false;
@@ -650,8 +653,8 @@ extern "C" rmw_node_t * rmw_create_node(
 #if MULTIDOMAIN
   /* domain_id = UINT32_MAX = Cyclone DDS' "default domain id".*/
   if (domain_id >= UINT32_MAX) {
-    RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp",
-      "rmw_create_node: domain id out of range");
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp", "rmw_create_node: domain id out of range");
     return nullptr;
   }
   const dds_domainid_t did = static_cast<dds_domainid_t>(domain_id);
@@ -687,8 +690,8 @@ extern "C" rmw_node_t * rmw_create_node(
   dds_delete_qos(qos);
   if (pp < 0) {
     node_gone_from_domain_locked(did);
-    RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp",
-      "rmw_create_node: failed to create DDS participant");
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp", "rmw_create_node: failed to create DDS participant");
     return nullptr;
   }
 #if SUPPORT_LOCALHOST
@@ -712,15 +715,15 @@ extern "C" rmw_node_t * rmw_create_node(
   dds_entity_t pub, sub;
   if ((pub = dds_create_publisher(pp, nullptr, nullptr)) < 0) {
     node_gone_from_domain_locked(did);
-    RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp",
-      "rmw_create_node: failed to create DDS publisher");
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp", "rmw_create_node: failed to create DDS publisher");
     dds_delete(pp);
     return nullptr;
   }
   if ((sub = dds_create_subscriber(pp, nullptr, nullptr)) < 0) {
     node_gone_from_domain_locked(did);
-    RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp",
-      "rmw_create_node: failed to create DDS subscriber");
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp", "rmw_create_node: failed to create DDS subscriber");
     dds_delete(pp);
     return nullptr;
   }
@@ -779,8 +782,8 @@ fail_node_handle:
 fail_builtin_reader:
 #endif
   if (RMW_RET_OK != rmw_destroy_guard_condition(graph_guard_condition)) {
-    RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp",
-      "failed to destroy guard condition during error handling");
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp", "failed to destroy guard condition during error handling");
   }
 fail_ggc:
   delete node_impl;
@@ -892,8 +895,8 @@ extern "C" rmw_ret_t rmw_deserialize(
     cycdeser sd(serialized_message->buffer, serialized_message->buffer_length);
     const rosidl_message_type_support_t * ts;
     if ((ts =
-      get_message_typesupport_handle(type_support,
-      rosidl_typesupport_introspection_c__identifier)) != nullptr)
+      get_message_typesupport_handle(
+        type_support, rosidl_typesupport_introspection_c__identifier)) != nullptr)
     {
       auto members =
         static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(ts->data);
@@ -901,8 +904,8 @@ extern "C" rmw_ret_t rmw_deserialize(
       ok = msgts.deserializeROSmessage(sd, ros_message, nullptr);
     } else {
       if ((ts =
-        get_message_typesupport_handle(type_support,
-        rosidl_typesupport_introspection_cpp::typesupport_identifier)) != nullptr)
+        get_message_typesupport_handle(
+          type_support, rosidl_typesupport_introspection_cpp::typesupport_identifier)) != nullptr)
       {
         auto members =
           static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(ts->data);
@@ -952,9 +955,8 @@ extern "C" rmw_ret_t rmw_publish_serialized_message(
   RET_WRONG_IMPLID(publisher);
   RET_NULL(serialized_message);
   auto pub = static_cast<CddsPublisher *>(publisher->data);
-  struct ddsi_serdata * d = serdata_rmw_from_serialized_message(pub->sertopic,
-      serialized_message->buffer,
-      serialized_message->buffer_length);
+  struct ddsi_serdata * d = serdata_rmw_from_serialized_message(
+    pub->sertopic, serialized_message->buffer, serialized_message->buffer_length);
   const bool ok = (dds_writecdr(pub->enth, d) >= 0);
   return ok ? RMW_RET_OK : RMW_RET_ERROR;
 }
@@ -977,14 +979,14 @@ static const rosidl_message_type_support_t * get_typesupport(
 {
   const rosidl_message_type_support_t * ts;
   if ((ts =
-    get_message_typesupport_handle(type_supports,
-    rosidl_typesupport_introspection_c__identifier)) != nullptr)
+    get_message_typesupport_handle(
+      type_supports, rosidl_typesupport_introspection_c__identifier)) != nullptr)
   {
     return ts;
   } else {
     if ((ts =
-      get_message_typesupport_handle(type_supports,
-      rosidl_typesupport_introspection_cpp::typesupport_identifier)) != nullptr)
+      get_message_typesupport_handle(
+        type_supports, rosidl_typesupport_introspection_cpp::typesupport_identifier)) != nullptr)
     {
       return ts;
     } else {
@@ -1066,8 +1068,9 @@ static dds_qos_t * create_readwrite_qos(
         int32_t hd;
         dds_qget_history(qos, &hk, &hd);
         dds_qset_durability(qos, DDS_DURABILITY_TRANSIENT_LOCAL);
-        dds_qset_durability_service(qos, DDS_SECS(0), hk, hd, DDS_LENGTH_UNLIMITED,
-          DDS_LENGTH_UNLIMITED, DDS_LENGTH_UNLIMITED);
+        dds_qset_durability_service(
+          qos, DDS_SECS(0), hk, hd, DDS_LENGTH_UNLIMITED, DDS_LENGTH_UNLIMITED,
+          DDS_LENGTH_UNLIMITED);
         break;
       }
     default:
@@ -1568,8 +1571,8 @@ fail_topic_name:
   rmw_subscription_free(rmw_subscription);
 fail_subscription:
   if (dds_delete(sub->rdcondh) < 0) {
-    RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp",
-      "failed to delete readcondition during error handling");
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp", "failed to delete readcondition during error handling");
   }
   if (dds_delete(sub->enth) < 0) {
     RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp", "failed to delete reader during error handling");
@@ -1645,14 +1648,16 @@ static rmw_ret_t rmw_take_int(
         message_info->publisher_gid.implementation_identifier = eclipse_cyclonedds_identifier;
         memset(message_info->publisher_gid.data, 0, sizeof(message_info->publisher_gid.data));
         assert(sizeof(info.publication_handle) <= sizeof(message_info->publisher_gid.data));
-        memcpy(message_info->publisher_gid.data, &info.publication_handle,
+        memcpy(
+          message_info->publisher_gid.data, &info.publication_handle,
           sizeof(info.publication_handle));
       }
 #if REPORT_LATE_MESSAGES > 0
       dds_time_t tnow = dds_time();
       dds_time_t dt = tnow - info.source_timestamp;
       if (dt >= DDS_MSECS(REPORT_LATE_MESSAGES)) {
-        fprintf(stderr, "** %s sample in history for %.fms\n", sub->sertopic->name,
+        fprintf(
+          stderr, "** %s sample in history for %.fms\n", sub->sertopic->name,
           static_cast<double>(dt) / 1e6);
       }
 #endif
@@ -1682,7 +1687,8 @@ static rmw_ret_t rmw_take_ser_int(
         message_info->publisher_gid.implementation_identifier = eclipse_cyclonedds_identifier;
         memset(message_info->publisher_gid.data, 0, sizeof(message_info->publisher_gid.data));
         assert(sizeof(info.publication_handle) <= sizeof(message_info->publisher_gid.data));
-        memcpy(message_info->publisher_gid.data, &info.publication_handle,
+        memcpy(
+          message_info->publisher_gid.data, &info.publication_handle,
           sizeof(info.publication_handle));
       }
       auto d = static_cast<serdata_rmw *>(dcmn);
@@ -2184,10 +2190,12 @@ extern "C" rmw_ret_t rmw_wait(
     ws->inuse = true;
   }
 
-  if (require_reattach(ws->subs, subs ? subs->subscriber_count : 0,
-    subs ? subs->subscribers : nullptr) ||
-    require_reattach(ws->gcs, gcs ? gcs->guard_condition_count : 0,
-    gcs ? gcs->guard_conditions : nullptr) ||
+  if (require_reattach(
+      ws->subs, subs ? subs->subscriber_count : 0,
+      subs ? subs->subscribers : nullptr) ||
+    require_reattach(
+      ws->gcs, gcs ? gcs->guard_condition_count : 0,
+      gcs ? gcs->guard_conditions : nullptr) ||
     require_reattach(ws->srvs, srvs ? srvs->service_count : 0, srvs ? srvs->services : nullptr) ||
     require_reattach(ws->cls, cls ? cls->client_count : 0, cls ? cls->clients : nullptr) ||
     require_reattach(ws->evs, evs))
@@ -2243,8 +2251,9 @@ extern "C" rmw_ret_t rmw_wait(
     DDS_NEVER :
     (dds_time_t) wait_timeout->sec * 1000000000 + wait_timeout->nsec;
   ws->trigs.resize(ws->nelems + 1);
-  const dds_return_t ntrig = dds_waitset_wait(ws->waitseth, ws->trigs.data(),
-      ws->trigs.size(), timeout);
+  const dds_return_t ntrig = dds_waitset_wait(
+    ws->waitseth, ws->trigs.data(),
+    ws->trigs.size(), timeout);
   ws->trigs.resize(ntrig);
   std::sort(ws->trigs.begin(), ws->trigs.end());
   ws->trigs.push_back((dds_attach_t) -1);
@@ -2268,7 +2277,8 @@ extern "C" rmw_ret_t rmw_wait(
     } \
 } while (0)
     DETACH(CddsSubscription, subs, subscriber, rdcondh, (void) x);
-    DETACH(CddsGuardCondition, gcs, guard_condition, gcondh,
+    DETACH(
+      CddsGuardCondition, gcs, guard_condition, gcondh,
       dds_take_guardcondition(x->gcondh, &dummy));
     DETACH(CddsService, srvs, service, service.sub->rdcondh, (void) x);
     DETACH(CddsClient, cls, client, client.sub->rdcondh, (void) x);
@@ -2335,8 +2345,9 @@ extern "C" rmw_ret_t rmw_take_response(
   RET_WRONG_IMPLID(client);
   auto info = static_cast<CddsClient *>(client->data);
   dds_time_t source_timestamp;
-  rmw_ret_t ret = rmw_take_response_request(&info->client, request_header, ros_response, taken,
-      &source_timestamp, info->client.pub->pubiid);
+  rmw_ret_t ret = rmw_take_response_request(
+    &info->client, request_header, ros_response, taken,
+    &source_timestamp, info->client.pub->pubiid);
 
 #if REPORT_BLOCKED_REQUESTS
   if (ret == RMW_RET_OK && *taken) {
@@ -2346,7 +2357,8 @@ extern "C" rmw_ret_t rmw_take_response(
     dds_time_t dtresp = tnow - source_timestamp;
     dds_time_t dtreq = tnow - info->reqtime[seq];
     if (dtreq > DDS_MSECS(REPORT_LATE_MESSAGES) || dtresp > DDS_MSECS(REPORT_LATE_MESSAGES)) {
-      fprintf(stderr, "** %s response time %.fms; response in history for %.fms\n",
+      fprintf(
+        stderr, "** %s response time %.fms; response in history for %.fms\n",
         info->client.sub->sertopic->name, static_cast<double>(dtreq) / 1e6,
         static_cast<double>(dtresp) / 1e6);
     }
@@ -2366,7 +2378,8 @@ static void check_for_blocked_requests(CddsClient & client)
     for (auto const & r : client.reqtime) {
       dds_time_t dt = tnow - r.second;
       if (dt > DDS_SECS(1)) {
-        fprintf(stderr, "** %s already waiting for %.fms\n", client.client.sub->sertopic->name,
+        fprintf(
+          stderr, "** %s already waiting for %.fms\n", client.client.sub->sertopic->name,
           static_cast<double>(dt) / 1e6);
       }
     }
@@ -2439,14 +2452,14 @@ static const rosidl_service_type_support_t * get_service_typesupport(
 {
   const rosidl_service_type_support_t * ts;
   if ((ts =
-    get_service_typesupport_handle(type_supports,
-    rosidl_typesupport_introspection_c__identifier)) != nullptr)
+    get_service_typesupport_handle(
+      type_supports, rosidl_typesupport_introspection_c__identifier)) != nullptr)
   {
     return ts;
   } else {
     if ((ts =
-      get_service_typesupport_handle(type_supports,
-      rosidl_typesupport_introspection_cpp::typesupport_identifier)) != nullptr)
+      get_service_typesupport_handle(
+        type_supports, rosidl_typesupport_introspection_cpp::typesupport_identifier)) != nullptr)
     {
       return ts;
     } else {
@@ -2481,10 +2494,10 @@ static rmw_ret_t rmw_init_cs(
     std::tie(sub_msg_ts, pub_msg_ts) =
       rmw_cyclonedds_cpp::make_request_response_value_types(type_supports);
 
-    sub_type_support = create_request_type_support(type_support->data,
-        type_support->typesupport_identifier);
-    pub_type_support = create_response_type_support(type_support->data,
-        type_support->typesupport_identifier);
+    sub_type_support = create_request_type_support(
+      type_support->data, type_support->typesupport_identifier);
+    pub_type_support = create_response_type_support(
+      type_support->data, type_support->typesupport_identifier);
     subtopic_name =
       make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", qos_policies);
     pubtopic_name = make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", qos_policies);
@@ -2492,16 +2505,17 @@ static rmw_ret_t rmw_init_cs(
     std::tie(pub_msg_ts, sub_msg_ts) =
       rmw_cyclonedds_cpp::make_request_response_value_types(type_supports);
 
-    pub_type_support = create_request_type_support(type_support->data,
-        type_support->typesupport_identifier);
-    sub_type_support = create_response_type_support(type_support->data,
-        type_support->typesupport_identifier);
+    pub_type_support = create_request_type_support(
+      type_support->data, type_support->typesupport_identifier);
+    sub_type_support = create_response_type_support(
+      type_support->data, type_support->typesupport_identifier);
     pubtopic_name =
       make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", qos_policies);
     subtopic_name = make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", qos_policies);
   }
 
-  RCUTILS_LOG_DEBUG_NAMED("rmw_cyclonedds_cpp", "************ %s Details *********",
+  RCUTILS_LOG_DEBUG_NAMED(
+    "rmw_cyclonedds_cpp", "************ %s Details *********",
     is_service ? "Service" : "Client");
   RCUTILS_LOG_DEBUG_NAMED("rmw_cyclonedds_cpp", "Sub Topic %s", subtopic_name.c_str());
   RCUTILS_LOG_DEBUG_NAMED("rmw_cyclonedds_cpp", "Pub Topic %s", pubtopic_name.c_str());
@@ -2595,8 +2609,9 @@ extern "C" rmw_client_t * rmw_create_client(
 #if REPORT_BLOCKED_REQUESTS
   info->lastcheck = 0;
 #endif
-  if (rmw_init_cs(&info->client, node, type_supports, service_name, qos_policies,
-    false) != RMW_RET_OK)
+  if (
+    rmw_init_cs(
+      &info->client, node, type_supports, service_name, qos_policies, false) != RMW_RET_OK)
   {
     delete (info);
     return nullptr;
@@ -2635,8 +2650,9 @@ extern "C" rmw_service_t * rmw_create_service(
   const rmw_qos_profile_t * qos_policies)
 {
   CddsService * info = new CddsService();
-  if (rmw_init_cs(&info->service, node, type_supports, service_name, qos_policies,
-    true) != RMW_RET_OK)
+  if (
+    rmw_init_cs(
+      &info->service, node, type_supports, service_name, qos_policies, true) != RMW_RET_OK)
   {
     delete (info);
     return nullptr;
@@ -2680,8 +2696,9 @@ static rmw_ret_t do_for_node(
   std::function<bool(const dds_builtintopic_participant_t & sample)> oper)
 {
   dds_entity_t rd;
-  if ((rd = dds_create_reader(node_impl->enth, DDS_BUILTIN_TOPIC_DCPSPARTICIPANT,
-    NULL, NULL)) < 0)
+  if (
+    (rd = dds_create_reader(
+      node_impl->enth, DDS_BUILTIN_TOPIC_DCPSPARTICIPANT, NULL, NULL)) < 0)
   {
     RMW_SET_ERROR_MSG("rmw_get_node_names: failed to create reader");
     return RMW_RET_ERROR;
@@ -2849,8 +2866,9 @@ static rmw_ret_t make_names_and_types(
     if ((tptyp->names.data[index] = rcutils_strdup(tp.first.c_str(), *allocator)) == NULL) {
       goto fail_mem;
     }
-    if (rcutils_string_array_init(&tptyp->types[index], tp.second.size(),
-      allocator) != RCUTILS_RET_OK)
+    if (
+      rcutils_string_array_init(
+        &tptyp->types[index], tp.second.size(), allocator) != RCUTILS_RET_OK)
     {
       goto fail_mem;
     }
@@ -2923,8 +2941,8 @@ static rmw_ret_t get_endpoint_names_and_types_by_node(
     int dummy_validation_result;
     size_t dummy_invalid_index;
     if ((ret =
-      rmw_validate_node_name(node_name, &dummy_validation_result,
-      &dummy_invalid_index)) != RMW_RET_OK)
+      rmw_validate_node_name(
+        node_name, &dummy_validation_result, &dummy_invalid_index)) != RMW_RET_OK)
     {
       return ret;
     }
@@ -2945,8 +2963,9 @@ static rmw_ret_t get_endpoint_names_and_types_by_node(
       if (node_name != nullptr && guids.count(sample.participant_key) == 0) {
         return false;
       } else {
-        if (!std::regex_search(sample.topic_name, cm_tp,
-          re_tp) || !std::regex_search(sample.type_name, cm_typ, re_typ))
+        if (
+          !std::regex_search(sample.topic_name, cm_tp, re_tp) ||
+          !std::regex_search(sample.type_name, cm_typ, re_typ))
         {
           return false;
         } else {
@@ -2954,8 +2973,8 @@ static rmw_ret_t get_endpoint_names_and_types_by_node(
           if (no_demangle) {
             type_name = std::string(type_name);
           } else {
-            std::string demangled_type = std::regex_replace(std::string(cm_typ[1]), std::regex(
-                  "::"), "/");
+            std::string demangled_type = std::regex_replace(
+              std::string(cm_typ[1]), std::regex("::"), "/");
             type_name = std::string(demangled_type) + std::string(cm_typ[2]);
           }
           return true;
@@ -2965,15 +2984,15 @@ static rmw_ret_t get_endpoint_names_and_types_by_node(
   std::map<std::string, std::set<std::string>> tt;
   if (subs &&
     (ret =
-    rmw_collect_tptyp_for_kind(tt, node_impl, DDS_BUILTIN_TOPIC_DCPSSUBSCRIPTION,
-    filter_and_map)) != RMW_RET_OK)
+    rmw_collect_tptyp_for_kind(
+      tt, node_impl, DDS_BUILTIN_TOPIC_DCPSSUBSCRIPTION, filter_and_map)) != RMW_RET_OK)
   {
     return ret;
   }
   if (pubs &&
     (ret =
-    rmw_collect_tptyp_for_kind(tt, node_impl, DDS_BUILTIN_TOPIC_DCPSPUBLICATION,
-    filter_and_map)) != RMW_RET_OK)
+    rmw_collect_tptyp_for_kind(
+      tt, node_impl, DDS_BUILTIN_TOPIC_DCPSPUBLICATION, filter_and_map)) != RMW_RET_OK)
   {
     return ret;
   }
@@ -3013,8 +3032,8 @@ static rmw_ret_t get_cs_names_and_types_by_node(
     int dummy_validation_result;
     size_t dummy_invalid_index;
     if ((ret =
-      rmw_validate_node_name(node_name, &dummy_validation_result,
-      &dummy_invalid_index)) != RMW_RET_OK)
+      rmw_validate_node_name(
+        node_name, &dummy_validation_result, &dummy_invalid_index)) != RMW_RET_OK)
     {
       return ret;
     }
@@ -3060,11 +3079,11 @@ static rmw_ret_t get_cs_names_and_types_by_node(
     };
   std::map<std::string, std::set<std::string>> tt;
   if ((ret =
-    rmw_collect_tptyp_for_kind(tt, node_impl, DDS_BUILTIN_TOPIC_DCPSSUBSCRIPTION,
-    filter_and_map)) != RMW_RET_OK ||
+    rmw_collect_tptyp_for_kind(
+      tt, node_impl, DDS_BUILTIN_TOPIC_DCPSSUBSCRIPTION, filter_and_map)) != RMW_RET_OK ||
     (ret =
-    rmw_collect_tptyp_for_kind(tt, node_impl, DDS_BUILTIN_TOPIC_DCPSPUBLICATION,
-    filter_and_map)) != RMW_RET_OK)
+    rmw_collect_tptyp_for_kind(
+      tt, node_impl, DDS_BUILTIN_TOPIC_DCPSPUBLICATION, filter_and_map)) != RMW_RET_OK)
   {
     return ret;
   }
@@ -3076,8 +3095,8 @@ extern "C" rmw_ret_t rmw_get_topic_names_and_types(
   rcutils_allocator_t * allocator,
   bool no_demangle, rmw_names_and_types_t * tptyp)
 {
-  return get_endpoint_names_and_types_by_node(node, allocator, nullptr, nullptr, no_demangle, tptyp,
-           true, true);
+  return get_endpoint_names_and_types_by_node(
+    node, allocator, nullptr, nullptr, no_demangle, tptyp, true, true);
 }
 
 extern "C" rmw_ret_t rmw_get_service_names_and_types(
@@ -3166,8 +3185,8 @@ extern "C" rmw_ret_t rmw_get_subscriber_names_and_types_by_node(
   bool no_demangle,
   rmw_names_and_types_t * tptyp)
 {
-  return get_endpoint_names_and_types_by_node(node, allocator, node_name, node_namespace,
-           no_demangle, tptyp, true, false);
+  return get_endpoint_names_and_types_by_node(
+    node, allocator, node_name, node_namespace, no_demangle, tptyp, true, false);
 }
 
 extern "C" rmw_ret_t rmw_get_publisher_names_and_types_by_node(
@@ -3178,8 +3197,8 @@ extern "C" rmw_ret_t rmw_get_publisher_names_and_types_by_node(
   bool no_demangle,
   rmw_names_and_types_t * tptyp)
 {
-  return get_endpoint_names_and_types_by_node(node, allocator, node_name, node_namespace,
-           no_demangle, tptyp, false, true);
+  return get_endpoint_names_and_types_by_node(
+    node, allocator, node_name, node_namespace, no_demangle, tptyp, false, true);
 }
 
 extern "C" rmw_ret_t rmw_get_service_names_and_types_by_node(
