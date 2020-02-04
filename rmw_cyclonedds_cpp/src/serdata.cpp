@@ -152,6 +152,25 @@ static struct ddsi_serdata * serdata_rmw_from_ser(
   return d.release();
 }
 
+#if DDSI_SERDATA_HAS_FROM_SER_IOV
+static struct ddsi_serdata * serdata_rmw_from_ser_iov(
+  const struct ddsi_sertopic * topic,
+  enum ddsi_serdata_kind kind,
+  ddsrt_msg_iovlen_t niov, const ddsrt_iovec_t * iov,
+  size_t size)
+{
+  auto d = std::make_unique<serdata_rmw>(topic, kind);
+  d->resize(size);
+
+  auto cursor = d->data();
+  for (ddsrt_msg_iovlen_t i = 0; i < niov; i++) {
+    memcpy(cursor, iov[i].iov_base, iov[i].iov_len);
+    cursor = byte_offset(cursor, iov[i].iov_len);
+  }
+  return d.release();
+}
+#endif
+
 static struct ddsi_serdata * serdata_rmw_from_keyhash(
   const struct ddsi_sertopic * topic,
   const struct nn_keyhash * keyhash)
@@ -362,6 +381,9 @@ static const struct ddsi_serdata_ops serdata_rmw_ops = {
   serdata_rmw_eqkey,
   serdata_rmw_size,
   serdata_rmw_from_ser,
+#if DDSI_SERDATA_HAS_FROM_SER_IOV
+  serdata_rmw_from_ser_iov,
+#endif
   serdata_rmw_from_keyhash,
   serdata_rmw_from_sample,
   serdata_rmw_to_ser,
@@ -420,11 +442,43 @@ static void sertopic_rmw_free_samples(
   (void) op;
 }
 
+#if DDSI_SERTOPIC_HAS_EQUAL_AND_HASH
+bool sertopic_rmw_equal(
+  const struct ddsi_sertopic * acmn, const struct ddsi_sertopic * bcmn)
+{
+  /* A bit of a guess: topics with the same name & type name are really the same if they have
+     the same type support identifier as well */
+  const struct sertopic_rmw * a = static_cast<const struct sertopic_rmw *>(acmn);
+  const struct sertopic_rmw * b = static_cast<const struct sertopic_rmw *>(bcmn);
+  if (a->is_request_header != b->is_request_header) {
+    return false;
+  }
+  if (strcmp(a->type_support.typesupport_identifier_,
+    b->type_support.typesupport_identifier_) != 0)
+  {
+    return false;
+  }
+  return true;
+}
+
+uint32_t sertopic_rmw_hash(const struct ddsi_sertopic * tpcmn)
+{
+  const struct sertopic_rmw * tp = static_cast<const struct sertopic_rmw *>(tpcmn);
+  uint32_t h2 = std::hash<bool>{} (tp->is_request_header);
+  uint32_t h1 = std::hash<std::string>{} (std::string(tp->type_support.typesupport_identifier_));
+  return h1 ^ h2;
+}
+#endif
+
 static const struct ddsi_sertopic_ops sertopic_rmw_ops = {
   sertopic_rmw_free,
   sertopic_rmw_zero_samples,
   sertopic_rmw_realloc_samples,
   sertopic_rmw_free_samples
+#if DDSI_SERTOPIC_HAS_EQUAL_AND_HASH
+  , sertopic_rmw_equal,
+  sertopic_rmw_hash
+#endif
 };
 
 template<typename MembersType>
