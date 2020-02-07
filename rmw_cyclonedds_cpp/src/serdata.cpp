@@ -112,7 +112,7 @@ void * create_response_type_support(
 static uint32_t serdata_rmw_size(const struct ddsi_serdata * dcmn)
 {
   size_t size = static_cast<const serdata_rmw *>(dcmn)->size();
-  uint32_t size_u32(size);
+  uint32_t size_u32 = static_cast<uint32_t>(size);
   assert(size == size_u32);
   return size_u32;
 }
@@ -504,7 +504,7 @@ void serdata_rmw::resize(size_t requested_size)
 
   /* FIXME: CDR padding in DDSI makes me do this to avoid reading beyond the bounds
   when copying data to network.  Should fix Cyclone to handle that more elegantly.  */
-  size_t n_pad_bytes = (-requested_size) % 4;
+  size_t n_pad_bytes = 4 - (requested_size % 4);  // Same as (-x) % 4, without negating unsigned
   m_data.reset(new byte[requested_size + n_pad_bytes]);
   m_size = requested_size + n_pad_bytes;
 
