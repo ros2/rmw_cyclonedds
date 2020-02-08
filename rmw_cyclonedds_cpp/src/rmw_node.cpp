@@ -3249,19 +3249,14 @@ static rmw_ret_t get_endpoint_names_and_types_by_node(
     [&tt, guids, node_name, no_demangle](
     const dds_builtintopic_endpoint_t & sample) -> void
     {
-      std::string topic_name, type_name;
+      std::string demangled_topic_name, demangled_type_name;
       if (
         (node_name == nullptr || guids.count(sample.participant_key) != 0) &&
-        demangle_topic_name(sample.topic_name, topic_kind::DEFAULT, topic_name) &&
-        demangle_topic_type(sample.type_name, topic_kind::DEFAULT, type_name))
+        demangle_topic_name(sample.topic_name, topic_kind::DEFAULT, demangled_topic_name) &&
+        demangle_topic_type(sample.type_name, topic_kind::DEFAULT, demangled_type_name))
       {
-        if (no_demangle) {
-          type_name = std::string(sample.type_name);
-        } else if (!demangle_topic_type(sample.type_name, topic_kind::DEFAULT, type_name)) {
-          // skip a non-ROS2 endpoint
-          return;
-        }
-        tt[topic_name].insert(type_name);
+        tt[demangled_topic_name].insert(
+          no_demangle ? std::string(sample.type_name) : demangled_type_name);
       }
     };
   if (subs &&
