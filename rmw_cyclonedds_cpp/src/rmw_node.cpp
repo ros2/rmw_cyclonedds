@@ -2933,6 +2933,7 @@ static void get_node_name(
   std::string & node_name,
   std::string & node_ns)
 {
+  static_cast<void>(pp_guid);  // only used in assert()
   bool node_found = false;
   const auto re_ud = std::regex("^name=(.*);namespace=(.*);$", std::regex::extended);
   size_t udsz;
