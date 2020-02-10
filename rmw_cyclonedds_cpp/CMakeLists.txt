@@ -101,9 +101,7 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-ament_package(
-  CONFIG_EXTRAS "rmw_cyclonedds_cpp-extras.cmake"
-)
+ament_package()
 
 install(
   DIRECTORY include/
