@@ -504,7 +504,7 @@ void serdata_rmw::resize(size_t requested_size)
 
   /* FIXME: CDR padding in DDSI makes me do this to avoid reading beyond the bounds
   when copying data to network.  Should fix Cyclone to handle that more elegantly.  */
-  size_t n_pad_bytes = 4 - (requested_size % 4);  // Same as (-x) % 4, without negating unsigned
+  size_t n_pad_bytes = (0 - requested_size) % 4;
   m_data.reset(new byte[requested_size + n_pad_bytes]);
   m_size = requested_size + n_pad_bytes;
 
