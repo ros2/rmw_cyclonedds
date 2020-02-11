@@ -2915,6 +2915,7 @@ static rmw_ret_t rmw_collect_data_for_endpoint(
   }
 }
 
+#if RMW_VERSION_GTE(0, 8, 2)
 struct endpoint_info_t
 {
   std::string topic_type;
@@ -3140,6 +3141,7 @@ get_endpoint_info_by_topic(
   dds_delete(ppant_rd);
   return RMW_RET_OK;
 }
+#endif  // RMW_VERSION_GTE(0, 8, 2)
 
 static rmw_ret_t make_names_and_types(
   rmw_names_and_types_t * tptyp, const std::map<std::string,
