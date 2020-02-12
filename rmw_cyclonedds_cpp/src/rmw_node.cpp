@@ -2748,10 +2748,11 @@ static bool demangle_topic_type(
   std::string & demangled_type_name)
 {
   bool is_def_kind = topic_kind == topic_kind::DEFAULT;
-  const auto re_typ = std::regex("^(.*::)dds_::(.*)_" +
-      (is_def_kind ? std::string() : std::string("(Response|Request)_")) +
-      std::string("$"),
-      std::regex::extended);
+  const auto re_typ = std::regex(
+    "^(.*::)dds_::(.*)_" +
+    (is_def_kind ? std::string() : std::string("(Response|Request)_")) +
+    std::string("$"),
+    std::regex::extended);
   std::cmatch cm_typ;
   if (std::regex_search(type_name, cm_typ, re_typ)) {
     demangled_type_name =

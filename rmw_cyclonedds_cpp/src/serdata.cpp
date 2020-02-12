@@ -453,8 +453,9 @@ bool sertopic_rmw_equal(
   if (a->is_request_header != b->is_request_header) {
     return false;
   }
-  if (strcmp(a->type_support.typesupport_identifier_,
-    b->type_support.typesupport_identifier_) != 0)
+  if (strcmp(
+      a->type_support.typesupport_identifier_,
+      b->type_support.typesupport_identifier_) != 0)
   {
     return false;
   }
