@@ -3108,7 +3108,6 @@ get_endpoint_info_by_topic(
       err_msg.str);
     return ret;
   }
-  endpoint_info->count = 0;
 
   node_cache_t node_cache;
   dds_entity_t ppant_rd;
@@ -3120,25 +3119,23 @@ get_endpoint_info_by_topic(
     handle_topic_endpoint_info_array_fini(endpoint_info, allocator);
     return RMW_RET_ERROR;
   }
+  size_t i = 0;
   for (const auto & epi : endpoint_info_vector) {
-    endpoint_info->info_array[endpoint_info->count] =
-      rmw_get_zero_initialized_topic_endpoint_info();
     if ((ret = set_rmw_topic_endpoint_info(
         node_cache,
         ppant_rd,
         allocator,
         epi,
         is_publisher,
-        endpoint_info->info_array[endpoint_info->count])) != RMW_RET_OK)
+        endpoint_info->info_array[i])) != RMW_RET_OK)
     {
-      endpoint_info->count++;
       handle_topic_endpoint_info_array_fini(endpoint_info, allocator);
       dds_delete(ppant_rd);
       return ret;
     }
-    endpoint_info->count++;
+    i++;
   }
-  assert(endpoint_info->count == epi_count);
+  assert(i == epi_count);
   dds_delete(ppant_rd);
   return RMW_RET_OK;
 }
