@@ -646,7 +646,11 @@ static std::string get_node_user_data(const char * node_name, const char * node_
 extern "C" rmw_node_t * rmw_create_node(
   rmw_context_t * context, const char * name,
   const char * namespace_, size_t domain_id,
+#if RMW_VERSION_GTE(0, 8, 2)
   const rmw_security_options_t * security_options
+#else
+  const rmw_node_security_options_t * security_options
+#endif
 #if RMW_VERSION_GTE(0, 8, 1)
   , bool localhost_only
 #endif
