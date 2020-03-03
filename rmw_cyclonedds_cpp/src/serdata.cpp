@@ -31,6 +31,18 @@
 #include "rmw_cyclonedds_cpp/ServiceTypeSupport.hpp"
 #include "rmw_cyclonedds_cpp/serdes.hpp"
 
+/* Cyclone's nn_keyhash got renamed to ddsi_keyhash and shuffled around in the header
+   files to avoid pulling in tons of things just for a definition of a keyhash.  This
+   coincides with the introduction of DDS Security, which itself adds another function
+   that was missing.
+
+   If that additional function is not needed, it is known as nn_keyhash and only a forward
+   declaration is available; else it is known as ddsi_keyhash and a definition is
+   available */
+#if !DDSI_SERDATA_HAS_GET_KEYHASH
+#define ddsi_keyhash nn_keyhash
+#endif
+
 using MessageTypeSupport_c =
   rmw_cyclonedds_cpp::MessageTypeSupport<rosidl_typesupport_introspection_c__MessageMembers>;
 using MessageTypeSupport_cpp =
@@ -173,7 +185,7 @@ static struct ddsi_serdata * serdata_rmw_from_ser_iov(
 
 static struct ddsi_serdata * serdata_rmw_from_keyhash(
   const struct ddsi_sertopic * topic,
-  const struct nn_keyhash * keyhash)
+  const struct ddsi_keyhash * keyhash)
 {
   static_cast<void>(keyhash);    // unused
   /* there is no key field, so from_keyhash is trivial */
@@ -377,6 +389,19 @@ static size_t serdata_rmw_print(
 }
 #endif
 
+#if DDSI_SERDATA_HAS_GET_KEYHASH
+static void serdata_rmw_get_keyhash(
+  const struct ddsi_serdata * d, struct ddsi_keyhash * buf,
+  bool force_md5)
+{
+  /* ROS2 doesn't do keys in a meaningful way yet, this is never called for topics without
+     key fields */
+  static_cast<void>(d);
+  static_cast<void>(force_md5);
+  memset(buf, 0, sizeof(*buf));
+}
+#endif
+
 static const struct ddsi_serdata_ops serdata_rmw_ops = {
   serdata_rmw_eqkey,
   serdata_rmw_size,
@@ -395,6 +420,9 @@ static const struct ddsi_serdata_ops serdata_rmw_ops = {
   serdata_rmw_free
 #if DDSI_SERDATA_HAS_PRINT
   , serdata_rmw_print
+#endif
+#if DDSI_SERDATA_HAS_GET_KEYHASH
+  , serdata_rmw_get_keyhash
 #endif
 };
 
