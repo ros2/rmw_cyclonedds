@@ -7,7 +7,6 @@
 #include <cstddef>
 #include <cstdint>
 
-
 enum class EncodingVersion {
   CDR_Legacy,
   CDR1,
@@ -20,6 +19,7 @@ struct SignedIntegralValueType : public PrimitiveValueType
 {
   uint8_t num_bits;
 };
+
 struct UnsignedIntegralValueType : public PrimitiveValueType
 {
   uint8_t num_bits;
@@ -63,16 +63,6 @@ static constexpr size_t get_cdr_maxalign(EncodingVersion eversion)
 template<typename VT>
 static constexpr size_t get_cdr_alignof(EncodingVersion encoding, VT vt){
   return std::min(get_cdr_maxalign(vt), get_cdr_maxalign(encoding));
-}
-
-template<typename T>
-bool idl_is_primitive(T){
-  return false;
-}
-
-template<>
-bool idl_is_primitive(PrimitiveValueType){
-  return true;
 }
 
 #endif  //ROS2_MASTER_CDR_HPP

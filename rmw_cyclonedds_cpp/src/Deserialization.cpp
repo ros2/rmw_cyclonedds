@@ -16,44 +16,50 @@
 #include "CDRCursor.hpp"
 namespace rmw_cyclonedds_cpp
 {
-
-struct StructValueTypeMembersIterator{
-  void * obj;
-  const StructValueType * vt;
-  Member * which_member;
-};
-
-struct SequenceIterator{
-  void * obj;
-  const StructValueType * vt;
-  Member * which_member;
-};
-
-struct ArrayIterator{
-  void * obj;
-  const ArrayValueType * vt;
-  Member * which_member;
-};
-
 void deserialize_top_level(void * destination_object, const void * data, const StructValueType * ts);
 
-void deserialize(void * destination_object, const AnyValueType * vt, CDRCursor * data_cursor){
+void deserialize(void * destination_object, const PrimitiveValueType & vt, AbstractCDRReadingCursor * data_cursor){
 }
-void deserialize(void * destination_object, const PrimitiveValueType & vt, CDRCursor * data_cursor){
+void deserialize(void * destination_object, const U8StringValueType & vt, AbstractCDRReadingCursor * data_cursor){
 }
-void deserialize(void * destination_object, const U8StringValueType & vt, CDRCursor * data_cursor){
+void deserialize(void * destination_object, const U16StringValueType & vt, AbstractCDRReadingCursor * data_cursor){
 }
-void deserialize(void * destination_object, const U16StringValueType & vt, CDRCursor * data_cursor){
+void deserialize(void * destination_object, const ArrayValueType & vt, AbstractCDRReadingCursor * data_cursor){
 }
-void deserialize(void * destination_object, const ArrayValueType & vt, CDRCursor * data_cursor){
+void deserialize(void * destination_object, const SpanSequenceValueType & vt,  AbstractCDRReadingCursor * data_cursor){
+
 }
-void deserialize(void * destination_object, const SpanSequenceValueType & vt, CDRCursor * data_cursor){
-}
-void deserialize(void * destination_object, const StructValueType & vt, CDRCursor * data_cursor){
+void deserialize(void * destination_object, const StructValueType & vt, AbstractCDRReadingCursor * data_cursor){
   for (size_t i=0; i<vt.n_members(); i++){
     auto member = vt.get_member(i);
-    auto member_object = byte_offset( destination_object , member->member_offset);
+    auto member_object = byte_offset(destination_object, member->member_offset);
     deserialize(member_object, member->value_type, data_cursor);
+  }
+}
+void deserialize(void * destination_object, const AnyValueType * vt, AbstractCDRReadingCursor * data_cursor){
+  switch(vt->e_value_type()){
+    case EValueType::PrimitiveValueType:
+      deserialize(destination_object, *static_cast<const PrimitiveValueType *>(vt), data_cursor);
+      break;
+    case EValueType::U8StringValueType:
+      deserialize(destination_object, *static_cast<const U8StringValueType *>(vt), data_cursor);
+      break;
+    case EValueType::U16StringValueType:
+      deserialize(destination_object, *static_cast<const U16StringValueType *>(vt), data_cursor);
+      break;
+    case EValueType::StructValueType:
+      deserialize(destination_object, *static_cast<const StructValueType *>(vt), data_cursor);
+      break;
+    case EValueType::ArrayValueType:
+      deserialize(destination_object, *static_cast<const ArrayValueType *>(vt), data_cursor);
+      break;
+    case EValueType::SpanSequenceValueType:
+      deserialize(destination_object, *static_cast<const SpanSequenceValueType *>(vt), data_cursor);
+      break;
+    case EValueType::BoolVectorValueType:
+      // todo
+      throw std::exception();
+      break;
   }
 }
 }

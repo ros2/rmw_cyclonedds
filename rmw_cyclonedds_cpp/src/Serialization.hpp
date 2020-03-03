@@ -23,17 +23,17 @@
 namespace rmw_cyclonedds_cpp
 {
 
-class BaseCDRWriter
+class AbstractCDRWriter
 {
 public:
   virtual size_t get_serialized_size(const void * data) const = 0;
   virtual void serialize(void * dest, const void * data) const = 0;
   virtual size_t get_serialized_size(const cdds_request_wrapper_t & request) const = 0;
   virtual void serialize(void * dest, const cdds_request_wrapper_t & request) const = 0;
-  virtual ~BaseCDRWriter() = default;
+  virtual ~AbstractCDRWriter() = default;
 };
 
-std::unique_ptr<BaseCDRWriter> make_cdr_writer(std::unique_ptr<StructValueType> value_type);
+std::unique_ptr<AbstractCDRWriter> make_cdr_writer(std::unique_ptr<StructValueType> value_type);
 }  // namespace rmw_cyclonedds_cpp
 
 #endif  // SERIALIZATION_HPP_
