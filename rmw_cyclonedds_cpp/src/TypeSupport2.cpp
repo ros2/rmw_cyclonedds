@@ -41,10 +41,10 @@ public:
   size_t sizeof_struct() const override {return impl->size_of_;}
   size_t n_members() const override {return impl->member_count_;}
   const Member * get_member(size_t index) const override {return &m_members.at(index);}
-  void ctor (void * obj) const {
+  void ctor (void * obj) const override {
     impl->init_function(obj, ROSIDL_RUNTIME_C_MSG_INIT_ZERO);
   }
-  void dtor (void * obj) const {
+  void dtor (void * obj) const override {
     impl->fini_function(obj);
   }
 };
@@ -155,7 +155,7 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
       member_value_type = make_value_type<ArrayValueType>(
         element_value_type, member_impl.array_size_);
     } else if (member_impl.size_function) {
-      member_value_type = make_value_type<CallbackSpanSequenceValueType>(
+      member_value_type = make_value_type<ROSIDLCPP_SpanSequenceValueType>(
         element_value_type, member_impl.size_function, member_impl.get_const_function);
     } else {
       member_value_type = make_value_type<ROSIDLC_SpanSequenceValueType>(element_value_type);
@@ -203,7 +203,7 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
     } else if (ROSIDL_TypeKind(member_impl.type_id_) == ROSIDL_TypeKind::BOOLEAN) {
       member_value_type = make_value_type<BoolVectorValueType>();
     } else {
-      member_value_type = make_value_type<CallbackSpanSequenceValueType>(
+      member_value_type = make_value_type<ROSIDLCPP_SpanSequenceValueType>(
         element_value_type, member_impl.size_function, member_impl.get_const_function);
     }
     m_members.push_back(

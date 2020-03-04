@@ -50,8 +50,6 @@ struct AbstractCDRWritingCursor : AbstractCDRCursor
   virtual void put_bytes(const void *, size_t n_bytes) = 0;
 };
 
-
-
 struct CDRWritingCursor : public AbstractCDRWritingCursor
 {
   const void * origin;
