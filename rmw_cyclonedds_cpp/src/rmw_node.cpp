@@ -3687,4 +3687,9 @@ extern "C" rmw_ret_t rmw_get_subscriptions_info_by_topic(
     subscriptions_info);
 }
 
+extern "C" bool rmw_use_node_name_in_security_directory_lookup()
+{
+  return true;
+}
+
 #endif
