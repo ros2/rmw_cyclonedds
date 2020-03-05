@@ -30,6 +30,5 @@ DDS directly instead of via the ROS2 abstraction.
 
 ## Known limitations
 
-Cyclone DDS doesn't yet implement the DDS Security standard, nor does it fully implement
-the Lifespan, Deadline and some of the Liveliness QoS modes.  Consequently these features
-of ROS2 are also not yet supported when using Cyclone DDS.
+Cyclone DDS doesn't yet fully implement the Lifespan, Deadline and some of the Liveliness QoS modes.
+Consequently these features of ROS2 are also not yet supported when using Cyclone DDS.

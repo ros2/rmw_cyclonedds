@@ -26,9 +26,11 @@
 #include <utility>
 #include <regex>
 
+#include "rcutils/filesystem.h"
 #include "rcutils/get_env.h"
 #include "rcutils/logging_macros.h"
 #include "rcutils/strdup.h"
+#include "rcutils/format_string.h"
 
 #include "rmw/allocators.h"
 #include "rmw/convert_rcutils_ret_to_rmw_ret.h"
@@ -642,6 +644,80 @@ static std::string get_node_user_data(const char * node_name, const char * node_
          std::string(";");
 }
 
+/*  Returns the full URI of a security file properly formatted for DDS  */
+char * get_security_file_URI(
+  const char * security_filename, const char * node_secure_root,
+  const rcutils_allocator_t allocator)
+{
+  char * ret;
+
+  char * file_path = rcutils_join_path(node_secure_root, security_filename, allocator);
+  if (file_path == nullptr) {
+    ret = nullptr;
+  } else if (!rcutils_is_readable(file_path)) {
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp", "get_security_file: %s not found", file_path);
+    ret = nullptr;
+    allocator.deallocate(file_path, allocator.state);
+  } else {
+    /*  Cyclone also supports a "data:" URI  */
+    ret = rcutils_format_string(allocator, "file:%s", file_path);
+    allocator.deallocate(file_path, allocator.state);
+  }
+  return ret;
+}
+
+void store_security_filepath_in_qos(
+  dds_qos_t * qos, const char * qos_property_name, const char * file_name,
+  const rmw_node_security_options_t * security_options)
+{
+  rcutils_allocator_t allocator = rcutils_get_default_allocator();
+
+  char * security_file_path = get_security_file_URI(
+    file_name, security_options->security_root_path, allocator);
+  if (security_file_path != nullptr) {
+    dds_qset_prop(qos, qos_property_name, security_file_path);
+    allocator.deallocate(security_file_path, allocator.state);
+  }
+}
+
+/*  Set all the qos properties needed to enable DDS security  */
+void configure_qos_for_security(
+  dds_qos_t * qos, const rmw_node_security_options_t * security_options)
+{
+  /*  File path is set to nullptr if file does not exist or is not readable  */
+  store_security_filepath_in_qos(
+    qos, "dds.sec.auth.identity_ca", "identity_ca.cert.pem",
+    security_options);
+  store_security_filepath_in_qos(
+    qos, "dds.sec.auth.identity_certificate", "cert.pem",
+    security_options);
+  store_security_filepath_in_qos(
+    qos, "dds.sec.auth.private_key", "key.pem",
+    security_options);
+  store_security_filepath_in_qos(
+    qos, "dds.sec.access.permissions_ca", "permissions_ca.cert.pem",
+    security_options);
+  store_security_filepath_in_qos(
+    qos, "dds.sec.access.governance", "governance.p7s",
+    security_options);
+  store_security_filepath_in_qos(
+    qos, "dds.sec.access.permissions", "permissions.p7s",
+    security_options);
+
+  dds_qset_prop(qos, "dds.sec.auth.library.path", "libdds_security_auth.so");
+  dds_qset_prop(qos, "dds.sec.auth.library.init", "init_authentication");
+  dds_qset_prop(qos, "dds.sec.auth.library.finalize", "finalize_authentication");
+
+  dds_qset_prop(qos, "dds.sec.crypto.library.path", "libdds_security_crypto.so");
+  dds_qset_prop(qos, "dds.sec.crypto.library.init", "init_crypto");
+  dds_qset_prop(qos, "dds.sec.crypto.library.finalize", "finalize_crypto");
+
+  dds_qset_prop(qos, "dds.sec.access.library.path", "libdds_security_ac.so");
+  dds_qset_prop(qos, "dds.sec.access.library.init", "init_access_control");
+  dds_qset_prop(qos, "dds.sec.access.library.finalize", "finalize_access_control");
+}
+
 extern "C" rmw_node_t * rmw_create_node(
   rmw_context_t * context, const char * name,
   const char * namespace_, size_t domain_id,
@@ -666,7 +742,13 @@ extern "C" rmw_node_t * rmw_create_node(
   static_cast<void>(domain_id);
   const dds_domainid_t did = DDS_DOMAIN_DEFAULT;
 #endif
-  (void) security_options;
+
+  if (security_options == nullptr) {
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp", "rmw_create_node: security options null");
+    return nullptr;
+  }
+
   rmw_ret_t ret;
   int dummy_validation_result;
   size_t dummy_invalid_index;
@@ -688,8 +770,18 @@ extern "C" rmw_node_t * rmw_create_node(
 #endif
 
   dds_qos_t * qos = dds_create_qos();
+  if (qos == nullptr) {
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp", "rmw_create_node: Unable to create qos");
+    return nullptr;
+  }
   std::string user_data = get_node_user_data(name, namespace_);
   dds_qset_userdata(qos, user_data.c_str(), user_data.size());
+
+  if (security_options->enforce_security) {
+    configure_qos_for_security(qos, security_options);
+  }
+
   dds_entity_t pp = dds_create_participant(did, qos, nullptr);
   dds_delete_qos(qos);
   if (pp < 0) {
