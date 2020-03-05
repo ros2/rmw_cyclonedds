@@ -216,6 +216,7 @@ public:
   virtual const AnyValueType * element_value_type() const = 0;
   virtual size_t sequence_size(const void * ptr_to_sequence) const = 0;
   virtual const void * sequence_contents(const void * ptr_to_sequence) const = 0;
+  virtual void * sequence_contents(void * ptr_to_sequence) const = 0;
   EValueType e_value_type() const final {return EValueType::SpanSequenceValueType;}
 
   virtual void resize(void * ptr_to_sequence, size_t new_size) const = 0;
@@ -228,8 +229,9 @@ protected:
   const AnyValueType * m_element_value_type;
 
 public:
-  ROSIDLCPP_SpanSequenceValueType(const rosidl_typesupport_introspection_cpp::MessageMember * message_member,
-  const AnyValueType * element_value_type )
+  ROSIDLCPP_SpanSequenceValueType(
+    const rosidl_typesupport_introspection_cpp::MessageMember * message_member,
+    const AnyValueType * element_value_type)
   : m_message_member(message_member),
     m_element_value_type(element_value_type)
   {
@@ -245,10 +247,14 @@ public:
   }
   const void * sequence_contents(const void * ptr_to_sequence) const override
   {
-    if (sequence_size(ptr_to_sequence) == 0) {
       return nullptr;
+    if (sequence_size(ptr_to_sequence) == 0) {
     }
     return m_message_member->get_const_function(ptr_to_sequence,0);
+  }
+  void * sequence_contents(void * ptr_to_sequence) const override
+  {
+    return m_message_member->get_function(ptr_to_sequence, 0);
   }
   void resize(void * ptr_to_sequence, size_t new_size) const final {
     m_message_member->resize_function(ptr_to_sequence, new_size);
@@ -258,7 +264,7 @@ public:
 class ROSIDLC_SpanSequenceValueType : public SpanSequenceValueType
 {
 protected:
-  rosidl_typesupport_introspection_c__MessageMember * m_message_member;
+  const rosidl_typesupport_introspection_c__MessageMember * m_message_member;
   const AnyValueType * m_element_value_type;
 
   struct ROSIDLC_SequenceObject
@@ -273,9 +279,17 @@ protected:
     return static_cast<const ROSIDLC_SequenceObject *>(ptr_to_sequence);
   }
 
+  const ROSIDLC_SequenceObject * get_value(void * ptr_to_sequence) const
+  {
+    return static_cast<ROSIDLC_SequenceObject *>(ptr_to_sequence);
+  }
+
+
 public:
-  explicit ROSIDLC_SpanSequenceValueType(const AnyValueType * element_value_type)
-  : m_element_value_type(element_value_type)
+  explicit ROSIDLC_SpanSequenceValueType(const rosidl_typesupport_introspection_c__MessageMember * message_member,
+                                         const AnyValueType * element_value_type)
+  : m_message_member(message_member),
+    m_element_value_type(element_value_type)
   {
   }
 
@@ -289,6 +303,10 @@ public:
   {
     return get_value(ptr_to_sequence)->data;
   }
+  void * sequence_contents(void * ptr_to_sequence) const final {
+    return get_value(ptr_to_sequence)->data;
+  }
+
   void resize(void * ptr_to_sequence, size_t new_size) const final {
     if (!m_message_member->resize_function(ptr_to_sequence, new_size)){
       throw std::runtime_error("Failed to resize");

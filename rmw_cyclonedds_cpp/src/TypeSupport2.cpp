@@ -70,10 +70,10 @@ public:
   size_t sizeof_struct() const override {return impl->size_of_;}
   size_t n_members() const override {return impl->member_count_;}
   const Member * get_member(size_t index) const final {return &m_members.at(index);}
-  void ctor (void * obj) const {
+  void ctor (void * obj) const override {
     impl->init_function(obj, rosidl_generator_cpp::MessageInitialization::ZERO);
   }
-  void dtor (void * obj) const {
+  void dtor (void * obj) const override {
     impl->fini_function(obj);
   }
 };
@@ -128,12 +128,12 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
 : impl{impl}, m_members{}, m_inner_value_types{}
 {
   for (size_t index = 0; index < impl->member_count_; index++) {
-    auto member_impl = impl->members_[index];
+    auto *member_impl = impl->members_ + index;
 
     const AnyValueType * element_value_type;
-    switch (ROSIDL_TypeKind(member_impl.type_id_)) {
+    switch (ROSIDL_TypeKind(member_impl->type_id_)) {
       case ROSIDL_TypeKind::MESSAGE:
-        m_inner_value_types.push_back(make_message_value_type(member_impl.members_));
+        m_inner_value_types.push_back(make_message_value_type(member_impl->members_));
         element_value_type = m_inner_value_types.back().get();
         break;
       case ROSIDL_TypeKind::STRING:
@@ -144,27 +144,27 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
         break;
       default:
         element_value_type =
-          make_value_type<PrimitiveValueType>(ROSIDL_TypeKind(member_impl.type_id_));
+          make_value_type<PrimitiveValueType>(ROSIDL_TypeKind(member_impl->type_id_));
         break;
     }
 
     const AnyValueType * member_value_type;
-    if (!member_impl.is_array_) {
+    if (!member_impl->is_array_) {
       member_value_type = element_value_type;
-    } else if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
+    } else if (member_impl->array_size_ != 0 && !member_impl->is_upper_bound_) {
       member_value_type = make_value_type<ArrayValueType>(
-        element_value_type, member_impl.array_size_);
-    } else if (member_impl.size_function) {
-      member_value_type = make_value_type<ROSIDLCPP_SpanSequenceValueType>(
-        element_value_type, member_impl.size_function, member_impl.get_const_function);
+        element_value_type, member_impl->array_size_);
+    } else if (member_impl->size_function) {
+      // TODO: do these cases need different handling?
+      member_value_type = make_value_type<ROSIDLC_SpanSequenceValueType>(member_impl, element_value_type);
     } else {
-      member_value_type = make_value_type<ROSIDLC_SpanSequenceValueType>(element_value_type);
+      member_value_type = make_value_type<ROSIDLC_SpanSequenceValueType>(member_impl, element_value_type);
     }
     m_members.push_back(
       Member{
-        member_impl.name_,
+        member_impl->name_,
         member_value_type,
-        member_impl.offset_,
+        member_impl->offset_,
       });
   }
 }
@@ -174,12 +174,12 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
 : impl(impl)
 {
   for (size_t index = 0; index < impl->member_count_; index++) {
-    auto member_impl = impl->members_[index];
+    auto member_impl = impl->members_ + index;
 
     const AnyValueType * element_value_type;
-    switch (ROSIDL_TypeKind(member_impl.type_id_)) {
+    switch (ROSIDL_TypeKind(member_impl->type_id_)) {
       case ROSIDL_TypeKind::MESSAGE:
-        m_inner_value_types.push_back(make_message_value_type(member_impl.members_));
+        m_inner_value_types.push_back(make_message_value_type(member_impl->members_));
         element_value_type = m_inner_value_types.back().get();
         break;
       case ROSIDL_TypeKind::STRING:
@@ -190,27 +190,28 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
         break;
       default:
         element_value_type =
-          make_value_type<PrimitiveValueType>(ROSIDL_TypeKind(member_impl.type_id_));
+          make_value_type<PrimitiveValueType>(ROSIDL_TypeKind(member_impl->type_id_));
         break;
     }
 
     const AnyValueType * member_value_type;
-    if (!member_impl.is_array_) {
+    if (!member_impl->is_array_) {
       member_value_type = element_value_type;
-    } else if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
+    } else if (member_impl->array_size_ != 0 && !member_impl->is_upper_bound_) {
       member_value_type = make_value_type<ArrayValueType>(
-        element_value_type, member_impl.array_size_);
-    } else if (ROSIDL_TypeKind(member_impl.type_id_) == ROSIDL_TypeKind::BOOLEAN) {
+        element_value_type, member_impl->array_size_);
+    } else if (ROSIDL_TypeKind(member_impl->type_id_) == ROSIDL_TypeKind::BOOLEAN) {
       member_value_type = make_value_type<BoolVectorValueType>();
     } else {
       member_value_type = make_value_type<ROSIDLCPP_SpanSequenceValueType>(
-        element_value_type, member_impl.size_function, member_impl.get_const_function);
+        member_impl,
+        element_value_type );
     }
     m_members.push_back(
       Member {
-        member_impl.name_,
+        member_impl->name_,
         member_value_type,
-        member_impl.offset_,
+        member_impl->offset_,
       });
   }
 }
