@@ -14,6 +14,43 @@ enum class EncodingVersion {
   CDR2,
 };
 
+/// aka ENC_HEADER
+struct EncapsulationHeader
+{
+  /// stream endianness
+  endian m_endian = native_endian();
+  /// encoding version
+  EncodingVersion m_eversion;
+  /// encoding options
+  std::array<byte, 2> m_options;
+};
+
+/// aka DHEADER
+struct DelimiterHeaderData
+{
+  int32_t size;
+};
+
+/// aka LC
+enum class LengthCode {
+  Bytes1 = 0,
+  Bytes2 = 1,
+  Bytes4 = 2,
+  Bytes8 = 3,
+  BytesN = 4,
+  BytesN_ = 5,
+  Bytes4N = 6,
+  Byten8N = 7,
+};
+
+/// aka EMHEADER
+struct MemberHeader
+{
+  bool must_understand = false;
+  LengthCode length_code;
+  uint32_t next_int;
+};
+
 class CDREncodingInfo
 {
   EncodingVersion m_version;
@@ -65,9 +102,9 @@ public:
   size_t get_align_of_primitive(ROSIDL_TypeKind tk) const
   {
     size_t sizeof_ = get_size_of_primitive(tk);
-    return std::min(sizeof_ ,max_align());
+    return std::min(sizeof_, max_align());
   }
 };
-}
+}  // namespace rmw_cyclonedds_cpp
 
 #endif  //ROS2_MASTER_CDR_HPP

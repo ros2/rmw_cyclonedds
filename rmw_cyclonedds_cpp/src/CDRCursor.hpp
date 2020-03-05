@@ -16,6 +16,8 @@ struct AbstractCDRCursor
   explicit AbstractCDRCursor(AbstractCDRCursor const &) = delete;
   void operator=(AbstractCDRCursor const & x) = delete;
 
+  virtual endian stream_endian() const = 0;
+
   // virtual functions to be implemented
   // get the cursor's current offset.
   virtual size_t offset() const = 0;
@@ -48,6 +50,9 @@ struct AbstractCDRCursor
 struct AbstractCDRWritingCursor : AbstractCDRCursor
 {
   virtual void put_bytes(const void *, size_t n_bytes) = 0;
+  endian stream_endian() const override {
+    return native_endian();
+  }
 };
 
 struct CDRWritingCursor : public AbstractCDRWritingCursor
