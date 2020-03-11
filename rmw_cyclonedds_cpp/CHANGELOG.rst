@@ -2,6 +2,33 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.5.1 (2020-03-12)
+
+* Use a list instead of a set for node names list
+* Update for changes on Cyclone DDS security branch
+* Fix leak in client/service topic error handling
+* Fix sertopic referencing
+* Update usage of rmw_topic_endpoint_info_array (`#101 <https://github.com/ros2/rmw_cyclonedds/issues/101>`_)
+* Correct std::hash return type sizes (`#102 <https://github.com/ros2/rmw_cyclonedds/issues/102>`_)
+* Correct the coding style to pass CI test.
+* Update for cyclonedds changes needed for ros1 bridge
+* Fix MSBuild warnings C4146 and C4267
+* Add #if version >= 0.8.2 to fix ros2 dashing builds
+* Implementation for rmw_get_pub/sub_info_by_topic (`#97 <https://github.com/ros2/rmw_cyclonedds/issues/97>`_)
+* Remove unused CMake extras (`#84 <https://github.com/ros2/rmw_cyclonedds/issues/84>`_)
+* code style only: wrap after open parenthesis if not in one line (`#95 <https://github.com/ros2/rmw_cyclonedds/issues/95>`_)
+* Support for deadline, lifespan and liveliness qos  (`#88 <https://github.com/ros2/rmw_cyclonedds/issues/88>`_)
+* rmw_get_topic_endpoint_info doesn't exist on Dashing (`#91 <https://github.com/ros2/rmw_cyclonedds/issues/91>`_)
+* dds_time_t instead of dds_duration_t for absolute time
+* Stubs for rmw_get_publishers_info_by_topic and rmw_get_subscriptions_info_by_topic (`#81 <https://github.com/ros2/rmw_cyclonedds/issues/81>`_)
+* Cache serialization info when CDRWriter is constructed (`#80 <https://github.com/ros2/rmw_cyclonedds/issues/80>`_)
+* Mark code that should be unreachable (`#77 <https://github.com/ros2/rmw_cyclonedds/issues/77>`_)
+* Clean up topic namespace prefixes (`#76 <https://github.com/ros2/rmw_cyclonedds/issues/76>`_)
+* Serialize into initialized memory, not vector (`#75 <https://github.com/ros2/rmw_cyclonedds/issues/75>`_)
+* Rework serialization (`#42 <https://github.com/ros2/rmw_cyclonedds/issues/42>`_)
+* Use rcutils_get_env() instead of getenv() (`#71 <https://github.com/ros2/rmw_cyclonedds/issues/71>`_) (`#72 <https://github.com/ros2/rmw_cyclonedds/issues/72>`_)
+* Contributors: Erik Boasson, Dan Rose, Ivan Santiago Paunovic, Dirk Thomas, Dennis Potman, Emerson Knapp, Michael Carroll 
+
 0.4.4 (2019-11-19)
 ------------------
 * Minor CMakeLists cleanup
@@ -12,7 +39,7 @@ Changelog for package rmw_cyclonedds_cpp
 * Address "Precondition not met" on rmw_create_node (`#65 <https://github.com/ros2/rmw_cyclonedds/issues/65>`_) (`#66 <https://github.com/ros2/rmw_cyclonedds/issues/66>`_)
 * Fix dashing breakage (`#64 <https://github.com/ros2/rmw_cyclonedds/issues/64>`_)
 * Support localhost-only communications (`#60 <https://github.com/ros2/rmw_cyclonedds/issues/60>`_)
-* Contributors: eboasson
+* Contributors: eboasson 
 
 0.4.2 (2019-11-01)
 ------------------
