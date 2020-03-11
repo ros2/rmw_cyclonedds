@@ -2884,14 +2884,14 @@ extern "C" rmw_ret_t rmw_get_node_names(
     return RMW_RET_ERROR;
   }
 
-  std::set<std::pair<std::string, std::string>> ns;
+  std::vector<std::pair<std::string, std::string>> ns;
   const auto re = std::regex("^name=(.*);namespace=(.*);$", std::regex::extended);
   auto oper =
     [&ns, re](const dds_builtintopic_participant_t & sample, const char * ud) -> bool {
       std::cmatch cm;
       static_cast<void>(sample);
       if (std::regex_search(ud, cm, re)) {
-        ns.insert(std::make_pair(std::string(cm[1]), std::string(cm[2])));
+        ns.push_back(std::make_pair(std::string(cm[1]), std::string(cm[2])));
       }
       return true;
     };
