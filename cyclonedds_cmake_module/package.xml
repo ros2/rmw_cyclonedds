@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format2.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="2">
   <name>cyclonedds_cmake_module</name>
-  <version>0.4.4</version>
+  <version>0.5.1</version>
   <description>Provide CMake module to find Eclipse CycloneDDS.</description>
   <maintainer email="erik.boasson@adlinktech.com">Erik Boasson</maintainer>
   <license>Apache License 2.0</license>
