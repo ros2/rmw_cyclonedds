@@ -358,6 +358,10 @@ extern "C" rmw_ret_t rmw_init_options_init(
   init_options->implementation_identifier = eclipse_cyclonedds_identifier;
   init_options->allocator = allocator;
   init_options->impl = nullptr;
+  init_options->localhost_only = RMW_LOCALHOST_ONLY_DEFAULT;
+  init_options->domain_id = RMW_DEFAULT_DOMAIN_ID;
+  init_options->name = NULL;
+  init_options->security_options = rmw_get_zero_initialized_security_options();
   return RMW_RET_OK;
 }
 
@@ -374,19 +378,37 @@ extern "C" rmw_ret_t rmw_init_options_copy(const rmw_init_options_t * src, rmw_i
     RMW_SET_ERROR_MSG("expected zero-initialized dst");
     return RMW_RET_INVALID_ARGUMENT;
   }
+  const rcutils_allocator_t * allocator = &src->allocator;
+  rmw_ret_t ret = RMW_RET_OK;
+
+  allocator->deallocate(dst->name, allocator->state);
   *dst = *src;
-  return RMW_RET_OK;
+  dst->name = NULL;
+  dst->security_options = rmw_get_zero_initialized_security_options();
+
+  dst->name = rcutils_strdup(src->name, *allocator);
+  if (src->name && !dst->name) {
+    ret = RMW_RET_BAD_ALLOC;
+    goto fail;
+  }
+  return rmw_security_options_copy(&src->security_options, allocator, &dst->security_options);
+fail:
+  allocator->deallocate(dst->name, allocator->state);
+  return ret;
 }
 
 extern "C" rmw_ret_t rmw_init_options_fini(rmw_init_options_t * init_options)
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(init_options, RMW_RET_INVALID_ARGUMENT);
-  RCUTILS_CHECK_ALLOCATOR(&init_options->allocator, return RMW_RET_INVALID_ARGUMENT);
+  rcutils_allocator_t & allocator = init_options->allocator;
+  RCUTILS_CHECK_ALLOCATOR(&allocator, return RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
     init_options,
     init_options->implementation_identifier,
     eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  allocator.deallocate(init_options->name, allocator.state);
+  rmw_security_options_fini(&init_options->security_options, &allocator);
   *init_options = rmw_get_zero_initialized_init_options();
   return RMW_RET_OK;
 }
@@ -645,11 +667,9 @@ static std::string get_node_user_data(const char * node_name, const char * node_
 
 extern "C" rmw_node_t * rmw_create_node(
   rmw_context_t * context, const char * name,
-  const char * namespace_, size_t domain_id,
-#if RMW_VERSION_GTE(0, 8, 2)
-  const rmw_security_options_t * security_options
-#else
-  const rmw_node_security_options_t * security_options
+  const char * namespace_, size_t domain_id
+#if !RMW_VERSION_GTE(0, 8, 2)
+  , const rmw_security_options_t * security_options
 #endif
 #if RMW_VERSION_GTE(0, 8, 1)
   , bool localhost_only
@@ -671,7 +691,9 @@ extern "C" rmw_node_t * rmw_create_node(
   static_cast<void>(domain_id);
   const dds_domainid_t did = DDS_DOMAIN_DEFAULT;
 #endif
+#if !RMW_VERSION_GTE(0, 8, 2)
   (void) security_options;
+#endif
   rmw_ret_t ret;
   int dummy_validation_result;
   size_t dummy_invalid_index;
