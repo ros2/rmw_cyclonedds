@@ -2173,14 +2173,14 @@ static const std::unordered_map<rmw_event_type_t, uint32_t> mask_map{
   {RMW_EVENT_OFFERED_DEADLINE_MISSED, DDS_OFFERED_DEADLINE_MISSED_STATUS},
 };
 
+extern "C" bool rmw_event_type_is_supported(rmw_event_type_t event_t)
+{
+  return mask_map.count(event_t) > 0;
+}
+
 static uint32_t get_status_kind_from_rmw(const rmw_event_type_t event_t)
 {
   return mask_map.at(event_t);
-}
-
-static bool is_event_supported(const rmw_event_type_t event_t)
-{
-  return mask_map.count(event_t) > 0;
 }
 
 static rmw_ret_t gather_event_entities(
@@ -2199,7 +2199,7 @@ static rmw_ret_t gather_event_entities(
       return RMW_RET_ERROR;
     }
 
-    if (is_event_supported(current_event->event_type)) {
+    if (rmw_event_type_is_supported(current_event->event_type)) {
       if (status_mask_map.find(dds_entity) == status_mask_map.end()) {
         status_mask_map[dds_entity] = 0;
       }
@@ -2228,7 +2228,7 @@ static rmw_ret_t handle_active_events(rmw_events_t * events)
 
       uint32_t status_mask;
       dds_get_status_changes(dds_entity, &status_mask);
-      if (!is_event_supported(current_event->event_type) ||
+      if (!rmw_event_type_is_supported(current_event->event_type) ||
         !static_cast<bool>(status_mask & get_status_kind_from_rmw(current_event->event_type)))
       {
         events->events[i] = nullptr;
