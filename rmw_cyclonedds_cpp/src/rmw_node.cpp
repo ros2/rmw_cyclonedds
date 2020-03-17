@@ -360,7 +360,7 @@ extern "C" rmw_ret_t rmw_init_options_init(
   init_options->impl = nullptr;
   init_options->localhost_only = RMW_LOCALHOST_ONLY_DEFAULT;
   init_options->domain_id = RMW_DEFAULT_DOMAIN_ID;
-  init_options->name = NULL;
+  init_options->security_context = NULL;
   init_options->security_options = rmw_get_zero_initialized_security_options();
   return RMW_RET_OK;
 }
@@ -381,19 +381,19 @@ extern "C" rmw_ret_t rmw_init_options_copy(const rmw_init_options_t * src, rmw_i
   const rcutils_allocator_t * allocator = &src->allocator;
   rmw_ret_t ret = RMW_RET_OK;
 
-  allocator->deallocate(dst->name, allocator->state);
+  allocator->deallocate(dst->security_context, allocator->state);
   *dst = *src;
-  dst->name = NULL;
+  dst->security_context = NULL;
   dst->security_options = rmw_get_zero_initialized_security_options();
 
-  dst->name = rcutils_strdup(src->name, *allocator);
-  if (src->name && !dst->name) {
+  dst->security_context = rcutils_strdup(src->security_context, *allocator);
+  if (src->security_context && !dst->security_context) {
     ret = RMW_RET_BAD_ALLOC;
     goto fail;
   }
   return rmw_security_options_copy(&src->security_options, allocator, &dst->security_options);
 fail:
-  allocator->deallocate(dst->name, allocator->state);
+  allocator->deallocate(dst->security_context, allocator->state);
   return ret;
 }
 
@@ -407,7 +407,7 @@ extern "C" rmw_ret_t rmw_init_options_fini(rmw_init_options_t * init_options)
     init_options->implementation_identifier,
     eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
-  allocator.deallocate(init_options->name, allocator.state);
+  allocator.deallocate(init_options->security_context, allocator.state);
   rmw_security_options_fini(&init_options->security_options, &allocator);
   *init_options = rmw_get_zero_initialized_init_options();
   return RMW_RET_OK;
@@ -3707,11 +3707,6 @@ extern "C" rmw_ret_t rmw_get_subscriptions_info_by_topic(
     no_mangle,
     false,
     subscriptions_info);
-}
-
-extern "C" bool rmw_use_node_name_in_security_directory_lookup()
-{
-  return true;
 }
 
 #endif
