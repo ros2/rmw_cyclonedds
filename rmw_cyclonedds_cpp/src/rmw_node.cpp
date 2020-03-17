@@ -1872,7 +1872,7 @@ static const std::unordered_map<rmw_event_type_t, uint32_t> mask_map{
 
 static bool is_event_supported(const rmw_event_type_t event_t)
 {
-  return mask_map.count(event_t) > 0;
+  return mask_map.count(event_t) == 1;
 }
 
 static uint32_t get_status_kind_from_rmw(const rmw_event_type_t event_t)
