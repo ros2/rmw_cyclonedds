@@ -1856,6 +1856,71 @@ extern "C" rmw_ret_t rmw_return_loaned_message_from_subscription(
   return RMW_RET_UNSUPPORTED;
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////
+///////////                                                                   ///////////
+///////////    EVENTS                                                         ///////////
+///////////                                                                   ///////////
+/////////////////////////////////////////////////////////////////////////////////////////
+
+/// mapping of RMW_EVENT to the corresponding DDS status
+static const std::unordered_map<rmw_event_type_t, uint32_t> mask_map{
+  {RMW_EVENT_LIVELINESS_CHANGED, DDS_LIVELINESS_CHANGED_STATUS},
+  {RMW_EVENT_REQUESTED_DEADLINE_MISSED, DDS_REQUESTED_DEADLINE_MISSED_STATUS},
+  {RMW_EVENT_LIVELINESS_LOST, DDS_LIVELINESS_LOST_STATUS},
+  {RMW_EVENT_OFFERED_DEADLINE_MISSED, DDS_OFFERED_DEADLINE_MISSED_STATUS},
+};
+
+static bool is_event_supported(const rmw_event_type_t event_t)
+{
+  return mask_map.count(event_t) == 1;
+}
+
+static uint32_t get_status_kind_from_rmw(const rmw_event_type_t event_t)
+{
+  return mask_map.at(event_t);
+}
+
+static rmw_ret_t init_rmw_event(
+  rmw_event_t * rmw_event, const char * topic_endpoint_impl_identifier, void * data,
+  rmw_event_type_t event_type)
+{
+  RMW_CHECK_ARGUMENT_FOR_NULL(rmw_event, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(topic_endpoint_impl_identifier, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(data, RMW_RET_INVALID_ARGUMENT);
+  if (!is_event_supported(event_type)) {
+    RMW_SET_ERROR_MSG("provided event_type is not supported by rmw_cyclonedds_cpp");
+    return RMW_RET_UNSUPPORTED;
+  }
+
+  rmw_event->implementation_identifier = topic_endpoint_impl_identifier;
+  rmw_event->data = data;
+  rmw_event->event_type = event_type;
+
+  return RMW_RET_OK;
+}
+
+extern "C" rmw_ret_t rmw_publisher_event_init(
+  rmw_event_t * rmw_event, const rmw_publisher_t * publisher, rmw_event_type_t event_type)
+{
+  RET_WRONG_IMPLID_X(publisher, return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  return init_rmw_event(
+    rmw_event,
+    publisher->implementation_identifier,
+    publisher->data,
+    event_type);
+}
+
+extern "C" rmw_ret_t rmw_subscription_event_init(
+  rmw_event_t * rmw_event, const rmw_subscription_t * subscription, rmw_event_type_t event_type)
+{
+  RET_WRONG_IMPLID_X(subscription, return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  return init_rmw_event(
+    rmw_event,
+    subscription->implementation_identifier,
+    subscription->data,
+    event_type);
+}
+
 extern "C" rmw_ret_t rmw_take_event(
   const rmw_event_t * event_handle, void * event_info,
   bool * taken)
@@ -2163,24 +2228,6 @@ static void clean_waitset_caches()
       waitset_detach(ws);
     }
   }
-}
-
-/// mapping of RMW_EVENT to the corresponding DDS status
-static const std::unordered_map<rmw_event_type_t, uint32_t> mask_map{
-  {RMW_EVENT_LIVELINESS_CHANGED, DDS_LIVELINESS_CHANGED_STATUS},
-  {RMW_EVENT_REQUESTED_DEADLINE_MISSED, DDS_REQUESTED_DEADLINE_MISSED_STATUS},
-  {RMW_EVENT_LIVELINESS_LOST, DDS_LIVELINESS_LOST_STATUS},
-  {RMW_EVENT_OFFERED_DEADLINE_MISSED, DDS_OFFERED_DEADLINE_MISSED_STATUS},
-};
-
-static uint32_t get_status_kind_from_rmw(const rmw_event_type_t event_t)
-{
-  return mask_map.at(event_t);
-}
-
-static bool is_event_supported(const rmw_event_type_t event_t)
-{
-  return mask_map.count(event_t) > 0;
 }
 
 static rmw_ret_t gather_event_entities(
