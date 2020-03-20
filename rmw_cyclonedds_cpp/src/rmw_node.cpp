@@ -2221,8 +2221,10 @@ static void clean_waitset_caches()
      used ... */
   std::lock_guard<std::mutex> lock(gcdds.lock);
   for (auto && ws : gcdds.waitsets) {
-    std::lock_guard<std::mutex> lock2(ws->lock);
-    waitset_detach(ws);
+    std::unique_lock<std::mutex> lock2(ws->lock, std::try_to_lock);
+    if (lock2.owns_lock()) {
+      waitset_detach(ws);
+    }
   }
 }
 
