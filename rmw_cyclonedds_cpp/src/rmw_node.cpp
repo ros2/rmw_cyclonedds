@@ -427,7 +427,7 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
   context->instance_id = options->instance_id;
   context->implementation_identifier = eclipse_cyclonedds_identifier;
   context->impl = nullptr;
-  return RMW_RET_OK;
+  return rmw_init_options_copy(options, &context->options);
 }
 
 extern "C" rmw_ret_t rmw_node_assert_liveliness(const rmw_node_t * node)
@@ -669,7 +669,7 @@ static std::string get_node_user_data(
   const char * node_name, const char * node_namespace, const char * security_context)
 {
   return get_node_user_data_name_ns(node_name, node_namespace) +
-         std::string("security_context=") + std::string(security_context) +
+         std::string("securitycontext=") + std::string(security_context) +
          std::string(";");
 }
 
@@ -3030,7 +3030,7 @@ extern "C" rmw_ret_t rmw_get_node_names(
   }
 
   std::vector<std::pair<std::string, std::string>> ns;
-  const auto re = std::regex("^name=(.*);namespace=(.*);.*$", std::regex::extended);
+  const auto re = std::regex("^name=([^;]*);namespace=([^;]*);", std::regex::extended);
   auto oper =
     [&ns, re](const dds_builtintopic_participant_t & sample, const char * ud) -> bool {
       std::cmatch cm;
@@ -3101,13 +3101,13 @@ extern "C" rmw_ret_t rmw_get_node_names_with_security_contexts(
 
   std::vector<std::tuple<std::string, std::string, std::string>> ns;
   const auto re = std::regex(
-    "^name=(.*);namespace=(.*);securitycontext=(.*).*$", std::regex::extended);
+    "^name=([^;]*);namespace=([^;]*);securitycontext=([^;]*);", std::regex::extended);
   auto oper =
     [&ns, re](const dds_builtintopic_participant_t & sample, const char * ud) -> bool {
       std::cmatch cm;
       static_cast<void>(sample);
       if (std::regex_search(ud, cm, re)) {
-        ns.insert(std::make_tuple(std::string(cm[1]), std::string(cm[2]), std::string(cm[3])));
+        ns.push_back(std::make_tuple(std::string(cm[1]), std::string(cm[2]), std::string(cm[3])));
       }
       return true;
     };
@@ -3219,7 +3219,7 @@ static void get_node_name(
 {
   static_cast<void>(pp_guid);  // only used in assert()
   bool node_found = false;
-  const auto re_ud = std::regex("^name=(.*);namespace=(.*);$", std::regex::extended);
+  const auto re_ud = std::regex("^name=([^;]*);namespace=([^;]*);", std::regex::extended);
   size_t udsz;
   dds_sample_info_t info;
   void * msg = NULL;
