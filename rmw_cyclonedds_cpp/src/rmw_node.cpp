@@ -658,10 +658,18 @@ static void node_gone_from_domain_locked(dds_domainid_t did)
 }
 #endif
 
-static std::string get_node_user_data(const char * node_name, const char * node_namespace)
+static std::string get_node_user_data_name_ns(const char * node_name, const char * node_namespace)
 {
   return std::string("name=") + std::string(node_name) +
          std::string(";namespace=") + std::string(node_namespace) +
+         std::string(";");
+}
+
+static std::string get_node_user_data(
+  const char * node_name, const char * node_namespace, const char * security_context)
+{
+  return get_node_user_data_name_ns(node_name, node_namespace) +
+         std::string("security_context=") + std::string(security_context) +
          std::string(";");
 }
 
@@ -676,7 +684,6 @@ extern "C" rmw_node_t * rmw_create_node(
 #endif
 )
 {
-  static_cast<void>(context);
   RET_NULL_X(name, return nullptr);
   RET_NULL_X(namespace_, return nullptr);
 #if MULTIDOMAIN
@@ -715,7 +722,7 @@ extern "C" rmw_node_t * rmw_create_node(
 #endif
 
   dds_qos_t * qos = dds_create_qos();
-  std::string user_data = get_node_user_data(name, namespace_);
+  std::string user_data = get_node_user_data(name, namespace_, context->options.security_context);
   dds_qset_userdata(qos, user_data.c_str(), user_data.size());
   dds_entity_t pp = dds_create_participant(did, qos, nullptr);
   dds_delete_qos(qos);
@@ -3023,7 +3030,7 @@ extern "C" rmw_ret_t rmw_get_node_names(
   }
 
   std::vector<std::pair<std::string, std::string>> ns;
-  const auto re = std::regex("^name=(.*);namespace=(.*);$", std::regex::extended);
+  const auto re = std::regex("^name=(.*);namespace=(.*);.*$", std::regex::extended);
   auto oper =
     [&ns, re](const dds_builtintopic_participant_t & sample, const char * ud) -> bool {
       std::cmatch cm;
@@ -3069,6 +3076,87 @@ fail_alloc:
   }
   if (node_namespaces) {
     if (rcutils_string_array_fini(node_namespaces) != RCUTILS_RET_OK) {
+      RCUTILS_LOG_ERROR_NAMED(
+        "rmw_cyclonedds_cpp",
+        "failed to cleanup during error handling: %s", rcutils_get_error_string().str);
+      rcutils_reset_error();
+    }
+  }
+  return RMW_RET_BAD_ALLOC;
+}
+
+extern "C" rmw_ret_t rmw_get_node_names_with_security_contexts(
+  const rmw_node_t * node,
+  rcutils_string_array_t * node_names,
+  rcutils_string_array_t * node_namespaces,
+  rcutils_string_array_t * security_contexts)
+{
+  RET_WRONG_IMPLID(node);
+  auto node_impl = static_cast<CddsNode *>(node->data);
+  if (rmw_check_zero_rmw_string_array(node_names) != RMW_RET_OK ||
+    rmw_check_zero_rmw_string_array(node_namespaces) != RMW_RET_OK)
+  {
+    return RMW_RET_ERROR;
+  }
+
+  std::vector<std::tuple<std::string, std::string, std::string>> ns;
+  const auto re = std::regex(
+    "^name=(.*);namespace=(.*);securitycontext=(.*).*$", std::regex::extended);
+  auto oper =
+    [&ns, re](const dds_builtintopic_participant_t & sample, const char * ud) -> bool {
+      std::cmatch cm;
+      static_cast<void>(sample);
+      if (std::regex_search(ud, cm, re)) {
+        ns.insert(std::make_tuple(std::string(cm[1]), std::string(cm[2]), std::string(cm[3])));
+      }
+      return true;
+    };
+  rmw_ret_t ret;
+  if ((ret = do_for_node_user_data(node_impl, oper)) != RMW_RET_OK) {
+    return ret;
+  }
+
+  rcutils_allocator_t allocator = rcutils_get_default_allocator();
+  if (rcutils_string_array_init(node_names, ns.size(), &allocator) != RCUTILS_RET_OK ||
+    rcutils_string_array_init(node_namespaces, ns.size(), &allocator) != RCUTILS_RET_OK ||
+    rcutils_string_array_init(security_contexts, ns.size(), &allocator) != RCUTILS_RET_OK)
+  {
+    RMW_SET_ERROR_MSG(rcutils_get_error_string().str);
+    goto fail_alloc;
+  }
+  size_t i;
+  i = 0;
+  for (auto && n : ns) {
+    node_names->data[i] = rcutils_strdup(std::get<0>(n).c_str(), allocator);
+    node_namespaces->data[i] = rcutils_strdup(std::get<1>(n).c_str(), allocator);
+    security_contexts->data[i] = rcutils_strdup(std::get<2>(n).c_str(), allocator);
+    if (!node_names->data[i] || !node_namespaces->data[i] || !security_contexts->data[i]) {
+      RMW_SET_ERROR_MSG("rmw_get_node_names for name/namespace/security_context");
+      goto fail_alloc;
+    }
+    i++;
+  }
+  return RMW_RET_OK;
+
+fail_alloc:
+  if (node_names) {
+    if (rcutils_string_array_fini(node_names) != RCUTILS_RET_OK) {
+      RCUTILS_LOG_ERROR_NAMED(
+        "rmw_cyclonedds_cpp",
+        "failed to cleanup during error handling: %s", rcutils_get_error_string().str);
+      rcutils_reset_error();
+    }
+  }
+  if (node_namespaces) {
+    if (rcutils_string_array_fini(node_namespaces) != RCUTILS_RET_OK) {
+      RCUTILS_LOG_ERROR_NAMED(
+        "rmw_cyclonedds_cpp",
+        "failed to cleanup during error handling: %s", rcutils_get_error_string().str);
+      rcutils_reset_error();
+    }
+  }
+  if (security_contexts) {
+    if (rcutils_string_array_fini(security_contexts) != RCUTILS_RET_OK) {
       RCUTILS_LOG_ERROR_NAMED(
         "rmw_cyclonedds_cpp",
         "failed to cleanup during error handling: %s", rcutils_get_error_string().str);
@@ -3383,10 +3471,10 @@ static rmw_ret_t get_node_guids(
   const char * node_name, const char * node_namespace,
   std::set<dds_builtintopic_guid_t> & guids)
 {
-  std::string needle = get_node_user_data(node_name, node_namespace);
+  std::string needle = get_node_user_data_name_ns(node_name, node_namespace);
   auto oper =
     [&guids, needle](const dds_builtintopic_participant_t & sample, const char * ud) -> bool {
-      if (std::string(ud) == needle) {
+      if (0u == std::string(ud).find(needle)) {
         guids.insert(sample.key);
       }
       return true;               /* do keep looking - what if there are many? */
