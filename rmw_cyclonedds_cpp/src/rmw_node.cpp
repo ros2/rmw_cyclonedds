@@ -2219,9 +2219,9 @@ static void clean_waitset_caches()
      have been cached in a waitset), and drops all cached entities from all waitsets (just to keep
      life simple). I'm assuming one is not allowed to delete an entity while it is still being
      used ... */
-  std::lock_guard<std::mutex> lock(gcdds.lock);
+  std::lock_guard<std::mutex> lock{gcdds.lock};
   for (auto && ws : gcdds.waitsets) {
-    std::unique_lock<std::mutex> lock2(ws->lock, std::try_to_lock);
+    std::unique_lock<std::mutex> lock2{ws->lock, std::try_to_lock};
     if (lock2.owns_lock()) {
       waitset_detach(ws);
     }
