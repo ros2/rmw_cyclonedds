@@ -1172,9 +1172,10 @@ static dds_qos_t * create_readwrite_qos(
   return qos;
 }
 
+#if RMW_VERSION_GTE(0, 8, 2)
 static rmw_qos_policy_kind_t dds_qos_policy_to_rmw_qos_policy(dds_qos_policy_id_t policy_id)
 {
-  switch(policy_id) {
+  switch (policy_id) {
     case DDS_DURABILITY_QOS_POLICY_ID:
       return RMW_QOS_POLICY_DURABILITY;
     case DDS_DEADLINE_QOS_POLICY_ID:
@@ -1191,6 +1192,7 @@ static rmw_qos_policy_kind_t dds_qos_policy_to_rmw_qos_policy(dds_qos_policy_id_
       return RMW_QOS_POLICY_INVALID;
   }
 }
+#endif
 
 static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qos_policies)
 {
@@ -1887,10 +1889,12 @@ extern "C" rmw_ret_t rmw_return_loaned_message_from_subscription(
 static const std::unordered_map<rmw_event_type_t, uint32_t> mask_map{
   {RMW_EVENT_LIVELINESS_CHANGED, DDS_LIVELINESS_CHANGED_STATUS},
   {RMW_EVENT_REQUESTED_DEADLINE_MISSED, DDS_REQUESTED_DEADLINE_MISSED_STATUS},
-  {RMW_EVENT_REQUESTED_QOS_INCOMPATIBLE, DDS_REQUESTED_INCOMPATIBLE_QOS_STATUS},
   {RMW_EVENT_LIVELINESS_LOST, DDS_LIVELINESS_LOST_STATUS},
   {RMW_EVENT_OFFERED_DEADLINE_MISSED, DDS_OFFERED_DEADLINE_MISSED_STATUS},
+#if RMW_VERSION_GTE(0, 8, 2)
+  {RMW_EVENT_REQUESTED_QOS_INCOMPATIBLE, DDS_REQUESTED_INCOMPATIBLE_QOS_STATUS},
   {RMW_EVENT_OFFERED_QOS_INCOMPATIBLE, DDS_OFFERED_INCOMPATIBLE_QOS_STATUS},
+#endif
 };
 
 static bool is_event_supported(const rmw_event_type_t event_t)
@@ -1984,6 +1988,7 @@ extern "C" rmw_ret_t rmw_take_event(
         }
       }
 
+#if RMW_VERSION_GTE(0, 8, 2)
     case RMW_EVENT_REQUESTED_QOS_INCOMPATIBLE: {
         auto ei = static_cast<rmw_requested_qos_incompatible_event_status_t *>(event_info);
         auto sub = static_cast<CddsSubscription *>(event_handle->data);
@@ -2000,6 +2005,7 @@ extern "C" rmw_ret_t rmw_take_event(
           return RMW_RET_OK;
         }
       }
+#endif
 
     case RMW_EVENT_LIVELINESS_LOST: {
         auto ei = static_cast<rmw_liveliness_lost_status_t *>(event_info);
@@ -2031,6 +2037,7 @@ extern "C" rmw_ret_t rmw_take_event(
         }
       }
 
+#if RMW_VERSION_GTE(0, 8, 2)
     case RMW_EVENT_OFFERED_QOS_INCOMPATIBLE: {
         auto ei = static_cast<rmw_offered_qos_incompatible_event_status_t *>(event_info);
         auto pub = static_cast<CddsPublisher *>(event_handle->data);
@@ -2047,6 +2054,7 @@ extern "C" rmw_ret_t rmw_take_event(
           return RMW_RET_OK;
         }
       }
+#endif
 
     case RMW_EVENT_INVALID: {
         break;
