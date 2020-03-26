@@ -3044,7 +3044,8 @@ extern "C" rmw_ret_t rmw_get_node_names(
   RET_WRONG_IMPLID(node);
   auto node_impl = static_cast<CddsNode *>(node->data);
   if (rmw_check_zero_rmw_string_array(node_names) != RMW_RET_OK ||
-    rmw_check_zero_rmw_string_array(node_namespaces) != RMW_RET_OK)
+    rmw_check_zero_rmw_string_array(node_namespaces) != RMW_RET_OK ||
+    rmw_check_zero_rmw_string_array(security_contexts) != RMW_RET_OK)
   {
     return RMW_RET_ERROR;
   }
