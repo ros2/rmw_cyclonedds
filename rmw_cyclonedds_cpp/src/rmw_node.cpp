@@ -61,7 +61,6 @@
 #include "namespace_prefix.hpp"
 
 #include "dds/dds.h"
-#include "dds/ddsc/dds_public_qos.h"
 #include "dds/ddsi/ddsi_sertopic.h"
 #include "rmw_cyclonedds_cpp/serdes.hpp"
 #include "serdata.hpp"
@@ -695,7 +694,6 @@ void store_security_filepath_in_qos(
 rmw_ret_t configure_qos_for_security(
   dds_qos_t * qos, const rmw_node_security_options_t * security_options)
 {
-
 #if RMW_SUPPORT_SECURITY
   /*  File path is set to nullptr if file does not exist or is not readable  */
   store_security_filepath_in_qos(
@@ -789,13 +787,18 @@ extern "C" rmw_node_t * rmw_create_node(
 #endif
 
   dds_qos_t * qos = dds_create_qos();
-  RCUTILS_CHECK_FOR_NULL_WITH_MSG(
-    security_options, "rmw_create_node: Unable to create qos", return nullptr);
+  if (qos == nullptr) {
+    RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp", "rmw_create_node: Unable to create qos");
+    node_gone_from_domain_locked(did);
+    return nullptr;
+  }
   std::string user_data = get_node_user_data(name, namespace_);
   dds_qset_userdata(qos, user_data.c_str(), user_data.size());
 
   if (security_options->enforce_security) {
     if (configure_qos_for_security(qos, security_options) != RMW_RET_OK) {
+      dds_delete_qos(qos);
+      node_gone_from_domain_locked(did);
       return nullptr;
     }
   }
