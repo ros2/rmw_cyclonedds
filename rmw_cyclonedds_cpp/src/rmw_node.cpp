@@ -3038,7 +3038,6 @@ static rmw_ret_t do_for_node_user_data(
 }
 
 extern "C" rmw_ret_t rmw_get_node_names_impl(
-  std::regex re,
   const rmw_node_t * node,
   rcutils_string_array_t * node_names,
   rcutils_string_array_t * node_namespaces,
@@ -3052,13 +3051,17 @@ extern "C" rmw_ret_t rmw_get_node_names_impl(
     return RMW_RET_ERROR;
   }
 
+  std::regex re {
+    "^name=([^;]*);namespace=([^;]*);(securitycontext=([^;]*);)?",
+    std::regex_constants::extended
+  };
   std::vector<std::tuple<std::string, std::string, std::string>> ns;
   auto oper =
     [&ns, re](const dds_builtintopic_participant_t & sample, const char * ud) -> bool {
       std::cmatch cm;
       static_cast<void>(sample);
       if (std::regex_search(ud, cm, re)) {
-        ns.push_back(std::make_tuple(std::string(cm[1]), std::string(cm[2]), std::string(cm[3])));
+        ns.push_back(std::make_tuple(std::string(cm[1]), std::string(cm[2]), std::string(cm[4])));
       }
       return true;
     };
@@ -3134,7 +3137,6 @@ extern "C" rmw_ret_t rmw_get_node_names(
   rcutils_string_array_t * node_namespaces)
 {
   return rmw_get_node_names_impl(
-    std::regex("^name=([^;]*);namespace=([^;]*);securitycontext=([^;]*);", std::regex::extended),
     node,
     node_names,
     node_namespaces,
@@ -3152,7 +3154,6 @@ extern "C" rmw_ret_t rmw_get_node_names_with_security_contexts(
     return RMW_RET_ERROR;
   }
   return rmw_get_node_names_impl(
-    std::regex("^name=([^;]*);namespace=([^;]*);securitycontext=([^;]*);", std::regex::extended),
     node,
     node_names,
     node_namespaces,
