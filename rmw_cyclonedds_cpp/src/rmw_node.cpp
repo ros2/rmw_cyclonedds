@@ -3037,77 +3037,8 @@ static rmw_ret_t do_for_node_user_data(
   return do_for_node(node_impl, f);
 }
 
-extern "C" rmw_ret_t rmw_get_node_names(
-  const rmw_node_t * node,
-  rcutils_string_array_t * node_names,
-  rcutils_string_array_t * node_namespaces)
-{
-  RET_WRONG_IMPLID(node);
-  auto node_impl = static_cast<CddsNode *>(node->data);
-  if (rmw_check_zero_rmw_string_array(node_names) != RMW_RET_OK ||
-    rmw_check_zero_rmw_string_array(node_namespaces) != RMW_RET_OK)
-  {
-    return RMW_RET_ERROR;
-  }
-
-  std::vector<std::pair<std::string, std::string>> ns;
-  const auto re = std::regex("^name=([^;]*);namespace=([^;]*);", std::regex::extended);
-  auto oper =
-    [&ns, re](const dds_builtintopic_participant_t & sample, const char * ud) -> bool {
-      std::cmatch cm;
-      static_cast<void>(sample);
-      if (std::regex_search(ud, cm, re)) {
-        ns.push_back(std::make_pair(std::string(cm[1]), std::string(cm[2])));
-      }
-      return true;
-    };
-  rmw_ret_t ret;
-  if ((ret = do_for_node_user_data(node_impl, oper)) != RMW_RET_OK) {
-    return ret;
-  }
-
-  rcutils_allocator_t allocator = rcutils_get_default_allocator();
-  if (rcutils_string_array_init(node_names, ns.size(), &allocator) != RCUTILS_RET_OK ||
-    rcutils_string_array_init(node_namespaces, ns.size(), &allocator) != RCUTILS_RET_OK)
-  {
-    RMW_SET_ERROR_MSG(rcutils_get_error_string().str);
-    goto fail_alloc;
-  }
-  size_t i;
-  i = 0;
-  for (auto && n : ns) {
-    node_names->data[i] = rcutils_strdup(n.first.c_str(), allocator);
-    node_namespaces->data[i] = rcutils_strdup(n.second.c_str(), allocator);
-    if (!node_names->data[i] || !node_namespaces->data[i]) {
-      RMW_SET_ERROR_MSG("rmw_get_node_names for name/namespace");
-      goto fail_alloc;
-    }
-    i++;
-  }
-  return RMW_RET_OK;
-
-fail_alloc:
-  if (node_names) {
-    if (rcutils_string_array_fini(node_names) != RCUTILS_RET_OK) {
-      RCUTILS_LOG_ERROR_NAMED(
-        "rmw_cyclonedds_cpp",
-        "failed to cleanup during error handling: %s", rcutils_get_error_string().str);
-      rcutils_reset_error();
-    }
-  }
-  if (node_namespaces) {
-    if (rcutils_string_array_fini(node_namespaces) != RCUTILS_RET_OK) {
-      RCUTILS_LOG_ERROR_NAMED(
-        "rmw_cyclonedds_cpp",
-        "failed to cleanup during error handling: %s", rcutils_get_error_string().str);
-      rcutils_reset_error();
-    }
-  }
-  return RMW_RET_BAD_ALLOC;
-}
-
-#if RMW_VERSION_GTE(0, 8, 2)
-extern "C" rmw_ret_t rmw_get_node_names_with_security_contexts(
+extern "C" rmw_ret_t rmw_get_node_names_impl(
+  std::regex re,
   const rmw_node_t * node,
   rcutils_string_array_t * node_names,
   rcutils_string_array_t * node_namespaces,
@@ -3115,16 +3046,13 @@ extern "C" rmw_ret_t rmw_get_node_names_with_security_contexts(
 {
   RET_WRONG_IMPLID(node);
   auto node_impl = static_cast<CddsNode *>(node->data);
-  if (rmw_check_zero_rmw_string_array(node_names) != RMW_RET_OK ||
-    rmw_check_zero_rmw_string_array(node_namespaces) != RMW_RET_OK ||
-    rmw_check_zero_rmw_string_array(security_contexts) != RMW_RET_OK)
+  if (RMW_RET_OK != rmw_check_zero_rmw_string_array(node_names) ||
+    RMW_RET_OK != rmw_check_zero_rmw_string_array(node_namespaces))
   {
     return RMW_RET_ERROR;
   }
 
   std::vector<std::tuple<std::string, std::string, std::string>> ns;
-  const auto re = std::regex(
-    "^name=([^;]*);namespace=([^;]*);securitycontext=([^;]*);", std::regex::extended);
   auto oper =
     [&ns, re](const dds_builtintopic_participant_t & sample, const char * ud) -> bool {
       std::cmatch cm;
@@ -3141,7 +3069,12 @@ extern "C" rmw_ret_t rmw_get_node_names_with_security_contexts(
 
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   if (rcutils_string_array_init(node_names, ns.size(), &allocator) != RCUTILS_RET_OK ||
-    rcutils_string_array_init(node_namespaces, ns.size(), &allocator) != RCUTILS_RET_OK ||
+    rcutils_string_array_init(node_namespaces, ns.size(), &allocator) != RCUTILS_RET_OK)
+  {
+    RMW_SET_ERROR_MSG(rcutils_get_error_string().str);
+    goto fail_alloc;
+  }
+  if (security_contexts &&
     rcutils_string_array_init(security_contexts, ns.size(), &allocator) != RCUTILS_RET_OK)
   {
     RMW_SET_ERROR_MSG(rcutils_get_error_string().str);
@@ -3149,13 +3082,19 @@ extern "C" rmw_ret_t rmw_get_node_names_with_security_contexts(
   }
   size_t i;
   i = 0;
-  for (auto && n : ns) {
+  for (auto & n : ns) {
     node_names->data[i] = rcutils_strdup(std::get<0>(n).c_str(), allocator);
     node_namespaces->data[i] = rcutils_strdup(std::get<1>(n).c_str(), allocator);
-    security_contexts->data[i] = rcutils_strdup(std::get<2>(n).c_str(), allocator);
-    if (!node_names->data[i] || !node_namespaces->data[i] || !security_contexts->data[i]) {
-      RMW_SET_ERROR_MSG("rmw_get_node_names for name/namespace/security_context");
+    if (!node_names->data[i] || !node_namespaces->data[i]) {
+      RMW_SET_ERROR_MSG("rmw_get_node_names for name/namespace");
       goto fail_alloc;
+    }
+    if (security_contexts) {
+      security_contexts->data[i] = rcutils_strdup(std::get<2>(n).c_str(), allocator);
+      if (!security_contexts->data[i]) {
+        RMW_SET_ERROR_MSG("rmw_get_node_names for security_context");
+        goto fail_alloc;
+      }
     }
     i++;
   }
@@ -3187,6 +3126,37 @@ fail_alloc:
     }
   }
   return RMW_RET_BAD_ALLOC;
+}
+
+extern "C" rmw_ret_t rmw_get_node_names(
+  const rmw_node_t * node,
+  rcutils_string_array_t * node_names,
+  rcutils_string_array_t * node_namespaces)
+{
+  return rmw_get_node_names_impl(
+    std::regex("^name=([^;]*);namespace=([^;]*);securitycontext=([^;]*);", std::regex::extended),
+    node,
+    node_names,
+    node_namespaces,
+    nullptr);
+}
+
+#if RMW_VERSION_GTE(0, 8, 2)
+extern "C" rmw_ret_t rmw_get_node_names_with_security_contexts(
+  const rmw_node_t * node,
+  rcutils_string_array_t * node_names,
+  rcutils_string_array_t * node_namespaces,
+  rcutils_string_array_t * security_contexts)
+{
+  if (RMW_RET_OK != rmw_check_zero_rmw_string_array(security_contexts)) {
+    return RMW_RET_ERROR;
+  }
+  return rmw_get_node_names_impl(
+    std::regex("^name=([^;]*);namespace=([^;]*);securitycontext=([^;]*);", std::regex::extended),
+    node,
+    node_names,
+    node_namespaces,
+    security_contexts);
 }
 #endif
 
