@@ -9,7 +9,7 @@ on:
 jobs:
   build:
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
           os: [ubuntu-latest, macOS-latest, windows-latest]
           rosdistro: [dashing, eloquent]
@@ -20,4 +20,6 @@ jobs:
       with:
         required-ros-distributions: ${{ matrix.rosdistro }}
     - uses: ros-tooling/action-ros-ci@0.0.13
+      with:
+        package-name: rmw_cyclonedds_cpp
       
