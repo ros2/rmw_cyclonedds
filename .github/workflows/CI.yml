@@ -12,7 +12,7 @@ jobs:
       fail-fast: true
       matrix:
           os: [ubuntu-latest, macOS-latest, windows-latest]
-          rosdistro: [dashing, eloquent, source]
+          rosdistro: [dashing, eloquent]
     runs-on: ${{ matrix.os }}
 
     steps:
