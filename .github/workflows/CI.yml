@@ -13,9 +13,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: build-deps
-      run: pip3 install colcon-common-extensions
-    - name: colcon build
-      run: colcon build --packages-up-to rmw_cyclonedds
-    - name: colcon test
-      run: colcon test --packages-select rmw_cyclonedds
+    - uses: ros-tooling/setup-ros@0.0.15
+    # Run the generator and output the results to a file.
+    - run: |
+        rosinstall_generator rmw_cyclonedds_cpp system_tests --rosdistro dashing \
+        --deps --exclude rmw_cyclonedds_cpp --upstream-development > /tmp/deps.repos
+    # Pass the file to the action
+    - uses: ros-tooling/action-ros-ci@0.0.13
+      with:
+        package-name: rmw_cyclonedds_cpp
