@@ -1,0 +1,21 @@
+name: ROS2 CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: build-deps
+      run: pip3 install colcon-common-extensions
+    - name: colcon build
+      run: colcon build --packages-up-to rmw_cyclonedds
+    - name: colcon test
+      run: colcon test --packages-select rmw_cyclonedds
