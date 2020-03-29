@@ -14,10 +14,6 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - uses: ros-tooling/setup-ros@0.0.15
-    # Pass the file to the action
     - uses: ros-/toolingaction-ros-ci@0.0.13
       with:
-        package-name: rmw_cyclonedds_cpp
-    - uses: ros-/toolingaction-ros-ci@0.0.13
-      with:
-        package-name: system_tests
+        package-name: rmw_cyclonedds_cpp, test_communication
