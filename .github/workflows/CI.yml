@@ -22,4 +22,4 @@ jobs:
         required-ros-distributions: ${{ matrix.rosdistro }}
     - uses: ros-tooling/action-ros-ci@0.0.13
       with:
-        package-name: rmw_cyclonedds_cpp test_communication
+        package-name: rmw_cyclonedds_cpp
