@@ -37,7 +37,6 @@
 #include "rmw/get_node_info_and_types.h"
 #include "rmw/get_service_names_and_types.h"
 #include "rmw/get_topic_names_and_types.h"
-#include "rmw/incompatible_qos_events_statuses.h"
 #include "rmw/names_and_types.h"
 #include "rmw/rmw.h"
 #include "rmw/sanity_checks.h"
@@ -54,6 +53,7 @@
 
 #if RMW_VERSION_GTE(0, 8, 2)
 #include "rmw/get_topic_endpoint_info.h"
+#include "rmw/incompatible_qos_events_statuses.h"
 #include "rmw/topic_endpoint_info_array.h"
 #endif
 
