@@ -21,4 +21,4 @@ jobs:
         required-ros-distributions: ${{ matrix.rosdistro }}
     - uses: ros-tooling/action-ros-ci@0.0.13
       with:
-        package-name: rmw_cyclonedds_cpp
+        package-name: rmw_cyclonedds_cpp cyclonedds_cmake_module
