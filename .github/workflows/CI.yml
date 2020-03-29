@@ -14,11 +14,10 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - uses: ros-tooling/setup-ros@0.0.15
-    # Run the generator and output the results to a file.
-    - run: |
-        rosinstall_generator rmw_cyclonedds_cpp system_tests --rosdistro dashing \
-        --deps --exclude rmw_cyclonedds_cpp --upstream-development > /tmp/deps.repos
     # Pass the file to the action
-    - uses: ros-tooling/action-ros-ci@0.0.13
+    - uses: ros-/toolingaction-ros-ci@0.0.13
       with:
         package-name: rmw_cyclonedds_cpp
+    - uses: ros-/toolingaction-ros-ci@0.0.13
+      with:
+        package-name: system_tests
