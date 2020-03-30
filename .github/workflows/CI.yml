@@ -19,7 +19,7 @@ jobs:
     - uses: ros-tooling/setup-ros@0.0.15
       with:
         required-ros-distributions: ${{ matrix.rosdistro }}
-    - uses: ros-tooling/action-ros-ci@0.0.13
+    - uses: ros-tooling/action-ros-ci@0.0.14
       with:
         package-name: rmw_cyclonedds_cpp
       
