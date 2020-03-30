@@ -1,0 +1,20 @@
+name: ROS2 CI
+on: [push, pull_request]
+jobs:
+  build:
+    strategy:
+      matrix:
+          os: [ubuntu-18.04, macOS-latest, windows-latest]
+          rosdistro: [dashing, eloquent, source]
+          exclude: # issue in action-ros-ci@0.0.14
+            - os: ubuntu-18.04
+              rosdistro: source
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: ros-tooling/setup-ros@0.0.15
+      with:
+        required-ros-distributions: ${{ matrix.rosdistro }}
+    - uses: ros-tooling/action-ros-ci@0.0.14
+      with:
+        package-name: rmw_cyclonedds_cpp
+      
