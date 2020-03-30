@@ -10,24 +10,13 @@
   <buildtool_depend>ament_cmake_ros</buildtool_depend>
   <buildtool_depend>cyclonedds_cmake_module</buildtool_depend>
 
-  <buildtool_export_depend>ament_cmake</buildtool_export_depend>
-
-  <build_depend>cyclonedds</build_depend>
-  <build_depend>cyclonedds_cmake_module</build_depend>
-
-  <build_depend>rcutils</build_depend>
-  <build_depend>rmw</build_depend>
-  <build_depend>rosidl_generator_c</build_depend>
-  <build_depend>rosidl_typesupport_introspection_c</build_depend>
-  <build_depend>rosidl_typesupport_introspection_cpp</build_depend>
-
-  <build_export_depend>cyclonedds</build_export_depend>
-  <build_export_depend>cyclonedds_cmake_module</build_export_depend>
-  <build_export_depend>rcutils</build_export_depend>
-  <build_export_depend>rmw</build_export_depend>
-  <build_export_depend>rosidl_generator_c</build_export_depend>
-  <build_export_depend>rosidl_typesupport_introspection_c</build_export_depend>
-  <build_export_depend>rosidl_typesupport_introspection_cpp</build_export_depend>
+  <depend>cyclonedds</depend>
+  <depend>cyclonedds_cmake_module</depend>
+  <depend>rcutils</depend>
+  <depend>rmw</depend>
+  <depend>rosidl_generator_c</depend>
+  <depend>rosidl_typesupport_introspection_c</depend>
+  <depend>rosidl_typesupport_introspection_cpp</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
