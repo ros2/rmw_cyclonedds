@@ -3,18 +3,27 @@ on: [push, pull_request]
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
           os: [ubuntu-18.04, macOS-latest, windows-latest]
-          rosdistro: [dashing, eloquent, source]
-          exclude: # issue in action-ros-ci@0.0.14
-            - os: ubuntu-18.04
-              rosdistro: source
+          repos-url:
+            - https://raw.githubusercontent.com/ros2/ros2/dashing/ros2.repos
+            - https://raw.githubusercontent.com/ros2/ros2/eloquent/ros2.repos
+            - https://raw.githubusercontent.com/ros2/ros2/master/ros2.repos
+          exclude:
+            # pending https://github.com/ament/ament_cmake/pull/233
+            - os: windows-latest
+              repos-url: https://raw.githubusercontent.com/ros2/ros2/eloquent/ros2.repos
+            # pending https://github.com/ament/ament_cmake/pull/234
+            - os: windows-latest
+              repos-url: https://raw.githubusercontent.com/ros2/ros2/dashing/ros2.repos
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: ros-tooling/setup-ros@0.0.15
-      with:
-        required-ros-distributions: ${{ matrix.rosdistro }}
-    - uses: ros-tooling/action-ros-ci@0.0.14
+    - name: Acquire ROS dependencies
+      uses: ros-tooling/setup-ros@0.0.15
+    - name: Build and test ROS
+      uses: ros-tooling/action-ros-ci@0.0.14
       with:
         package-name: rmw_cyclonedds_cpp
+        vcs-repo-file-url: ${{ matrix.repos-url }}
       
