@@ -5,18 +5,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+          rosdistro: [dashing, eloquent, master]
           os: [ubuntu-18.04, macOS-latest, windows-latest]
-          repos-url:
-            - https://raw.githubusercontent.com/ros2/ros2/dashing/ros2.repos
-            - https://raw.githubusercontent.com/ros2/ros2/eloquent/ros2.repos
-            - https://raw.githubusercontent.com/ros2/ros2/master/ros2.repos
           exclude:
             # pending https://github.com/ament/ament_cmake/pull/233
-            - os: windows-latest
-              repos-url: https://raw.githubusercontent.com/ros2/ros2/eloquent/ros2.repos
+            - rosdistro: eloquent
+              os: windows-latest
             # pending https://github.com/ament/ament_cmake/pull/234
-            - os: windows-latest
-              repos-url: https://raw.githubusercontent.com/ros2/ros2/dashing/ros2.repos
+            - rosdistro: dashing
+              os: windows-latest
     runs-on: ${{ matrix.os }}
     steps:
     - name: Acquire ROS dependencies
@@ -25,5 +22,4 @@ jobs:
       uses: ros-tooling/action-ros-ci@0.0.14
       with:
         package-name: rmw_cyclonedds_cpp
-        vcs-repo-file-url: ${{ matrix.repos-url }}
-      
+        vcs-repo-file-url: https://raw.githubusercontent.com/ros2/ros2/${{ matrix.rosdistro }}/ros2.repos
