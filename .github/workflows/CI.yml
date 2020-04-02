@@ -16,6 +16,9 @@ jobs:
               os: windows-latest
     runs-on: ${{ matrix.os }}
     steps:
+    - if: runner.os == 'Linux'
+      # azure ubuntu repo can be flaky so add an alternate source
+      run: sed -e 's/azure.archive.ubuntu.com/us.archive.ubuntu.com/g' -e t -e d /etc/apt/sources.list | sudo tee /etc/apt/sources.list.d/nonazure.list
     - name: Acquire ROS dependencies
       uses: ros-tooling/setup-ros@0.0.15
     - name: Build and test ROS
