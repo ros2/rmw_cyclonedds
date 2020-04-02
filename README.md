@@ -26,7 +26,6 @@ Cyclone DDS is ready to use. It seeks to give the fastest, easiest, and most rob
 
 ## Building from source and contributing
 
-
 Note the `master` branch maintains compatibility with ROS releases Dashing and later, including the not-yet-released [*Foxy*](https://index.ros.org/doc/ros2/Releases/Release-Foxy-Fitzroy/).
 
 If building ROS2 from source ([ros2.repos](https://github.com/ros2/ros2/blob/master/ros2.repos)), you already have this package and Cyclone DDS:
