@@ -702,6 +702,9 @@ extern "C" rmw_node_t * rmw_create_node(
 #endif
 )
 {
+#if !RMW_VERSION_GTE(0, 8, 2)
+  static_cast<void>(context);
+#endif
   RET_NULL_X(name, return nullptr);
   RET_NULL_X(namespace_, return nullptr);
 #if MULTIDOMAIN
@@ -3084,23 +3087,24 @@ extern "C" rmw_ret_t rmw_get_node_names_impl(
     RMW_SET_ERROR_MSG(rcutils_get_error_string().str);
     goto fail_alloc;
   }
-  size_t i;
-  i = 0;
-  for (auto & n : ns) {
-    node_names->data[i] = rcutils_strdup(std::get<0>(n).c_str(), allocator);
-    node_namespaces->data[i] = rcutils_strdup(std::get<1>(n).c_str(), allocator);
-    if (!node_names->data[i] || !node_namespaces->data[i]) {
-      RMW_SET_ERROR_MSG("rmw_get_node_names for name/namespace");
-      goto fail_alloc;
-    }
-    if (security_contexts) {
-      security_contexts->data[i] = rcutils_strdup(std::get<2>(n).c_str(), allocator);
-      if (!security_contexts->data[i]) {
-        RMW_SET_ERROR_MSG("rmw_get_node_names for security_context");
+  {
+    size_t i = 0;
+    for (auto & n : ns) {
+      node_names->data[i] = rcutils_strdup(std::get<0>(n).c_str(), allocator);
+      node_namespaces->data[i] = rcutils_strdup(std::get<1>(n).c_str(), allocator);
+      if (!node_names->data[i] || !node_namespaces->data[i]) {
+        RMW_SET_ERROR_MSG("rmw_get_node_names for name/namespace");
         goto fail_alloc;
       }
+      if (security_contexts) {
+        security_contexts->data[i] = rcutils_strdup(std::get<2>(n).c_str(), allocator);
+        if (!security_contexts->data[i]) {
+          RMW_SET_ERROR_MSG("rmw_get_node_names for security_context");
+          goto fail_alloc;
+        }
+      }
+      i++;
     }
-    i++;
   }
   return RMW_RET_OK;
 
