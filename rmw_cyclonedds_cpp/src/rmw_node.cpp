@@ -35,14 +35,14 @@
 #include "rmw/allocators.h"
 #include "rmw/convert_rcutils_ret_to_rmw_ret.h"
 #include "rmw/error_handling.h"
-#include "rmw/names_and_types.h"
+#include "rmw/event.h"
+#include "rmw/get_node_info_and_types.h"
 #include "rmw/get_service_names_and_types.h"
 #include "rmw/get_topic_names_and_types.h"
-#include "rmw/get_node_info_and_types.h"
-#include "rmw/event.h"
-#include "rmw/validate_node_name.h"
+#include "rmw/names_and_types.h"
 #include "rmw/rmw.h"
 #include "rmw/sanity_checks.h"
+#include "rmw/validate_node_name.h"
 
 #include "Serialization.hpp"
 #include "rmw/impl/cpp/macros.hpp"
@@ -55,6 +55,7 @@
 
 #if RMW_VERSION_GTE(0, 8, 2)
 #include "rmw/get_topic_endpoint_info.h"
+#include "rmw/incompatible_qos_events_statuses.h"
 #include "rmw/topic_endpoint_info_array.h"
 #endif
 
@@ -1326,6 +1327,28 @@ static dds_qos_t * create_readwrite_qos(
   return qos;
 }
 
+#if RMW_VERSION_GTE(0, 8, 2)
+static rmw_qos_policy_kind_t dds_qos_policy_to_rmw_qos_policy(dds_qos_policy_id_t policy_id)
+{
+  switch (policy_id) {
+    case DDS_DURABILITY_QOS_POLICY_ID:
+      return RMW_QOS_POLICY_DURABILITY;
+    case DDS_DEADLINE_QOS_POLICY_ID:
+      return RMW_QOS_POLICY_DEADLINE;
+    case DDS_LIVELINESS_QOS_POLICY_ID:
+      return RMW_QOS_POLICY_LIVELINESS;
+    case DDS_RELIABILITY_QOS_POLICY_ID:
+      return RMW_QOS_POLICY_RELIABILITY;
+    case DDS_HISTORY_QOS_POLICY_ID:
+      return RMW_QOS_POLICY_HISTORY;
+    case DDS_LIFESPAN_QOS_POLICY_ID:
+      return RMW_QOS_POLICY_LIFESPAN;
+    default:
+      return RMW_QOS_POLICY_INVALID;
+  }
+}
+#endif
+
 static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qos_policies)
 {
   assert(dds_qos);
@@ -2023,6 +2046,10 @@ static const std::unordered_map<rmw_event_type_t, uint32_t> mask_map{
   {RMW_EVENT_REQUESTED_DEADLINE_MISSED, DDS_REQUESTED_DEADLINE_MISSED_STATUS},
   {RMW_EVENT_LIVELINESS_LOST, DDS_LIVELINESS_LOST_STATUS},
   {RMW_EVENT_OFFERED_DEADLINE_MISSED, DDS_OFFERED_DEADLINE_MISSED_STATUS},
+#if RMW_VERSION_GTE(0, 8, 2)
+  {RMW_EVENT_REQUESTED_QOS_INCOMPATIBLE, DDS_REQUESTED_INCOMPATIBLE_QOS_STATUS},
+  {RMW_EVENT_OFFERED_QOS_INCOMPATIBLE, DDS_OFFERED_INCOMPATIBLE_QOS_STATUS},
+#endif
 };
 
 static bool is_event_supported(const rmw_event_type_t event_t)
@@ -2116,6 +2143,25 @@ extern "C" rmw_ret_t rmw_take_event(
         }
       }
 
+#if RMW_VERSION_GTE(0, 8, 2)
+    case RMW_EVENT_REQUESTED_QOS_INCOMPATIBLE: {
+        auto ei = static_cast<rmw_requested_qos_incompatible_event_status_t *>(event_info);
+        auto sub = static_cast<CddsSubscription *>(event_handle->data);
+        dds_requested_incompatible_qos_status_t st;
+        if (dds_get_requested_incompatible_qos_status(sub->enth, &st) < 0) {
+          *taken = false;
+          return RMW_RET_ERROR;
+        } else {
+          ei->total_count = static_cast<int32_t>(st.total_count);
+          ei->total_count_change = st.total_count_change;
+          ei->last_policy_kind = dds_qos_policy_to_rmw_qos_policy(
+            static_cast<dds_qos_policy_id_t>(st.last_policy_id));
+          *taken = true;
+          return RMW_RET_OK;
+        }
+      }
+#endif
+
     case RMW_EVENT_LIVELINESS_LOST: {
         auto ei = static_cast<rmw_liveliness_lost_status_t *>(event_info);
         auto pub = static_cast<CddsPublisher *>(event_handle->data);
@@ -2145,6 +2191,25 @@ extern "C" rmw_ret_t rmw_take_event(
           return RMW_RET_OK;
         }
       }
+
+#if RMW_VERSION_GTE(0, 8, 2)
+    case RMW_EVENT_OFFERED_QOS_INCOMPATIBLE: {
+        auto ei = static_cast<rmw_offered_qos_incompatible_event_status_t *>(event_info);
+        auto pub = static_cast<CddsPublisher *>(event_handle->data);
+        dds_offered_incompatible_qos_status_t st;
+        if (dds_get_offered_incompatible_qos_status(pub->enth, &st) < 0) {
+          *taken = false;
+          return RMW_RET_ERROR;
+        } else {
+          ei->total_count = static_cast<int32_t>(st.total_count);
+          ei->total_count_change = st.total_count_change;
+          ei->last_policy_kind = dds_qos_policy_to_rmw_qos_policy(
+            static_cast<dds_qos_policy_id_t>(st.last_policy_id));
+          *taken = true;
+          return RMW_RET_OK;
+        }
+      }
+#endif
 
     case RMW_EVENT_INVALID: {
         break;

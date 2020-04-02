@@ -1,0 +1,28 @@
+name: ROS2 CI
+on: [push, pull_request]
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+          rosdistro: [dashing, eloquent, master]
+          os: [ubuntu-18.04, macOS-latest, windows-latest]
+          exclude:
+            # pending https://github.com/ament/ament_cmake/pull/233
+            - rosdistro: eloquent
+              os: windows-latest
+            # pending https://github.com/ament/ament_cmake/pull/234
+            - rosdistro: dashing
+              os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+    - if: runner.os == 'Linux'
+      # azure ubuntu repo can be flaky so add an alternate source
+      run: sed -e 's/azure.archive.ubuntu.com/us.archive.ubuntu.com/g' -e t -e d /etc/apt/sources.list | sudo tee /etc/apt/sources.list.d/nonazure.list
+    - name: Acquire ROS dependencies
+      uses: ros-tooling/setup-ros@0.0.15
+    - name: Build and test ROS
+      uses: ros-tooling/action-ros-ci@0.0.14
+      with:
+        package-name: rmw_cyclonedds_cpp
+        vcs-repo-file-url: https://raw.githubusercontent.com/ros2/ros2/${{ matrix.rosdistro }}/ros2.repos

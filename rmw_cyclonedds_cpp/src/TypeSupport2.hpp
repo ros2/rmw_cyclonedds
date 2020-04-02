@@ -245,6 +245,9 @@ public:
   }
   const void * sequence_contents(const void * ptr_to_sequence) const override
   {
+    if (sequence_size(ptr_to_sequence) == 0) {
+      return nullptr;
+    }
     return m_get_const_function(ptr_to_sequence, 0);
   }
 };
