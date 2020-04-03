@@ -23,6 +23,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <regex>
 
@@ -358,6 +359,12 @@ extern "C" rmw_ret_t rmw_init_options_init(
   init_options->implementation_identifier = eclipse_cyclonedds_identifier;
   init_options->allocator = allocator;
   init_options->impl = nullptr;
+#if RMW_VERSION_GTE(0, 8, 2)
+  init_options->localhost_only = RMW_LOCALHOST_ONLY_DEFAULT;
+  init_options->domain_id = RMW_DEFAULT_DOMAIN_ID;
+  init_options->security_context = NULL;
+  init_options->security_options = rmw_get_zero_initialized_security_options();
+#endif
   return RMW_RET_OK;
 }
 
@@ -374,19 +381,44 @@ extern "C" rmw_ret_t rmw_init_options_copy(const rmw_init_options_t * src, rmw_i
     RMW_SET_ERROR_MSG("expected zero-initialized dst");
     return RMW_RET_INVALID_ARGUMENT;
   }
+#if RMW_VERSION_GTE(0, 8, 2)
+  const rcutils_allocator_t * allocator = &src->allocator;
+  rmw_ret_t ret = RMW_RET_OK;
+
+  allocator->deallocate(dst->security_context, allocator->state);
+  *dst = *src;
+  dst->security_context = NULL;
+  dst->security_options = rmw_get_zero_initialized_security_options();
+
+  dst->security_context = rcutils_strdup(src->security_context, *allocator);
+  if (src->security_context && !dst->security_context) {
+    ret = RMW_RET_BAD_ALLOC;
+    goto fail;
+  }
+  return rmw_security_options_copy(&src->security_options, allocator, &dst->security_options);
+fail:
+  allocator->deallocate(dst->security_context, allocator->state);
+  return ret;
+#else
   *dst = *src;
   return RMW_RET_OK;
+#endif
 }
 
 extern "C" rmw_ret_t rmw_init_options_fini(rmw_init_options_t * init_options)
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(init_options, RMW_RET_INVALID_ARGUMENT);
-  RCUTILS_CHECK_ALLOCATOR(&init_options->allocator, return RMW_RET_INVALID_ARGUMENT);
+  rcutils_allocator_t & allocator = init_options->allocator;
+  RCUTILS_CHECK_ALLOCATOR(&allocator, return RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
     init_options,
     init_options->implementation_identifier,
     eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+#if RMW_VERSION_GTE(0, 8, 2)
+  allocator.deallocate(init_options->security_context, allocator.state);
+  rmw_security_options_fini(&init_options->security_options, &allocator);
+#endif
   *init_options = rmw_get_zero_initialized_init_options();
   return RMW_RET_OK;
 }
@@ -405,7 +437,11 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
   context->instance_id = options->instance_id;
   context->implementation_identifier = eclipse_cyclonedds_identifier;
   context->impl = nullptr;
+#if RMW_VERSION_GTE(0, 8, 2)
+  return rmw_init_options_copy(options, &context->options);
+#else
   return RMW_RET_OK;
+#endif
 }
 
 extern "C" rmw_ret_t rmw_node_assert_liveliness(const rmw_node_t * node)
@@ -636,23 +672,39 @@ static void node_gone_from_domain_locked(dds_domainid_t did)
 }
 #endif
 
-static std::string get_node_user_data(const char * node_name, const char * node_namespace)
+static std::string get_node_user_data_name_ns(const char * node_name, const char * node_namespace)
 {
   return std::string("name=") + std::string(node_name) +
          std::string(";namespace=") + std::string(node_namespace) +
          std::string(";");
 }
 
+#if RMW_VERSION_GTE(0, 8, 2)
+static std::string get_node_user_data(
+  const char * node_name, const char * node_namespace, const char * security_context)
+{
+  return get_node_user_data_name_ns(node_name, node_namespace) +
+         std::string("securitycontext=") + std::string(security_context) +
+         std::string(";");
+}
+#else
+#define get_node_user_data get_node_user_data_name_ns
+#endif
+
 extern "C" rmw_node_t * rmw_create_node(
   rmw_context_t * context, const char * name,
-  const char * namespace_, size_t domain_id,
-  const rmw_node_security_options_t * security_options
+  const char * namespace_, size_t domain_id
+#if !RMW_VERSION_GTE(0, 8, 2)
+  , const rmw_node_security_options_t * security_options
+#endif
 #if RMW_VERSION_GTE(0, 8, 1)
   , bool localhost_only
 #endif
 )
 {
+#if !RMW_VERSION_GTE(0, 8, 2)
   static_cast<void>(context);
+#endif
   RET_NULL_X(name, return nullptr);
   RET_NULL_X(namespace_, return nullptr);
 #if MULTIDOMAIN
@@ -667,7 +719,9 @@ extern "C" rmw_node_t * rmw_create_node(
   static_cast<void>(domain_id);
   const dds_domainid_t did = DDS_DOMAIN_DEFAULT;
 #endif
+#if !RMW_VERSION_GTE(0, 8, 2)
   (void) security_options;
+#endif
   rmw_ret_t ret;
   int dummy_validation_result;
   size_t dummy_invalid_index;
@@ -689,7 +743,11 @@ extern "C" rmw_node_t * rmw_create_node(
 #endif
 
   dds_qos_t * qos = dds_create_qos();
+#if RMW_VERSION_GTE(0, 8, 2)
+  std::string user_data = get_node_user_data(name, namespace_, context->options.security_context);
+#else
   std::string user_data = get_node_user_data(name, namespace_);
+#endif
   dds_qset_userdata(qos, user_data.c_str(), user_data.size());
   dds_entity_t pp = dds_create_participant(did, qos, nullptr);
   dds_delete_qos(qos);
@@ -2983,27 +3041,31 @@ static rmw_ret_t do_for_node_user_data(
   return do_for_node(node_impl, f);
 }
 
-extern "C" rmw_ret_t rmw_get_node_names(
+extern "C" rmw_ret_t rmw_get_node_names_impl(
   const rmw_node_t * node,
   rcutils_string_array_t * node_names,
-  rcutils_string_array_t * node_namespaces)
+  rcutils_string_array_t * node_namespaces,
+  rcutils_string_array_t * security_contexts)
 {
   RET_WRONG_IMPLID(node);
   auto node_impl = static_cast<CddsNode *>(node->data);
-  if (rmw_check_zero_rmw_string_array(node_names) != RMW_RET_OK ||
-    rmw_check_zero_rmw_string_array(node_namespaces) != RMW_RET_OK)
+  if (RMW_RET_OK != rmw_check_zero_rmw_string_array(node_names) ||
+    RMW_RET_OK != rmw_check_zero_rmw_string_array(node_namespaces))
   {
     return RMW_RET_ERROR;
   }
 
-  std::vector<std::pair<std::string, std::string>> ns;
-  const auto re = std::regex("^name=(.*);namespace=(.*);$", std::regex::extended);
+  std::regex re {
+    "^name=([^;]*);namespace=([^;]*);(securitycontext=([^;]*);)?",
+    std::regex_constants::extended
+  };
+  std::vector<std::tuple<std::string, std::string, std::string>> ns;
   auto oper =
     [&ns, re](const dds_builtintopic_participant_t & sample, const char * ud) -> bool {
       std::cmatch cm;
       static_cast<void>(sample);
       if (std::regex_search(ud, cm, re)) {
-        ns.push_back(std::make_pair(std::string(cm[1]), std::string(cm[2])));
+        ns.push_back(std::make_tuple(std::string(cm[1]), std::string(cm[2]), std::string(cm[4])));
       }
       return true;
     };
@@ -3019,16 +3081,30 @@ extern "C" rmw_ret_t rmw_get_node_names(
     RMW_SET_ERROR_MSG(rcutils_get_error_string().str);
     goto fail_alloc;
   }
-  size_t i;
-  i = 0;
-  for (auto && n : ns) {
-    node_names->data[i] = rcutils_strdup(n.first.c_str(), allocator);
-    node_namespaces->data[i] = rcutils_strdup(n.second.c_str(), allocator);
-    if (!node_names->data[i] || !node_namespaces->data[i]) {
-      RMW_SET_ERROR_MSG("rmw_get_node_names for name/namespace");
-      goto fail_alloc;
+  if (security_contexts &&
+    rcutils_string_array_init(security_contexts, ns.size(), &allocator) != RCUTILS_RET_OK)
+  {
+    RMW_SET_ERROR_MSG(rcutils_get_error_string().str);
+    goto fail_alloc;
+  }
+  {
+    size_t i = 0;
+    for (auto & n : ns) {
+      node_names->data[i] = rcutils_strdup(std::get<0>(n).c_str(), allocator);
+      node_namespaces->data[i] = rcutils_strdup(std::get<1>(n).c_str(), allocator);
+      if (!node_names->data[i] || !node_namespaces->data[i]) {
+        RMW_SET_ERROR_MSG("rmw_get_node_names for name/namespace");
+        goto fail_alloc;
+      }
+      if (security_contexts) {
+        security_contexts->data[i] = rcutils_strdup(std::get<2>(n).c_str(), allocator);
+        if (!security_contexts->data[i]) {
+          RMW_SET_ERROR_MSG("rmw_get_node_names for security_context");
+          goto fail_alloc;
+        }
+      }
+      i++;
     }
-    i++;
   }
   return RMW_RET_OK;
 
@@ -3049,8 +3125,46 @@ fail_alloc:
       rcutils_reset_error();
     }
   }
+  if (security_contexts) {
+    if (rcutils_string_array_fini(security_contexts) != RCUTILS_RET_OK) {
+      RCUTILS_LOG_ERROR_NAMED(
+        "rmw_cyclonedds_cpp",
+        "failed to cleanup during error handling: %s", rcutils_get_error_string().str);
+      rcutils_reset_error();
+    }
+  }
   return RMW_RET_BAD_ALLOC;
 }
+
+extern "C" rmw_ret_t rmw_get_node_names(
+  const rmw_node_t * node,
+  rcutils_string_array_t * node_names,
+  rcutils_string_array_t * node_namespaces)
+{
+  return rmw_get_node_names_impl(
+    node,
+    node_names,
+    node_namespaces,
+    nullptr);
+}
+
+#if RMW_VERSION_GTE(0, 8, 2)
+extern "C" rmw_ret_t rmw_get_node_names_with_security_contexts(
+  const rmw_node_t * node,
+  rcutils_string_array_t * node_names,
+  rcutils_string_array_t * node_namespaces,
+  rcutils_string_array_t * security_contexts)
+{
+  if (RMW_RET_OK != rmw_check_zero_rmw_string_array(security_contexts)) {
+    return RMW_RET_ERROR;
+  }
+  return rmw_get_node_names_impl(
+    node,
+    node_names,
+    node_namespaces,
+    security_contexts);
+}
+#endif
 
 static rmw_ret_t rmw_collect_data_for_endpoint(
   CddsNode * node_impl,
@@ -3105,7 +3219,7 @@ static void get_node_name(
 {
   static_cast<void>(pp_guid);  // only used in assert()
   bool node_found = false;
-  const auto re_ud = std::regex("^name=(.*);namespace=(.*);$", std::regex::extended);
+  const auto re_ud = std::regex("^name=([^;]*);namespace=([^;]*);", std::regex::extended);
   size_t udsz;
   dds_sample_info_t info;
   void * msg = NULL;
@@ -3357,10 +3471,10 @@ static rmw_ret_t get_node_guids(
   const char * node_name, const char * node_namespace,
   std::set<dds_builtintopic_guid_t> & guids)
 {
-  std::string needle = get_node_user_data(node_name, node_namespace);
+  std::string needle = get_node_user_data_name_ns(node_name, node_namespace);
   auto oper =
     [&guids, needle](const dds_builtintopic_participant_t & sample, const char * ud) -> bool {
-      if (std::string(ud) == needle) {
+      if (0u == std::string(ud).find(needle)) {
         guids.insert(sample.key);
       }
       return true;               /* do keep looking - what if there are many? */
