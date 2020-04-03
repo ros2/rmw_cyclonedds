@@ -23,6 +23,22 @@ Cyclone DDS is ready to use. It seeks to give the fastest, easiest, and most rob
 
    ```ros2 doctor --report```
 
+## Debugging
+
+So Cyclone isn't playing nice or not giving you the performance you had hoped for? That's not good... Please [file an issue against this repository](https://github.com/ros2/rmw_cyclonedds/issues/new)!
+Here are some ways to generate additional debugging info that can help identify the problem faster.
+
+Set update the config to create richer debugging output.
+
+To see the output live:
+`export CYCLONEDDS_URI=‘<Tracing><Verbosity>trace</><Out>stderr</></>’`
+
+To put log files to /var/log/:
+`export CYCLONEDDS_URI=‘<Tracing><Verbosity>trace</><Out>/var/log/CycloneDDS/${CYCLONEDDS_PID}.log</></>’`
+
+Create a Wireshark capture:
+`wireshark -k -w wireshark.pcap.gz`
+
 
 ## Building from source and contributing
 
