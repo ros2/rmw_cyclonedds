@@ -209,7 +209,6 @@ struct CddsWaitset
   size_t nelems;
 
   std::mutex lock;
-  bool inuse;
   std::vector<CddsSubscription *> subs;
   std::vector<CddsGuardCondition *> gcs;
   std::vector<CddsClient *> cls;
@@ -2201,7 +2200,6 @@ extern "C" rmw_wait_set_t * rmw_create_wait_set(rmw_context_t * context, size_t 
     RMW_SET_ERROR_MSG("failed to construct wait set info struct");
     goto fail_ws;
   }
-  ws->inuse = false;
   ws->nelems = 0;
 #if MULTIDOMAIN
   owner = DDS_CYCLONEDDS_HANDLE;
@@ -2344,10 +2342,10 @@ static void clean_waitset_caches()
      have been cached in a waitset), and drops all cached entities from all waitsets (just to keep
      life simple). I'm assuming one is not allowed to delete an entity while it is still being
      used ... */
-  std::lock_guard<std::mutex> lock(gcdds.lock);
+  std::lock_guard<std::mutex> lock{gcdds.lock};
   for (auto && ws : gcdds.waitsets) {
-    std::lock_guard<std::mutex> lock(ws->lock);
-    if (!ws->inuse) {
+    std::unique_lock<std::mutex> lock2{ws->lock, std::try_to_lock};
+    if (lock2.owns_lock()) {
       waitset_detach(ws);
     }
   }
@@ -2417,14 +2415,7 @@ extern "C" rmw_ret_t rmw_wait(
   CddsWaitset * ws = static_cast<CddsWaitset *>(wait_set->data);
   RET_NULL(ws);
 
-  {
-    std::lock_guard<std::mutex> lock(ws->lock);
-    if (ws->inuse) {
-      RMW_SET_ERROR_MSG("concurrent calls to rmw_wait on a single waitset is not supported");
-      return RMW_RET_ERROR;
-    }
-    ws->inuse = true;
-  }
+  std::lock_guard<std::mutex> lock(ws->lock);
 
   if (require_reattach(
       ws->subs, subs ? subs->subscriber_count : 0,
@@ -2527,11 +2518,6 @@ extern "C" rmw_ret_t rmw_wait(
     check_for_blocked_requests(*c);
   }
 #endif
-
-  {
-    std::lock_guard<std::mutex> lock(ws->lock);
-    ws->inuse = false;
-  }
 
   return (ws->trigs.size() == 1) ? RMW_RET_TIMEOUT : RMW_RET_OK;
 }
