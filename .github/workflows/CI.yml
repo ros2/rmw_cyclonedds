@@ -7,13 +7,6 @@ jobs:
       matrix:
           rosdistro: [dashing, eloquent, master]
           os: [ubuntu-18.04, macOS-latest, windows-latest]
-          exclude:
-            # pending https://github.com/ament/ament_cmake/pull/233
-            - rosdistro: eloquent
-              os: windows-latest
-            # pending https://github.com/ament/ament_cmake/pull/234
-            - rosdistro: dashing
-              os: windows-latest
     runs-on: ${{ matrix.os }}
     steps:
     - if: runner.os == 'Linux'
