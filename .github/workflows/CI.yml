@@ -20,9 +20,9 @@ jobs:
       # azure ubuntu repo can be flaky so add an alternate source
       run: sed -e 's/azure.archive.ubuntu.com/us.archive.ubuntu.com/g' -e t -e d /etc/apt/sources.list | sudo tee /etc/apt/sources.list.d/nonazure.list
     - name: Acquire ROS dependencies
-      uses: ros-tooling/setup-ros@0.0.15
+      uses: ros-tooling/setup-ros@0.0.17
     - name: Build and test ROS
-      uses: ros-tooling/action-ros-ci@0.0.14
+      uses: ros-tooling/action-ros-ci@0.0.15
       with:
         package-name: rmw_cyclonedds_cpp
         vcs-repo-file-url: https://raw.githubusercontent.com/ros2/ros2/${{ matrix.rosdistro }}/ros2.repos
