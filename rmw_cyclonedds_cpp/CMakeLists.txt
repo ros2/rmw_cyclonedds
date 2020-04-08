@@ -28,6 +28,7 @@ endif()
 find_package(ament_cmake_ros REQUIRED)
 
 find_package(rcutils REQUIRED)
+find_package(rcpputils REQUIRED)
 
 #find_package(cyclonedds_cmake_module REQUIRED)
 find_package(CycloneDDS QUIET CONFIG)
@@ -38,13 +39,16 @@ if(NOT CycloneDDS_FOUND)
 endif()
 
 find_package(rmw REQUIRED)
+find_package(rmw_dds_common REQUIRED)
 find_package(rosidl_runtime_c REQUIRED)
 find_package(rosidl_typesupport_introspection_c REQUIRED)
 find_package(rosidl_typesupport_introspection_cpp REQUIRED)
 
 ament_export_dependencies(rcutils)
+ament_export_dependencies(rcpputils)
 ament_export_dependencies(rmw)
 ament_export_dependencies(rosidl_runtime_c)
+ament_export_dependencies(rmw_dds_common)
 ament_export_dependencies(rosidl_typesupport_introspection_c)
 ament_export_dependencies(rosidl_typesupport_introspection_cpp)
 
@@ -52,10 +56,11 @@ add_library(rmw_cyclonedds_cpp
   src/rmw_node.cpp
   src/serdata.cpp
   src/serdes.cpp
-  src/graphrhc.cpp
   src/u16string.cpp
   src/exception.cpp
+  src/demangle.cpp
   src/deserialization_exception.cpp
+  src/participant_entities_info__type_support.cpp
   src/Serialization.cpp
   src/TypeSupport2.cpp)
 
@@ -64,13 +69,18 @@ target_include_directories(rmw_cyclonedds_cpp PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(rmw_cyclonedds_cpp CycloneDDS::ddsc)
+target_link_libraries(rmw_cyclonedds_cpp
+  ${rmw_dds_common_LIBRARIES__rosidl_typesupport_introspection_cpp}
+  CycloneDDS::ddsc
+)
 
 ament_target_dependencies(rmw_cyclonedds_cpp
   "rcutils"
+  "rcpputils"
   "rosidl_typesupport_introspection_c"
   "rosidl_typesupport_introspection_cpp"
   "rmw"
+  "rmw_dds_common"
   "rosidl_runtime_c"
 )
 
