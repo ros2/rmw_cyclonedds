@@ -27,6 +27,8 @@
 #include <utility>
 #include <regex>
 
+#include "rcutils/filesystem.h"
+#include "rcutils/format_string.h"
 #include "rcutils/get_env.h"
 #include "rcutils/logging_macros.h"
 #include "rcutils/strdup.h"
@@ -79,6 +81,13 @@
 #define SUPPORT_LOCALHOST 1
 #else
 #define SUPPORT_LOCALHOST 0
+#endif
+
+/* Security must be enabled when compiling and requires cyclone to support QOS property lists */
+#if DDS_HAS_SECURITY && DDS_HAS_PROPERTY_LIST_QOS
+#define RMW_SUPPORT_SECURITY 1
+#else
+#define RMW_SUPPORT_SECURITY 0
 #endif
 
 /* Set to > 0 for printing warnings to stderr for each messages that was taken more than this many
@@ -139,6 +148,18 @@ struct builtin_readers
 {
   dds_entity_t rds[sizeof(builtin_topics) / sizeof(builtin_topics[0])];
 };
+
+#if RMW_SUPPORT_SECURITY
+struct dds_security_files_t
+{
+  char * identity_ca_cert = nullptr;
+  char * cert = nullptr;
+  char * key = nullptr;
+  char * permissions_ca_cert = nullptr;
+  char * governance_p7s = nullptr;
+  char * permissions_p7s = nullptr;
+};
+#endif
 
 struct CddsEntity
 {
@@ -690,6 +711,131 @@ static std::string get_node_user_data(
 #else
 #define get_node_user_data get_node_user_data_name_ns
 #endif
+#if RMW_SUPPORT_SECURITY
+/*  Returns the full URI of a security file properly formatted for DDS  */
+bool get_security_file_URI(
+  char ** security_file, const char * security_filename, const char * node_secure_root,
+  const rcutils_allocator_t allocator)
+{
+  *security_file = nullptr;
+  char * file_path = rcutils_join_path(node_secure_root, security_filename, allocator);
+  if (file_path != nullptr) {
+    if (rcutils_is_readable(file_path)) {
+      /*  Cyclone also supports a "data:" URI  */
+      *security_file = rcutils_format_string(allocator, "file:%s", file_path);
+      allocator.deallocate(file_path, allocator.state);
+    } else {
+      RCUTILS_LOG_INFO_NAMED(
+        "rmw_cyclonedds_cpp", "get_security_file_URI: %s not found", file_path);
+      allocator.deallocate(file_path, allocator.state);
+    }
+  }
+  return *security_file != nullptr;
+}
+
+bool get_security_file_URIs(
+#if !RMW_VERSION_GTE(0, 8, 2)
+  const rmw_node_security_options_t * security_options,
+#else
+  const rmw_security_options_t * security_options,
+#endif
+  dds_security_files_t & dds_security_files, rcutils_allocator_t allocator)
+{
+  bool ret = false;
+
+  if (security_options->security_root_path != nullptr) {
+    ret = (
+      get_security_file_URI(
+        &dds_security_files.identity_ca_cert, "identity_ca.cert.pem",
+        security_options->security_root_path, allocator) &&
+      get_security_file_URI(
+        &dds_security_files.cert, "cert.pem",
+        security_options->security_root_path, allocator) &&
+      get_security_file_URI(
+        &dds_security_files.key, "key.pem",
+        security_options->security_root_path, allocator) &&
+      get_security_file_URI(
+        &dds_security_files.permissions_ca_cert, "permissions_ca.cert.pem",
+        security_options->security_root_path, allocator) &&
+      get_security_file_URI(
+        &dds_security_files.governance_p7s, "governance.p7s",
+        security_options->security_root_path, allocator) &&
+      get_security_file_URI(
+        &dds_security_files.permissions_p7s, "permissions.p7s",
+        security_options->security_root_path, allocator));
+  }
+  return ret;
+}
+
+void finalize_security_file_URIs(
+  dds_security_files_t dds_security_files, const rcutils_allocator_t allocator)
+{
+  allocator.deallocate(dds_security_files.identity_ca_cert, allocator.state);
+  dds_security_files.identity_ca_cert = nullptr;
+  allocator.deallocate(dds_security_files.cert, allocator.state);
+  dds_security_files.cert = nullptr;
+  allocator.deallocate(dds_security_files.key, allocator.state);
+  dds_security_files.key = nullptr;
+  allocator.deallocate(dds_security_files.permissions_ca_cert, allocator.state);
+  dds_security_files.permissions_ca_cert = nullptr;
+  allocator.deallocate(dds_security_files.governance_p7s, allocator.state);
+  dds_security_files.governance_p7s = nullptr;
+  allocator.deallocate(dds_security_files.permissions_p7s, allocator.state);
+  dds_security_files.permissions_p7s = nullptr;
+}
+
+#endif  /* RMW_SUPPORT_SECURITY */
+
+/* Attempt to set all the qos properties needed to enable DDS security */
+rmw_ret_t configure_qos_for_security(
+  dds_qos_t * qos,
+#if !RMW_VERSION_GTE(0, 8, 2)
+  const rmw_node_security_options_t * security_options
+#else
+  const rmw_security_options_t * security_options
+#endif
+)
+{
+#if RMW_SUPPORT_SECURITY
+  rmw_ret_t ret = RMW_RET_UNSUPPORTED;
+  dds_security_files_t dds_security_files;
+  rcutils_allocator_t allocator = rcutils_get_default_allocator();
+
+  if (get_security_file_URIs(security_options, dds_security_files, allocator)) {
+    dds_qset_prop(qos, "dds.sec.auth.identity_ca", dds_security_files.identity_ca_cert);
+    dds_qset_prop(qos, "dds.sec.auth.identity_certificate", dds_security_files.cert);
+    dds_qset_prop(qos, "dds.sec.auth.private_key", dds_security_files.key);
+    dds_qset_prop(qos, "dds.sec.access.permissions_ca", dds_security_files.permissions_ca_cert);
+    dds_qset_prop(qos, "dds.sec.access.governance", dds_security_files.governance_p7s);
+    dds_qset_prop(qos, "dds.sec.access.permissions", dds_security_files.permissions_p7s);
+
+    dds_qset_prop(qos, "dds.sec.auth.library.path", "dds_security_auth");
+    dds_qset_prop(qos, "dds.sec.auth.library.init", "init_authentication");
+    dds_qset_prop(qos, "dds.sec.auth.library.finalize", "finalize_authentication");
+
+    dds_qset_prop(qos, "dds.sec.crypto.library.path", "dds_security_crypto");
+    dds_qset_prop(qos, "dds.sec.crypto.library.init", "init_crypto");
+    dds_qset_prop(qos, "dds.sec.crypto.library.finalize", "finalize_crypto");
+
+    dds_qset_prop(qos, "dds.sec.access.library.path", "dds_security_ac");
+    dds_qset_prop(qos, "dds.sec.access.library.init", "init_access_control");
+    dds_qset_prop(qos, "dds.sec.access.library.finalize", "finalize_access_control");
+
+    ret = RMW_RET_OK;
+  }
+  finalize_security_file_URIs(dds_security_files, allocator);
+  return ret;
+#else
+  (void) qos;
+  (void) security_options;
+  RMW_SET_ERROR_MSG(
+    "Security was requested but the Cyclone DDS being used does not have security "
+    "support enabled. Recompile Cyclone DDS with the '-DENABLE_SECURITY=ON' "
+    "CMake option");
+  return RMW_RET_UNSUPPORTED;
+#endif
+}
+
 
 extern "C" rmw_node_t * rmw_create_node(
   rmw_context_t * context, const char * name,
@@ -720,7 +866,11 @@ extern "C" rmw_node_t * rmw_create_node(
   const dds_domainid_t did = DDS_DOMAIN_DEFAULT;
 #endif
 #if !RMW_VERSION_GTE(0, 8, 2)
-  (void) security_options;
+  RCUTILS_CHECK_ARGUMENT_FOR_NULL(security_options, nullptr);
+#else
+  rmw_security_options_t * security_options;
+  RCUTILS_CHECK_ARGUMENT_FOR_NULL(context, nullptr);
+  security_options = &context->options.security_options;
 #endif
   rmw_ret_t ret;
   int dummy_validation_result;
@@ -749,6 +899,15 @@ extern "C" rmw_node_t * rmw_create_node(
   std::string user_data = get_node_user_data(name, namespace_);
 #endif
   dds_qset_userdata(qos, user_data.c_str(), user_data.size());
+
+  if (configure_qos_for_security(qos, security_options) != RMW_RET_OK) {
+    if (security_options->enforce_security == RMW_SECURITY_ENFORCEMENT_ENFORCE) {
+      dds_delete_qos(qos);
+      node_gone_from_domain_locked(did);
+      return nullptr;
+    }
+  }
+
   dds_entity_t pp = dds_create_participant(did, qos, nullptr);
   dds_delete_qos(qos);
   if (pp < 0) {
