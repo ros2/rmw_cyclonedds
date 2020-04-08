@@ -14,13 +14,18 @@
 #ifndef ROS2_MASTER_DESERIALIZATION_HPP
 #define ROS2_MASTER_DESERIALIZATION_HPP
 
+#include "CDR.hpp"
 #include "TypeSupport2.hpp"
 #include "serdata.hpp"
 namespace rmw_cyclonedds_cpp
 {
 
-void deserialize_top_level(
-  void * destination_object, const void * data, const StructValueType * ts);
+void deserialize_top_level(void * destination_object, const void * data, const StructValueType * ts)
+{
+  EncapsulationHeader enc_hdr; // todo
+  // todo: create deserialization stream using the encapsulation header (endian, eversion)
+  // todo: pull data out of that stream, structurally recursing on data and types
+}
 
 class AbstractCDRReader
 {

@@ -15,22 +15,26 @@
 
 #include "CDR.hpp"
 #include "CDRCursor.hpp"
+
 namespace rmw_cyclonedds_cpp
 {
 class CDRReader : public AbstractCDRReader
 {
 protected:
+  std::unique_ptr<StructValueType> m_value_type;
   CDREncodingInfo m_cdr;
 
 public:
   explicit CDRReader(std::unique_ptr<StructValueType> value_type)
-  : m_cdr{EncodingVersion::CDR_Legacy}
-  {
-    std::ignore = (value_type);  //todo
-  }
+  : m_cdr{EncodingVersion::CDR_Legacy},
+    m_value_type{std::move(value_type)}
+  {}
 
   void deserialize_top_level(
-    void * destination_object, const void * data, const StructValueType * ts);
+    void * destination_object, const void * data, const StructValueType * ts)
+  {
+
+  }
 
   uint32_t read_u32(CDRReadCursor * data_cursor)
   {
@@ -64,10 +68,12 @@ public:
     vt.assign(destination_object, static_cast<const uint16_t *>(data_cursor->position), size);
   }
 
-  void deserialize(void * destination_object, const ArrayValueType & vt, CDRReadCursor * data_cursor)
+  void deserialize(
+    void * destination_object, const ArrayValueType & vt,
+    CDRReadCursor * data_cursor)
   {
-    for (size_t i=0; i<vt.array_size(); i++) {
-      void * dest = byte_offset(destination_object,i*vt.element_value_type()->sizeof_type());
+    for (size_t i = 0; i < vt.array_size(); i++) {
+      void * dest = byte_offset(destination_object, i * vt.element_value_type()->sizeof_type());
       deserialize(dest, vt.element_value_type(), data_cursor);
     }
   }
@@ -78,8 +84,8 @@ public:
     size_t size = read_u32(data_cursor);
     vt.resize(destination_object, size);
     void * sequence_contents = vt.sequence_contents(destination_object);
-    for (size_t i=0; i<size; i++) {
-      void * dest = byte_offset(sequence_contents, i*vt.element_value_type()->sizeof_type());
+    for (size_t i = 0; i < size; i++) {
+      void * dest = byte_offset(sequence_contents, i * vt.element_value_type()->sizeof_type());
       deserialize(dest, vt.element_value_type(), data_cursor);
     }
   }

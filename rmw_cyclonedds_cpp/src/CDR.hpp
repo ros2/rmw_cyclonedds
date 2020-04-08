@@ -4,11 +4,15 @@
 #ifndef ROS2_MASTER_CDR_HPP
 #define ROS2_MASTER_CDR_HPP
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
+
+#include "bytewise.hpp"
 namespace rmw_cyclonedds_cpp
 {
-enum class EncodingVersion {
+enum class EncodingVersion
+{
   CDR_Legacy,
   CDR1,
   CDR2,
@@ -32,7 +36,8 @@ struct DelimiterHeaderData
 };
 
 /// aka LC
-enum class LengthCode {
+enum class LengthCode
+{
   Bytes1 = 0,
   Bytes2 = 1,
   Bytes4 = 2,
@@ -56,7 +61,7 @@ class CDREncodingInfo
   EncodingVersion m_version;
 
 public:
-  explicit CDREncodingInfo(EncodingVersion version) { m_version = version; }
+  explicit CDREncodingInfo(EncodingVersion version) {m_version = version;}
 
   size_t max_align() const
   {
