@@ -36,9 +36,9 @@ So Cyclone isn't playing nice or not giving you the performance you had hoped fo
 
 The `ddsperf` tool distributed with Cyclone DDS can be used to check that communication works *without* ROS. Run `ddsperf sanity` on two different machines - if the "mean" value is above `100000us`, there are likely network issues.
 
-If you're having trouble with nodes discovering others, you can set them up to know each other off the bat:
+If you're having trouble with nodes discovering others or can't use multicast *at all* on your network setup, you can circumvent discovery:
 
-  `export CYCLONEDDS_URI='<Discovery><Peers><Peer Address='myroshost.local' /></></>'`
+  `export CYCLONEDDS_URI='<Discovery><Peers><Peer Address='myroshost.local' /><Peer Address='myroshost2.local' /></></>'`
 
 Here are some ways to generate additional debugging info that can help identify the problem faster, and are helpful on an issue ticket:
 
