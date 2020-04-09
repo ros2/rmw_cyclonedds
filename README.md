@@ -36,17 +36,21 @@ So Cyclone isn't playing nice or not giving you the performance you had hoped fo
 
 The `ddsperf` tool distributed with Cyclone DDS can be used to check that communication works *without* ROS. Run `ddsperf sanity` on two different machines - if the "mean" value is above `100000us`, there are likely network issues.
 
+If you're having trouble with nodes discovering others, you can set them up to know each other off the bat:
+
+  `export CYCLONEDDS_URI='<Discovery><Peers><Peer Address='myroshost.local' /></></>'`
+
 Here are some ways to generate additional debugging info that can help identify the problem faster, and are helpful on an issue ticket:
 
 * Configure Cyclone to create richer debugging output:
 
   * To see the output live:
     
-    `export CYCLONEDDS_URI=‘<Tracing><Verbosity>trace</><Out>stderr</></>’`
+    `export CYCLONEDDS_URI='<Tracing><Verbosity>trace</><Out>stderr</></>'`
 
   * To put log files to /var/log/:
     
-    `export CYCLONEDDS_URI=‘<Tracing><Verbosity>trace</><Out>/var/log/cyclonedds.${CYCLONEDDS_PID}.log</></>’`
+    `export CYCLONEDDS_URI='<Tracing><Verbosity>trace</><Out>/var/log/cyclonedds.${CYCLONEDDS_PID}.log</></>'`
 
 * Create a Wireshark capture:
   
