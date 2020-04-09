@@ -27,8 +27,8 @@ Cyclone DDS is ready to use. It seeks to give the fastest, easiest, and most rob
 ## Performance recommendations
 
 With large samples (100s of kilobytes), excessive latency can be caused by running out of space in the OS-level receive buffer. For this reason, on Linux, we recommend increasing the buffer size:
-* Temporarily (until reboot): `sudo sysctl -w net.core.rmem_max=1048576`
-* After every reboot: `echo "net.core.rmem_max=1048576\n" | sudo tee /etc/sysctl.d/60-cyclonedds.conf`
+* Temporarily (until reboot): `sudo sysctl -w net.core.rmem_max=8388608`
+* After every reboot: `echo "net.core.rmem_max=8388608\n" | sudo tee /etc/sysctl.d/60-cyclonedds.conf`
 
 ## Debugging
 
