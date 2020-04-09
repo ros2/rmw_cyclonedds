@@ -29,7 +29,7 @@ find_package(ament_cmake_ros REQUIRED)
 
 find_package(rcutils REQUIRED)
 
-find_package(cyclonedds_cmake_module REQUIRED)
+#find_package(cyclonedds_cmake_module REQUIRED)
 find_package(CycloneDDS QUIET CONFIG)
 if(NOT CycloneDDS_FOUND)
   message(WARNING "Could not find Eclipse Cyclone DDS - skipping '${PROJECT_NAME}'")

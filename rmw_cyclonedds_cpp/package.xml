@@ -8,10 +8,8 @@
   <license>Apache License 2.0</license>
 
   <buildtool_depend>ament_cmake_ros</buildtool_depend>
-  <buildtool_depend>cyclonedds_cmake_module</buildtool_depend>
 
   <depend>cyclonedds</depend>
-  <depend>cyclonedds_cmake_module</depend>
   <depend>rcutils</depend>
   <depend>rmw</depend>
   <depend>rosidl_runtime_c</depend>
