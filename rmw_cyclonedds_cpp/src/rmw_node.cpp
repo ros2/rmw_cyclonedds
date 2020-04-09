@@ -705,7 +705,7 @@ static std::string get_node_user_data(
   const char * node_name, const char * node_namespace, const char * enclave)
 {
   return get_node_user_data_name_ns(node_name, node_namespace) +
-         std::string("securitycontext=") + std::string(enclave) +
+         std::string("enclave=") + std::string(enclave) +
          std::string(";");
 }
 #else
@@ -3215,7 +3215,7 @@ extern "C" rmw_ret_t rmw_get_node_names_impl(
   }
 
   std::regex re {
-    "^name=([^;]*);namespace=([^;]*);(securitycontext=([^;]*);)?",
+    "^name=([^;]*);namespace=([^;]*);(enclave=([^;]*);)?",
     std::regex_constants::extended
   };
   std::vector<std::tuple<std::string, std::string, std::string>> ns;
