@@ -383,7 +383,7 @@ extern "C" rmw_ret_t rmw_init_options_init(
 #if RMW_VERSION_GTE(0, 8, 2)
   init_options->localhost_only = RMW_LOCALHOST_ONLY_DEFAULT;
   init_options->domain_id = RMW_DEFAULT_DOMAIN_ID;
-  init_options->security_context = NULL;
+  init_options->enclave = NULL;
   init_options->security_options = rmw_get_zero_initialized_security_options();
 #endif
   return RMW_RET_OK;
@@ -406,19 +406,19 @@ extern "C" rmw_ret_t rmw_init_options_copy(const rmw_init_options_t * src, rmw_i
   const rcutils_allocator_t * allocator = &src->allocator;
   rmw_ret_t ret = RMW_RET_OK;
 
-  allocator->deallocate(dst->security_context, allocator->state);
+  allocator->deallocate(dst->enclave, allocator->state);
   *dst = *src;
-  dst->security_context = NULL;
+  dst->enclave = NULL;
   dst->security_options = rmw_get_zero_initialized_security_options();
 
-  dst->security_context = rcutils_strdup(src->security_context, *allocator);
-  if (src->security_context && !dst->security_context) {
+  dst->enclave = rcutils_strdup(src->enclave, *allocator);
+  if (src->enclave && !dst->enclave) {
     ret = RMW_RET_BAD_ALLOC;
     goto fail;
   }
   return rmw_security_options_copy(&src->security_options, allocator, &dst->security_options);
 fail:
-  allocator->deallocate(dst->security_context, allocator->state);
+  allocator->deallocate(dst->enclave, allocator->state);
   return ret;
 #else
   *dst = *src;
@@ -437,7 +437,7 @@ extern "C" rmw_ret_t rmw_init_options_fini(rmw_init_options_t * init_options)
     eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
 #if RMW_VERSION_GTE(0, 8, 2)
-  allocator.deallocate(init_options->security_context, allocator.state);
+  allocator.deallocate(init_options->enclave, allocator.state);
   rmw_security_options_fini(&init_options->security_options, &allocator);
 #endif
   *init_options = rmw_get_zero_initialized_init_options();
@@ -702,10 +702,10 @@ static std::string get_node_user_data_name_ns(const char * node_name, const char
 
 #if RMW_VERSION_GTE(0, 8, 2)
 static std::string get_node_user_data(
-  const char * node_name, const char * node_namespace, const char * security_context)
+  const char * node_name, const char * node_namespace, const char * enclave)
 {
   return get_node_user_data_name_ns(node_name, node_namespace) +
-         std::string("securitycontext=") + std::string(security_context) +
+         std::string("securitycontext=") + std::string(enclave) +
          std::string(";");
 }
 #else
@@ -894,7 +894,7 @@ extern "C" rmw_node_t * rmw_create_node(
 
   dds_qos_t * qos = dds_create_qos();
 #if RMW_VERSION_GTE(0, 8, 2)
-  std::string user_data = get_node_user_data(name, namespace_, context->options.security_context);
+  std::string user_data = get_node_user_data(name, namespace_, context->options.enclave);
 #else
   std::string user_data = get_node_user_data(name, namespace_);
 #endif
@@ -3204,7 +3204,7 @@ extern "C" rmw_ret_t rmw_get_node_names_impl(
   const rmw_node_t * node,
   rcutils_string_array_t * node_names,
   rcutils_string_array_t * node_namespaces,
-  rcutils_string_array_t * security_contexts)
+  rcutils_string_array_t * enclaves)
 {
   RET_WRONG_IMPLID(node);
   auto node_impl = static_cast<CddsNode *>(node->data);
@@ -3240,8 +3240,8 @@ extern "C" rmw_ret_t rmw_get_node_names_impl(
     RMW_SET_ERROR_MSG(rcutils_get_error_string().str);
     goto fail_alloc;
   }
-  if (security_contexts &&
-    rcutils_string_array_init(security_contexts, ns.size(), &allocator) != RCUTILS_RET_OK)
+  if (enclaves &&
+    rcutils_string_array_init(enclaves, ns.size(), &allocator) != RCUTILS_RET_OK)
   {
     RMW_SET_ERROR_MSG(rcutils_get_error_string().str);
     goto fail_alloc;
@@ -3255,10 +3255,10 @@ extern "C" rmw_ret_t rmw_get_node_names_impl(
         RMW_SET_ERROR_MSG("rmw_get_node_names for name/namespace");
         goto fail_alloc;
       }
-      if (security_contexts) {
-        security_contexts->data[i] = rcutils_strdup(std::get<2>(n).c_str(), allocator);
-        if (!security_contexts->data[i]) {
-          RMW_SET_ERROR_MSG("rmw_get_node_names for security_context");
+      if (enclaves) {
+        enclaves->data[i] = rcutils_strdup(std::get<2>(n).c_str(), allocator);
+        if (!enclaves->data[i]) {
+          RMW_SET_ERROR_MSG("rmw_get_node_names for enclave");
           goto fail_alloc;
         }
       }
@@ -3284,8 +3284,8 @@ fail_alloc:
       rcutils_reset_error();
     }
   }
-  if (security_contexts) {
-    if (rcutils_string_array_fini(security_contexts) != RCUTILS_RET_OK) {
+  if (enclaves) {
+    if (rcutils_string_array_fini(enclaves) != RCUTILS_RET_OK) {
       RCUTILS_LOG_ERROR_NAMED(
         "rmw_cyclonedds_cpp",
         "failed to cleanup during error handling: %s", rcutils_get_error_string().str);
@@ -3308,20 +3308,20 @@ extern "C" rmw_ret_t rmw_get_node_names(
 }
 
 #if RMW_VERSION_GTE(0, 8, 2)
-extern "C" rmw_ret_t rmw_get_node_names_with_security_contexts(
+extern "C" rmw_ret_t rmw_get_node_names_with_enclaves(
   const rmw_node_t * node,
   rcutils_string_array_t * node_names,
   rcutils_string_array_t * node_namespaces,
-  rcutils_string_array_t * security_contexts)
+  rcutils_string_array_t * enclaves)
 {
-  if (RMW_RET_OK != rmw_check_zero_rmw_string_array(security_contexts)) {
+  if (RMW_RET_OK != rmw_check_zero_rmw_string_array(enclaves)) {
     return RMW_RET_ERROR;
   }
   return rmw_get_node_names_impl(
     node,
     node_names,
     node_namespaces,
-    security_contexts);
+    enclaves);
 }
 #endif
 
