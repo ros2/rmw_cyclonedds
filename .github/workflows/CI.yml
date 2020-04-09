@@ -5,12 +5,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-          rosdistro: [dashing, eloquent, master]
+          rosdistro: [dashing, eloquent]
           os: [ubuntu-18.04, macOS-latest, windows-latest]
           exclude:
-            # pending https://github.com/ament/ament_cmake/pull/233
-            - rosdistro: eloquent
-              os: windows-latest
             # pending https://github.com/ament/ament_cmake/pull/234
             - rosdistro: dashing
               os: windows-latest
