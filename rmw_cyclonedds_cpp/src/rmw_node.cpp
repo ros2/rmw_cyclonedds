@@ -347,9 +347,24 @@ extern "C" const char * rmw_get_serialization_format()
 
 extern "C" rmw_ret_t rmw_set_log_severity(rmw_log_severity_t severity)
 {
-  static_cast<void>(severity);
-  RMW_SET_ERROR_MSG("unimplemented");
-  return RMW_RET_ERROR;
+  uint32_t mask = 0;
+  switch (severity) {
+    default:
+      RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("%s: Invalid log severity '%d'", __func__, severity);
+      return RMW_RET_INVALID_ARGUMENT;
+    case RMW_LOG_SEVERITY_DEBUG:
+      mask |= DDS_LC_DISCOVERY | DDS_LC_THROTTLE | DDS_LC_CONFIG;
+    case RMW_LOG_SEVERITY_INFO:
+      mask |= DDS_LC_INFO;
+    case RMW_LOG_SEVERITY_WARN:
+      mask |= DDS_LC_WARNING;
+    case RMW_LOG_SEVERITY_ERROR:
+      mask |= DDS_LC_ERROR;
+    case RMW_LOG_SEVERITY_FATAL:
+      mask |= DDS_LC_FATAL;
+  }
+  dds_set_log_mask(mask);
+  return RMW_RET_OK;
 }
 
 extern "C" rmw_ret_t rmw_context_fini(rmw_context_t * context)
