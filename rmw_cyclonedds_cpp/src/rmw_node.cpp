@@ -2163,6 +2163,61 @@ static rmw_ret_t rmw_take_int(
   return RMW_RET_OK;
 }
 
+static rmw_ret_t rmw_take_seq(
+  const rmw_subscription_t * subscription,
+  size_t count,
+  rmw_message_sequence_t * message_sequence,
+  rmw_message_info_sequence_t * message_info_sequence,
+  size_t * taken)
+{
+  RET_NULL(taken);
+  RET_NULL(message_sequence);
+  RET_NULL(message_info_sequence);
+  RET_WRONG_IMPLID(subscription);
+
+  if (count > message_sequence->capacity) {
+    RMW_SET_ERROR_MSG("Insuffient capacity in message_sequence");
+    return RMW_RET_ERROR;
+  }
+
+  if (count > message_info_sequence->capacity) {
+    RMW_SET_ERROR_MSG("Insuffient capacity in message_info_sequence");
+    return RMW_RET_ERROR;
+  }
+
+  CddsSubscription * sub = static_cast<CddsSubscription *>(subscription->data);
+  RET_NULL(sub);
+
+  std::vector<dds_sample_info_t> infos(count);
+  auto ret = dds_take(sub->enth, message_sequence->data, infos.data(), count, count);
+
+  if (ret <= 0) {
+    return RMW_RET_ERROR;
+  }
+
+  for (int ii = 0; ii < ret; ++ii) {
+    const dds_sample_info_t & info = infos[ii];
+    rmw_message_info_t * message_info = &message_info_sequence->data[ii];
+
+    if (info.valid_data) {
+      if (message_info) {
+        message_info->publisher_gid.implementation_identifier = eclipse_cyclonedds_identifier;
+        memset(message_info->publisher_gid.data, 0, sizeof(message_info->publisher_gid.data));
+        assert(sizeof(info.publication_handle) <= sizeof(message_info->publisher_gid.data));
+        memcpy(
+          message_info->publisher_gid.data, &info.publication_handle,
+          sizeof(info.publication_handle));
+      }
+    }
+  }
+
+  *taken = ret;
+  message_sequence->size = ret;
+  message_info_sequence->size = ret;
+
+  return RMW_RET_OK;
+}
+
 static rmw_ret_t rmw_take_ser_int(
   const rmw_subscription_t * subscription,
   rmw_serialized_message_t * serialized_message, bool * taken,
@@ -2219,6 +2274,16 @@ extern "C" rmw_ret_t rmw_take_with_info(
 {
   static_cast<void>(allocation);
   return rmw_take_int(subscription, ros_message, taken, message_info);
+}
+
+extern "C" rmw_ret_t rmw_take_sequence(
+  const rmw_subscription_t * subscription, size_t count,
+  rmw_message_sequence_t * message_sequence,
+  rmw_message_info_sequence_t * message_info_sequence,
+  size_t * taken, rmw_subscription_allocation_t * allocation)
+{
+  static_cast<void>(allocation);
+  return rmw_take_seq(subscription, count, message_sequence, message_info_sequence, taken);
 }
 
 extern "C" rmw_ret_t rmw_take_serialized_message(
