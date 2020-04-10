@@ -113,3 +113,7 @@ install(
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
+
+include(cmake/get_rmw_cyclonedds_output_filter.cmake)
+get_rmw_cyclonedds_output_filter(rmw_cyclonedds_output_patterns)
+ament_index_register_resource("rmw_output_patterns" CONTENT "${rmw_cyclonedds_output_patterns}")
