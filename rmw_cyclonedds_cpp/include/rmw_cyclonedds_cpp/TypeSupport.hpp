@@ -16,9 +16,9 @@
 #ifndef RMW_CYCLONEDDS_CPP__TYPESUPPORT_HPP_
 #define RMW_CYCLONEDDS_CPP__TYPESUPPORT_HPP_
 
-#include <rosidl_generator_c/string.h>
-#include <rosidl_generator_c/string_functions.h>
-#include <rosidl_generator_c/u16string_functions.h>
+#include <rosidl_runtime_c/string.h>
+#include <rosidl_runtime_c/string_functions.h>
+#include <rosidl_runtime_c/u16string_functions.h>
 
 #include <cassert>
 #include <string>
@@ -53,15 +53,15 @@ struct StringHelper;
 template<>
 struct StringHelper<rosidl_typesupport_introspection_c__MessageMembers>
 {
-  using type = rosidl_generator_c__String;
+  using type = rosidl_runtime_c__String;
 
   static std::string convert_to_std_string(void * data)
   {
-    auto c_string = static_cast<rosidl_generator_c__String *>(data);
+    auto c_string = static_cast<rosidl_runtime_c__String *>(data);
     if (!c_string) {
       RCUTILS_LOG_ERROR_NAMED(
         "rmw_cyclonedds_cpp",
-        "Failed to cast data as rosidl_generator_c__String");
+        "Failed to cast data as rosidl_runtime_c__String");
       return "";
     }
     if (!c_string->data) {
@@ -73,7 +73,7 @@ struct StringHelper<rosidl_typesupport_introspection_c__MessageMembers>
     return std::string(c_string->data);
   }
 
-  static std::string convert_to_std_string(rosidl_generator_c__String & data)
+  static std::string convert_to_std_string(rosidl_runtime_c__String & data)
   {
     return std::string(data.data);
   }
@@ -82,8 +82,8 @@ struct StringHelper<rosidl_typesupport_introspection_c__MessageMembers>
   {
     std::string str;
     deser >> str;
-    rosidl_generator_c__String * c_str = static_cast<rosidl_generator_c__String *>(field);
-    rosidl_generator_c__String__assign(c_str, str.c_str());
+    rosidl_runtime_c__String * c_str = static_cast<rosidl_runtime_c__String *>(field);
+    rosidl_runtime_c__String__assign(c_str, str.c_str());
   }
 };
 
