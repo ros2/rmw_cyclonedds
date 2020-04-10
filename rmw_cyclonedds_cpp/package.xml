@@ -12,7 +12,7 @@
   <depend>cyclonedds</depend>
   <depend>rcutils</depend>
   <depend>rmw</depend>
-  <depend>rosidl_generator_c</depend>
+  <depend>rosidl_runtime_c</depend>
   <depend>rosidl_typesupport_introspection_c</depend>
   <depend>rosidl_typesupport_introspection_cpp</depend>
 
