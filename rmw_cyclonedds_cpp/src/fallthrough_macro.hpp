@@ -15,7 +15,7 @@
 #ifndef FALLTHROUGH_MACRO_HPP_
 #define FALLTHROUGH_MACRO_HPP_
 
-#if __has_cpp_attribute(fallthrough) && (__cplusplus >= 201703L)
+#if __cplusplus >= 201603L
 // C++17
 #define FALLTHROUGH [[fallthrough]]
 #elif __has_cpp_attribute(clang::fallthrough)
