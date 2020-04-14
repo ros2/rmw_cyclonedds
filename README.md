@@ -28,7 +28,7 @@ Cyclone DDS is ready to use. It seeks to give the fastest, easiest, and most rob
 
 With large samples (100s of kilobytes), excessive latency can be caused by running out of space in the OS-level receive buffer. For this reason, on Linux, we recommend increasing the buffer size:
 * Temporarily (until reboot): `sudo sysctl -w net.core.rmem_max=8388608`
-* After every reboot: `echo "net.core.rmem_max=8388608\n" | sudo tee /etc/sysctl.d/60-cyclonedds.conf`
+* Permanently: `echo "net.core.rmem_max=8388608\n" | sudo tee /etc/sysctl.d/60-cyclonedds.conf`
 
 ## Debugging
 
@@ -48,7 +48,7 @@ Here are some ways to generate additional debugging info that can help identify 
     
     `export CYCLONEDDS_URI='<Tracing><Verbosity>trace</><Out>stderr</></>'`
 
-  * To put log files to /var/log/:
+  * To send to `/var/log/`:
     
     `export CYCLONEDDS_URI='<Tracing><Verbosity>trace</><Out>/var/log/cyclonedds.${CYCLONEDDS_PID}.log</></>'`
 
