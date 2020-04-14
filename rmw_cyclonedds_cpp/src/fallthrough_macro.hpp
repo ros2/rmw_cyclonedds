@@ -26,7 +26,7 @@
 #define FALLTHROUGH [[gnu::fallthrough]]
 #else
 // gcc
-#define FALLTHROUGH __attribute__ ((fallthrough));
+#define FALLTHROUGH /* FALLTHROUGH */
 #endif
 
 #endif  // FALLTHROUGH_MACRO_HPP_
