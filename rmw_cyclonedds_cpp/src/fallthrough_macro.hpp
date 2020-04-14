@@ -21,9 +21,12 @@
 #elif __has_cpp_attribute(clang::fallthrough)
 // Clang
 #define FALLTHROUGH [[clang::fallthrough]]
+#elif __has_cpp_attribute(gnu::fallthrough)
+// gcc with gnu extension
+#define FALLTHROUGH [[gnu::fallthrough]]
 #else
 // gcc
-#define FALLTHROUGH /* fallthrough */
+#define FALLTHROUGH __attribute__ ((fallthrough));
 #endif
 
 #endif  // FALLTHROUGH_MACRO_HPP_
