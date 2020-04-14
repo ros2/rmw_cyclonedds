@@ -7,17 +7,17 @@ Cyclone DDS is ready to use. It seeks to give the fastest, easiest, and most rob
 
 1. Install:
 
-  ```
-  apt install ros-eloquent-rmw-cyclonedds-cpp
-  ```
-  or
-  ```
-  apt install ros-dashing-rmw-cyclonedds-cpp
-  ```
+   ```
+   apt install ros-eloquent-rmw-cyclonedds-cpp
+   ```
+   or
+   ```
+   apt install ros-dashing-rmw-cyclonedds-cpp
+   ```
 
 2. Set env variable and run ROS2 apps as usual:
 
-  ```export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp```
+   ```export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp```
 
 3. Confirm RMW: In Eloquent, to confirm which RMW you're using:
 
