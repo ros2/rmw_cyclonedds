@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef RMW_CYCLONEDDS_CPP__FALLTHROUGH_MACRO_HPP_
-#define RMW_CYCLONEDDS_CPP__FALLTHROUGH_MACRO_HPP_
+#ifndef FALLTHROUGH_MACRO_HPP_
+#define FALLTHROUGH_MACRO_HPP_
 
 #if __has_cpp_attribute(fallthrough) || (__cplusplus >= 201603L)
 // C++17
@@ -26,4 +26,4 @@
 #define FALLTHROUGH /* fallthrough */
 #endif
 
-#endif  //RMW_CYCLONEDDS_CPP__FALLTHROUGH_MACRO_HPP_
+#endif  // FALLTHROUGH_MACRO_HPP_
