@@ -22,14 +22,14 @@ if(NOT CMAKE_CXX_STANDARD)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
+  add_compile_options(-Wall -Wextra -Wpedantic -Wimplicit-fallthrough)
 endif()
 
 find_package(ament_cmake_ros REQUIRED)
 
 find_package(rcutils REQUIRED)
 
-find_package(cyclonedds_cmake_module REQUIRED)
+#find_package(cyclonedds_cmake_module REQUIRED)
 find_package(CycloneDDS QUIET CONFIG)
 if(NOT CycloneDDS_FOUND)
   message(WARNING "Could not find Eclipse Cyclone DDS - skipping '${PROJECT_NAME}'")
@@ -38,13 +38,13 @@ if(NOT CycloneDDS_FOUND)
 endif()
 
 find_package(rmw REQUIRED)
-find_package(rosidl_generator_c REQUIRED)
+find_package(rosidl_runtime_c REQUIRED)
 find_package(rosidl_typesupport_introspection_c REQUIRED)
 find_package(rosidl_typesupport_introspection_cpp REQUIRED)
 
 ament_export_dependencies(rcutils)
 ament_export_dependencies(rmw)
-ament_export_dependencies(rosidl_generator_c)
+ament_export_dependencies(rosidl_runtime_c)
 ament_export_dependencies(rosidl_typesupport_introspection_c)
 ament_export_dependencies(rosidl_typesupport_introspection_cpp)
 
@@ -71,7 +71,7 @@ ament_target_dependencies(rmw_cyclonedds_cpp
   "rosidl_typesupport_introspection_c"
   "rosidl_typesupport_introspection_cpp"
   "rmw"
-  "rosidl_generator_c"
+  "rosidl_runtime_c"
 )
 
 configure_rmw_library(rmw_cyclonedds_cpp)

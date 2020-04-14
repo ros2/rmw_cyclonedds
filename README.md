@@ -58,7 +58,10 @@ Here are some ways to generate additional debugging info that can help identify 
 
 ## Building from source and contributing
 
-Note the `master` branch maintains compatibility with ROS releases Dashing and later, including the not-yet-released [*Foxy*](https://index.ros.org/doc/ros2/Releases/Release-Foxy-Fitzroy/).
+The following branches are actively maintained:
+
+* `master`, which targets the upcoming ROS version, [*Foxy*](https://index.ros.org/doc/ros2/Releases/Release-Foxy-Fitzroy/).
+* `dashing-eloquent`, which maintains compatibility with ROS releases [*Dashing*](https://index.ros.org/doc/ros2/Releases/Release-Dashing-Diademata/) and [*Eloquent*](https://index.ros.org/doc/ros2/Releases/Release-Eloquent-Elusor/)
 
 If building ROS2 from source ([ros2.repos](https://github.com/ros2/ros2/blob/master/ros2.repos)), you already have this package and Cyclone DDS:
 

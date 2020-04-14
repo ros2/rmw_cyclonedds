@@ -27,6 +27,8 @@
 #include <utility>
 #include <regex>
 
+#include "rcutils/filesystem.h"
+#include "rcutils/format_string.h"
 #include "rcutils/get_env.h"
 #include "rcutils/logging_macros.h"
 #include "rcutils/strdup.h"
@@ -43,6 +45,7 @@
 #include "rmw/sanity_checks.h"
 #include "rmw/validate_node_name.h"
 
+#include "fallthrough_macro.hpp"
 #include "Serialization.hpp"
 #include "rmw/impl/cpp/macros.hpp"
 
@@ -79,6 +82,13 @@
 #define SUPPORT_LOCALHOST 1
 #else
 #define SUPPORT_LOCALHOST 0
+#endif
+
+/* Security must be enabled when compiling and requires cyclone to support QOS property lists */
+#if DDS_HAS_SECURITY && DDS_HAS_PROPERTY_LIST_QOS
+#define RMW_SUPPORT_SECURITY 1
+#else
+#define RMW_SUPPORT_SECURITY 0
 #endif
 
 /* Set to > 0 for printing warnings to stderr for each messages that was taken more than this many
@@ -139,6 +149,18 @@ struct builtin_readers
 {
   dds_entity_t rds[sizeof(builtin_topics) / sizeof(builtin_topics[0])];
 };
+
+#if RMW_SUPPORT_SECURITY
+struct dds_security_files_t
+{
+  char * identity_ca_cert = nullptr;
+  char * cert = nullptr;
+  char * key = nullptr;
+  char * permissions_ca_cert = nullptr;
+  char * governance_p7s = nullptr;
+  char * permissions_p7s = nullptr;
+};
+#endif
 
 struct CddsEntity
 {
@@ -326,9 +348,28 @@ extern "C" const char * rmw_get_serialization_format()
 
 extern "C" rmw_ret_t rmw_set_log_severity(rmw_log_severity_t severity)
 {
-  static_cast<void>(severity);
-  RMW_SET_ERROR_MSG("unimplemented");
-  return RMW_RET_ERROR;
+  uint32_t mask = 0;
+  switch (severity) {
+    default:
+      RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("%s: Invalid log severity '%d'", __func__, severity);
+      return RMW_RET_INVALID_ARGUMENT;
+    case RMW_LOG_SEVERITY_DEBUG:
+      mask |= DDS_LC_DISCOVERY | DDS_LC_THROTTLE | DDS_LC_CONFIG;
+      FALLTHROUGH;
+    case RMW_LOG_SEVERITY_INFO:
+      mask |= DDS_LC_INFO;
+      FALLTHROUGH;
+    case RMW_LOG_SEVERITY_WARN:
+      mask |= DDS_LC_WARNING;
+      FALLTHROUGH;
+    case RMW_LOG_SEVERITY_ERROR:
+      mask |= DDS_LC_ERROR;
+      FALLTHROUGH;
+    case RMW_LOG_SEVERITY_FATAL:
+      mask |= DDS_LC_FATAL;
+  }
+  dds_set_log_mask(mask);
+  return RMW_RET_OK;
 }
 
 extern "C" rmw_ret_t rmw_context_fini(rmw_context_t * context)
@@ -362,7 +403,7 @@ extern "C" rmw_ret_t rmw_init_options_init(
 #if RMW_VERSION_GTE(0, 8, 2)
   init_options->localhost_only = RMW_LOCALHOST_ONLY_DEFAULT;
   init_options->domain_id = RMW_DEFAULT_DOMAIN_ID;
-  init_options->security_context = NULL;
+  init_options->enclave = NULL;
   init_options->security_options = rmw_get_zero_initialized_security_options();
 #endif
   return RMW_RET_OK;
@@ -385,19 +426,19 @@ extern "C" rmw_ret_t rmw_init_options_copy(const rmw_init_options_t * src, rmw_i
   const rcutils_allocator_t * allocator = &src->allocator;
   rmw_ret_t ret = RMW_RET_OK;
 
-  allocator->deallocate(dst->security_context, allocator->state);
+  allocator->deallocate(dst->enclave, allocator->state);
   *dst = *src;
-  dst->security_context = NULL;
+  dst->enclave = NULL;
   dst->security_options = rmw_get_zero_initialized_security_options();
 
-  dst->security_context = rcutils_strdup(src->security_context, *allocator);
-  if (src->security_context && !dst->security_context) {
+  dst->enclave = rcutils_strdup(src->enclave, *allocator);
+  if (src->enclave && !dst->enclave) {
     ret = RMW_RET_BAD_ALLOC;
     goto fail;
   }
   return rmw_security_options_copy(&src->security_options, allocator, &dst->security_options);
 fail:
-  allocator->deallocate(dst->security_context, allocator->state);
+  allocator->deallocate(dst->enclave, allocator->state);
   return ret;
 #else
   *dst = *src;
@@ -416,7 +457,7 @@ extern "C" rmw_ret_t rmw_init_options_fini(rmw_init_options_t * init_options)
     eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
 #if RMW_VERSION_GTE(0, 8, 2)
-  allocator.deallocate(init_options->security_context, allocator.state);
+  allocator.deallocate(init_options->enclave, allocator.state);
   rmw_security_options_fini(&init_options->security_options, &allocator);
 #endif
   *init_options = rmw_get_zero_initialized_init_options();
@@ -681,15 +722,140 @@ static std::string get_node_user_data_name_ns(const char * node_name, const char
 
 #if RMW_VERSION_GTE(0, 8, 2)
 static std::string get_node_user_data(
-  const char * node_name, const char * node_namespace, const char * security_context)
+  const char * node_name, const char * node_namespace, const char * enclave)
 {
   return get_node_user_data_name_ns(node_name, node_namespace) +
-         std::string("securitycontext=") + std::string(security_context) +
+         std::string("enclave=") + std::string(enclave) +
          std::string(";");
 }
 #else
 #define get_node_user_data get_node_user_data_name_ns
 #endif
+#if RMW_SUPPORT_SECURITY
+/*  Returns the full URI of a security file properly formatted for DDS  */
+bool get_security_file_URI(
+  char ** security_file, const char * security_filename, const char * node_secure_root,
+  const rcutils_allocator_t allocator)
+{
+  *security_file = nullptr;
+  char * file_path = rcutils_join_path(node_secure_root, security_filename, allocator);
+  if (file_path != nullptr) {
+    if (rcutils_is_readable(file_path)) {
+      /*  Cyclone also supports a "data:" URI  */
+      *security_file = rcutils_format_string(allocator, "file:%s", file_path);
+      allocator.deallocate(file_path, allocator.state);
+    } else {
+      RCUTILS_LOG_INFO_NAMED(
+        "rmw_cyclonedds_cpp", "get_security_file_URI: %s not found", file_path);
+      allocator.deallocate(file_path, allocator.state);
+    }
+  }
+  return *security_file != nullptr;
+}
+
+bool get_security_file_URIs(
+#if !RMW_VERSION_GTE(0, 8, 2)
+  const rmw_node_security_options_t * security_options,
+#else
+  const rmw_security_options_t * security_options,
+#endif
+  dds_security_files_t & dds_security_files, rcutils_allocator_t allocator)
+{
+  bool ret = false;
+
+  if (security_options->security_root_path != nullptr) {
+    ret = (
+      get_security_file_URI(
+        &dds_security_files.identity_ca_cert, "identity_ca.cert.pem",
+        security_options->security_root_path, allocator) &&
+      get_security_file_URI(
+        &dds_security_files.cert, "cert.pem",
+        security_options->security_root_path, allocator) &&
+      get_security_file_URI(
+        &dds_security_files.key, "key.pem",
+        security_options->security_root_path, allocator) &&
+      get_security_file_URI(
+        &dds_security_files.permissions_ca_cert, "permissions_ca.cert.pem",
+        security_options->security_root_path, allocator) &&
+      get_security_file_URI(
+        &dds_security_files.governance_p7s, "governance.p7s",
+        security_options->security_root_path, allocator) &&
+      get_security_file_URI(
+        &dds_security_files.permissions_p7s, "permissions.p7s",
+        security_options->security_root_path, allocator));
+  }
+  return ret;
+}
+
+void finalize_security_file_URIs(
+  dds_security_files_t dds_security_files, const rcutils_allocator_t allocator)
+{
+  allocator.deallocate(dds_security_files.identity_ca_cert, allocator.state);
+  dds_security_files.identity_ca_cert = nullptr;
+  allocator.deallocate(dds_security_files.cert, allocator.state);
+  dds_security_files.cert = nullptr;
+  allocator.deallocate(dds_security_files.key, allocator.state);
+  dds_security_files.key = nullptr;
+  allocator.deallocate(dds_security_files.permissions_ca_cert, allocator.state);
+  dds_security_files.permissions_ca_cert = nullptr;
+  allocator.deallocate(dds_security_files.governance_p7s, allocator.state);
+  dds_security_files.governance_p7s = nullptr;
+  allocator.deallocate(dds_security_files.permissions_p7s, allocator.state);
+  dds_security_files.permissions_p7s = nullptr;
+}
+
+#endif  /* RMW_SUPPORT_SECURITY */
+
+/* Attempt to set all the qos properties needed to enable DDS security */
+rmw_ret_t configure_qos_for_security(
+  dds_qos_t * qos,
+#if !RMW_VERSION_GTE(0, 8, 2)
+  const rmw_node_security_options_t * security_options
+#else
+  const rmw_security_options_t * security_options
+#endif
+)
+{
+#if RMW_SUPPORT_SECURITY
+  rmw_ret_t ret = RMW_RET_UNSUPPORTED;
+  dds_security_files_t dds_security_files;
+  rcutils_allocator_t allocator = rcutils_get_default_allocator();
+
+  if (get_security_file_URIs(security_options, dds_security_files, allocator)) {
+    dds_qset_prop(qos, "dds.sec.auth.identity_ca", dds_security_files.identity_ca_cert);
+    dds_qset_prop(qos, "dds.sec.auth.identity_certificate", dds_security_files.cert);
+    dds_qset_prop(qos, "dds.sec.auth.private_key", dds_security_files.key);
+    dds_qset_prop(qos, "dds.sec.access.permissions_ca", dds_security_files.permissions_ca_cert);
+    dds_qset_prop(qos, "dds.sec.access.governance", dds_security_files.governance_p7s);
+    dds_qset_prop(qos, "dds.sec.access.permissions", dds_security_files.permissions_p7s);
+
+    dds_qset_prop(qos, "dds.sec.auth.library.path", "dds_security_auth");
+    dds_qset_prop(qos, "dds.sec.auth.library.init", "init_authentication");
+    dds_qset_prop(qos, "dds.sec.auth.library.finalize", "finalize_authentication");
+
+    dds_qset_prop(qos, "dds.sec.crypto.library.path", "dds_security_crypto");
+    dds_qset_prop(qos, "dds.sec.crypto.library.init", "init_crypto");
+    dds_qset_prop(qos, "dds.sec.crypto.library.finalize", "finalize_crypto");
+
+    dds_qset_prop(qos, "dds.sec.access.library.path", "dds_security_ac");
+    dds_qset_prop(qos, "dds.sec.access.library.init", "init_access_control");
+    dds_qset_prop(qos, "dds.sec.access.library.finalize", "finalize_access_control");
+
+    ret = RMW_RET_OK;
+  }
+  finalize_security_file_URIs(dds_security_files, allocator);
+  return ret;
+#else
+  (void) qos;
+  (void) security_options;
+  RMW_SET_ERROR_MSG(
+    "Security was requested but the Cyclone DDS being used does not have security "
+    "support enabled. Recompile Cyclone DDS with the '-DENABLE_SECURITY=ON' "
+    "CMake option");
+  return RMW_RET_UNSUPPORTED;
+#endif
+}
+
 
 extern "C" rmw_node_t * rmw_create_node(
   rmw_context_t * context, const char * name,
@@ -720,7 +886,11 @@ extern "C" rmw_node_t * rmw_create_node(
   const dds_domainid_t did = DDS_DOMAIN_DEFAULT;
 #endif
 #if !RMW_VERSION_GTE(0, 8, 2)
-  (void) security_options;
+  RCUTILS_CHECK_ARGUMENT_FOR_NULL(security_options, nullptr);
+#else
+  rmw_security_options_t * security_options;
+  RCUTILS_CHECK_ARGUMENT_FOR_NULL(context, nullptr);
+  security_options = &context->options.security_options;
 #endif
   rmw_ret_t ret;
   int dummy_validation_result;
@@ -744,11 +914,20 @@ extern "C" rmw_node_t * rmw_create_node(
 
   dds_qos_t * qos = dds_create_qos();
 #if RMW_VERSION_GTE(0, 8, 2)
-  std::string user_data = get_node_user_data(name, namespace_, context->options.security_context);
+  std::string user_data = get_node_user_data(name, namespace_, context->options.enclave);
 #else
   std::string user_data = get_node_user_data(name, namespace_);
 #endif
   dds_qset_userdata(qos, user_data.c_str(), user_data.size());
+
+  if (configure_qos_for_security(qos, security_options) != RMW_RET_OK) {
+    if (security_options->enforce_security == RMW_SECURITY_ENFORCEMENT_ENFORCE) {
+      dds_delete_qos(qos);
+      node_gone_from_domain_locked(did);
+      return nullptr;
+    }
+  }
+
   dds_entity_t pp = dds_create_participant(did, qos, nullptr);
   dds_delete_qos(qos);
   if (pp < 0) {
@@ -3045,7 +3224,7 @@ extern "C" rmw_ret_t rmw_get_node_names_impl(
   const rmw_node_t * node,
   rcutils_string_array_t * node_names,
   rcutils_string_array_t * node_namespaces,
-  rcutils_string_array_t * security_contexts)
+  rcutils_string_array_t * enclaves)
 {
   RET_WRONG_IMPLID(node);
   auto node_impl = static_cast<CddsNode *>(node->data);
@@ -3056,7 +3235,7 @@ extern "C" rmw_ret_t rmw_get_node_names_impl(
   }
 
   std::regex re {
-    "^name=([^;]*);namespace=([^;]*);(securitycontext=([^;]*);)?",
+    "^name=([^;]*);namespace=([^;]*);(enclave=([^;]*);)?",
     std::regex_constants::extended
   };
   std::vector<std::tuple<std::string, std::string, std::string>> ns;
@@ -3081,8 +3260,8 @@ extern "C" rmw_ret_t rmw_get_node_names_impl(
     RMW_SET_ERROR_MSG(rcutils_get_error_string().str);
     goto fail_alloc;
   }
-  if (security_contexts &&
-    rcutils_string_array_init(security_contexts, ns.size(), &allocator) != RCUTILS_RET_OK)
+  if (enclaves &&
+    rcutils_string_array_init(enclaves, ns.size(), &allocator) != RCUTILS_RET_OK)
   {
     RMW_SET_ERROR_MSG(rcutils_get_error_string().str);
     goto fail_alloc;
@@ -3096,10 +3275,10 @@ extern "C" rmw_ret_t rmw_get_node_names_impl(
         RMW_SET_ERROR_MSG("rmw_get_node_names for name/namespace");
         goto fail_alloc;
       }
-      if (security_contexts) {
-        security_contexts->data[i] = rcutils_strdup(std::get<2>(n).c_str(), allocator);
-        if (!security_contexts->data[i]) {
-          RMW_SET_ERROR_MSG("rmw_get_node_names for security_context");
+      if (enclaves) {
+        enclaves->data[i] = rcutils_strdup(std::get<2>(n).c_str(), allocator);
+        if (!enclaves->data[i]) {
+          RMW_SET_ERROR_MSG("rmw_get_node_names for enclave");
           goto fail_alloc;
         }
       }
@@ -3125,8 +3304,8 @@ fail_alloc:
       rcutils_reset_error();
     }
   }
-  if (security_contexts) {
-    if (rcutils_string_array_fini(security_contexts) != RCUTILS_RET_OK) {
+  if (enclaves) {
+    if (rcutils_string_array_fini(enclaves) != RCUTILS_RET_OK) {
       RCUTILS_LOG_ERROR_NAMED(
         "rmw_cyclonedds_cpp",
         "failed to cleanup during error handling: %s", rcutils_get_error_string().str);
@@ -3149,20 +3328,20 @@ extern "C" rmw_ret_t rmw_get_node_names(
 }
 
 #if RMW_VERSION_GTE(0, 8, 2)
-extern "C" rmw_ret_t rmw_get_node_names_with_security_contexts(
+extern "C" rmw_ret_t rmw_get_node_names_with_enclaves(
   const rmw_node_t * node,
   rcutils_string_array_t * node_names,
   rcutils_string_array_t * node_namespaces,
-  rcutils_string_array_t * security_contexts)
+  rcutils_string_array_t * enclaves)
 {
-  if (RMW_RET_OK != rmw_check_zero_rmw_string_array(security_contexts)) {
+  if (RMW_RET_OK != rmw_check_zero_rmw_string_array(enclaves)) {
     return RMW_RET_ERROR;
   }
   return rmw_get_node_names_impl(
     node,
     node_names,
     node_namespaces,
-    security_contexts);
+    enclaves);
 }
 #endif
 
