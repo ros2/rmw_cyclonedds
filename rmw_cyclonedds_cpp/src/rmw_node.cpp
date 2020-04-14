@@ -45,6 +45,7 @@
 #include "rmw/sanity_checks.h"
 #include "rmw/validate_node_name.h"
 
+#include "fallthrough_macro.hpp"
 #include "Serialization.hpp"
 #include "rmw/impl/cpp/macros.hpp"
 
@@ -354,12 +355,16 @@ extern "C" rmw_ret_t rmw_set_log_severity(rmw_log_severity_t severity)
       return RMW_RET_INVALID_ARGUMENT;
     case RMW_LOG_SEVERITY_DEBUG:
       mask |= DDS_LC_DISCOVERY | DDS_LC_THROTTLE | DDS_LC_CONFIG;
+      FALLTHROUGH;
     case RMW_LOG_SEVERITY_INFO:
       mask |= DDS_LC_INFO;
+      FALLTHROUGH;
     case RMW_LOG_SEVERITY_WARN:
       mask |= DDS_LC_WARNING;
+      FALLTHROUGH;
     case RMW_LOG_SEVERITY_ERROR:
       mask |= DDS_LC_ERROR;
+      FALLTHROUGH;
     case RMW_LOG_SEVERITY_FATAL:
       mask |= DDS_LC_FATAL;
   }
