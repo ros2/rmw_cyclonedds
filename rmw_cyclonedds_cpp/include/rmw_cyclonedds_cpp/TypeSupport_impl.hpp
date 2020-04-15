@@ -120,12 +120,20 @@ void TypeSupport<MembersType>::setName(const std::string & name)
   this->name = std::string(name);
 }
 
-static inline void *
-align_(size_t __align, void * & __ptr) noexcept
+template<typename T>
+static inline T
+align_int_(size_t __align, T __int) noexcept
+{
+  return (__int - 1u + __align) & ~(__align - 1);
+}
+
+template<typename T>
+static inline T *
+align_ptr_(size_t __align, T * __ptr) noexcept
 {
   const auto __intptr = reinterpret_cast<uintptr_t>(__ptr);
-  const auto __aligned = (__intptr - 1u + __align) & ~(__align - 1);
-  return __ptr = reinterpret_cast<void *>(__aligned);
+  const auto __aligned = align_int_(__align, __intptr);
+  return reinterpret_cast<T *>(__aligned);
 }
 
 template<typename MembersType>
@@ -213,8 +221,7 @@ size_t get_array_size_and_assign_field(
   size_t max_align)
 {
   auto vector = reinterpret_cast<std::vector<unsigned char> *>(field);
-  void * ptr = reinterpret_cast<void *>(sub_members_size);
-  size_t vsize = vector->size() / reinterpret_cast<size_t>(align_(max_align, ptr));
+  size_t vsize = vector->size() / align_int_(max_align, sub_members_size);
   if (member->is_upper_bound_ && vsize > member->array_size_) {
     throw std::runtime_error("vector overcomes the maximum length");
   }
@@ -435,8 +442,7 @@ inline size_t get_submessage_array_deserialize(
   if (call_new) {
     new(vector) std::vector<unsigned char>;
   }
-  void * ptr = reinterpret_cast<void *>(sub_members_size);
-  vector->resize(vsize * (size_t)align_(max_align, ptr));
+  vector->resize(vsize * align_int_(max_align, sub_members_size));
   subros_message = reinterpret_cast<void *>(vector->data());
   return vsize;
 }
@@ -535,7 +541,7 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
             for (size_t index = 0; index < array_size; ++index) {
               deserializeROSmessage(deser, sub_members, subros_message, recall_new);
               subros_message = static_cast<char *>(subros_message) + sub_members_size;
-              subros_message = align_(max_align, subros_message);
+              subros_message = align_ptr_(max_align, subros_message);
             }
           }
         }
