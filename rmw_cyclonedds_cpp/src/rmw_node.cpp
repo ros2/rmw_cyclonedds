@@ -1015,14 +1015,13 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
 
   context->impl = impl.get();
 
-  // FIXME: not sure if I could get away with using a bunch of listeners
+  // One could also use a set of listeners instead of a thread for maintaining the graph cache:
   // - Locally published samples shouldn't make it to the reader, so there shouldn't be a deadlock
   //   caused by the graph cache's mutex already having been locked by (e.g.) rmw_create_node.
   // - Whatever the graph cache implementation does, it shouldn't involve much more than local state
   //   updates and triggering a guard condition, and so that should be safe.
-  // - There might be a significant cost to calling the graph cache function to update its internal
-  //   state, and having that occur on the thread receiving data from the network may not be wise
-  // So it may be better to create a thread and a waitset.
+  // however, the graph cache updates could be expensive, and so performing those operations on
+  // the thread receiving data from the network may not be wise.
   if ((ret = discovery_thread_start(context)) != RMW_RET_OK) {
     return ret;
   }
