@@ -1960,6 +1960,15 @@ extern "C" rmw_ret_t rmw_destroy_subscription(rmw_node_t * node, rmw_subscriptio
   return RMW_RET_OK;
 }
 
+static const intmax_t NS_PER_S = 1e9;
+
+rmw_time_t dds_to_rmw_time(const dds_time_t &time){
+  rmw_time_t result;
+  result.sec = time / NS_PER_S;
+  result.nsec = time % NS_PER_S;
+  return result;
+}
+
 static rmw_ret_t rmw_take_int(
   const rmw_subscription_t * subscription, void * ros_message,
   bool * taken, rmw_message_info_t * message_info)
@@ -1973,6 +1982,8 @@ static rmw_ret_t rmw_take_int(
   while (dds_take(sub->enth, &ros_message, &info, 1, 1) == 1) {
     if (info.valid_data) {
       if (message_info) {
+        message_info->source_timestamp = dds_to_rmw_time(info.source_timestamp);
+
         message_info->publisher_gid.implementation_identifier = eclipse_cyclonedds_identifier;
         memset(message_info->publisher_gid.data, 0, sizeof(message_info->publisher_gid.data));
         assert(sizeof(info.publication_handle) <= sizeof(message_info->publisher_gid.data));
@@ -1995,6 +2006,7 @@ static rmw_ret_t rmw_take_int(
   return RMW_RET_OK;
 }
 
+// TODO: fix common code with rmw_take_int
 static rmw_ret_t rmw_take_ser_int(
   const rmw_subscription_t * subscription,
   rmw_serialized_message_t * serialized_message, bool * taken,
@@ -2010,6 +2022,9 @@ static rmw_ret_t rmw_take_ser_int(
   while (dds_takecdr(sub->enth, &dcmn, 1, &info, DDS_ANY_STATE) == 1) {
     if (info.valid_data) {
       if (message_info) {
+        message_info->source_timestamp = dds_to_rmw_time(info.source_timestamp);
+        message_info->received_timestamp = {}; // todo
+
         message_info->publisher_gid.implementation_identifier = eclipse_cyclonedds_identifier;
         memset(message_info->publisher_gid.data, 0, sizeof(message_info->publisher_gid.data));
         assert(sizeof(info.publication_handle) <= sizeof(message_info->publisher_gid.data));
