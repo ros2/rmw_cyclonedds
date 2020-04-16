@@ -979,11 +979,11 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
      discovery */
   rmw_publisher_options_t publisher_options = rmw_get_default_publisher_options();
   impl->common.pub = create_publisher(
-      impl->ppant, impl->dds_pub,
-      rosidl_typesupport_cpp::get_message_type_support_handle<ParticipantEntitiesInfo>(),
-      "ros_discovery_info",
-      &pubsub_qos,
-      &publisher_options);
+    impl->ppant, impl->dds_pub,
+    rosidl_typesupport_cpp::get_message_type_support_handle<ParticipantEntitiesInfo>(),
+    "ros_discovery_info",
+    &pubsub_qos,
+    &publisher_options);
   if (impl->common.pub == nullptr) {
     return RMW_RET_ERROR;
   }
@@ -993,11 +993,11 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
   // FIXME: keyed topics => KEEP_LAST and depth 1.
   pubsub_qos.history = RMW_QOS_POLICY_HISTORY_KEEP_ALL;
   impl->common.sub = create_subscription(
-      impl->ppant, impl->dds_sub,
-      rosidl_typesupport_cpp::get_message_type_support_handle<ParticipantEntitiesInfo>(),
-      "ros_discovery_info",
-      &pubsub_qos,
-      &subscription_options);
+    impl->ppant, impl->dds_sub,
+    rosidl_typesupport_cpp::get_message_type_support_handle<ParticipantEntitiesInfo>(),
+    "ros_discovery_info",
+    &pubsub_qos,
+    &subscription_options);
   if (impl->common.sub == nullptr) {
     return RMW_RET_ERROR;
   }
