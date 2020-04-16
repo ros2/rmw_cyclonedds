@@ -19,7 +19,7 @@ Cyclone DDS is ready to use. It seeks to give the fastest, easiest, and most rob
 
    ```export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp```
 
-3. Confirm RMW: In Eloquent, to confirm which RMW you're using:
+3. Confirm RMW: In Eloquent and later, to confirm which RMW you're using:
 
    ```ros2 doctor --report```
 
@@ -27,8 +27,8 @@ Cyclone DDS is ready to use. It seeks to give the fastest, easiest, and most rob
 ## Performance recommendations
 
 With large samples (100s of kilobytes), excessive latency can be caused by running out of space in the OS-level receive buffer. For this reason, on Linux, we recommend increasing the buffer size:
-* Temporarily (until reboot): `sudo sysctl -w net.core.rmem_max=8388608`
-* Permanently: `echo "net.core.rmem_max=8388608\n" | sudo tee /etc/sysctl.d/60-cyclonedds.conf`
+* Temporarily (until reboot): `sudo sysctl -w net.core.rmem_max=8388608 net.core.rmem_default=8388608`
+* Permanently: `echo "net.core.rmem_max=8388608\nnet.core.rmem_default=8388608\n" | sudo tee /etc/sysctl.d/60-cyclonedds.conf`
 
 ## Debugging
 
