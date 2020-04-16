@@ -60,7 +60,6 @@ add_library(rmw_cyclonedds_cpp
   src/exception.cpp
   src/demangle.cpp
   src/deserialization_exception.cpp
-  src/participant_entities_info__type_support.cpp
   src/Serialization.cpp
   src/TypeSupport2.cpp)
 
@@ -70,7 +69,6 @@ target_include_directories(rmw_cyclonedds_cpp PUBLIC
 )
 
 target_link_libraries(rmw_cyclonedds_cpp
-  ${rmw_dds_common_LIBRARIES__rosidl_typesupport_introspection_cpp}
   CycloneDDS::ddsc
 )
 
