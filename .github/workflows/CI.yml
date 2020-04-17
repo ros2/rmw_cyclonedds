@@ -17,5 +17,13 @@ jobs:
     - name: Build and test ROS
       uses: ros-tooling/action-ros-ci@0.0.15
       with:
-        package-name: rmw_cyclonedds_cpp
+        package-name: |
+          rmw_cyclonedds_cpp
+          test_cli
+          test_cli_remapping
+          test_communication
+          test_quality_of_service
+          test_rclcpp
+          test_security
         vcs-repo-file-url: https://raw.githubusercontent.com/ros2/ros2/${{ matrix.rosdistro }}/ros2.repos
+    - name: run integra
