@@ -259,7 +259,13 @@ struct rmw_context_impl_t
 
   rmw_context_impl_t()
   : common(), domain_id(UINT32_MAX), ppant(0)
-  {}
+  {
+    /* destructor relies on these being initialized properly */
+    common.thread_is_running.store(false);
+    common.graph_guard_condition = nullptr;
+    common.pub = nullptr;
+    common.sub = nullptr;
+  }
   ~rmw_context_impl_t()
   {
     discovery_thread_stop(common);
@@ -890,12 +896,6 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
   if (impl == nullptr) {
     return RMW_RET_BAD_ALLOC;
   }
-
-  /* "impl"'s destructor relies on these being initialized properly */
-  impl->common.thread_is_running.store(false);
-  impl->common.graph_guard_condition = nullptr;
-  impl->common.pub = nullptr;
-  impl->common.sub = nullptr;
 
   /* Take domains_lock and hold it until after the participant creation succeeded or
      failed: otherwise there is a race with rmw_destroy_node deleting the last participant
