@@ -14,11 +14,15 @@ jobs:
       run: sed -e 's/azure.archive.ubuntu.com/us.archive.ubuntu.com/g' -e t -e d /etc/apt/sources.list | sudo tee /etc/apt/sources.list.d/nonazure.list
     - name: Acquire ROS dependencies
       uses: ros-tooling/setup-ros@0.0.19
-    - name: Build and test ROS
+    - name: Build and test Cyclone RMW
+      uses: ros-tooling/action-ros-ci@0.0.15
+      with:
+        package-name: rmw_cyclonedds_cpp
+        vcs-repo-file-url: https://raw.githubusercontent.com/ros2/ros2/${{ matrix.rosdistro }}/ros2.repos
+    - name: Build and test System Tests
       uses: ros-tooling/action-ros-ci@0.0.15
       with:
         package-name: |
-          rmw_cyclonedds_cpp
           test_cli
           test_cli_remapping
           test_communication
@@ -26,4 +30,3 @@ jobs:
           test_rclcpp
           test_security
         vcs-repo-file-url: https://raw.githubusercontent.com/ros2/ros2/${{ matrix.rosdistro }}/ros2.repos
-    - name: run integra
