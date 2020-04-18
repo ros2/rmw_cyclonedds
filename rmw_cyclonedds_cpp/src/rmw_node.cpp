@@ -1009,7 +1009,10 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
 
   impl->common.graph_cache.set_on_change_callback(
     [guard_condition = impl->common.graph_guard_condition]() {
-      static_cast<void>(rmw_trigger_guard_condition(guard_condition));
+      rmw_ret_t ret = rmw_trigger_guard_condition(guard_condition);
+      if (ret != RMW_RET_OK) {
+        RMW_SET_ERROR_MSG("graph cache on_change_callback failed to trigger guard condition");
+      }
     });
 
   get_entity_gid(impl->ppant, impl->common.gid);
