@@ -235,11 +235,7 @@ struct CddsDomain
   {}
 
   ~CddsDomain()
-  {
-    if (domain_handle > 0) {
-      static_cast<void>(dds_delete(domain_handle));
-    }
-  }
+  {}
 };
 
 struct rmw_context_impl_t
@@ -288,6 +284,7 @@ struct rmw_context_impl_t
       CddsDomain & dom = gcdds.domains[domain_id];
       assert(dom.refcount > 0);
       if (--dom.refcount == 0) {
+        static_cast<void>(dds_delete(dom.domain_handle));
         gcdds.domains.erase(domain_id);
       }
     }
@@ -738,7 +735,6 @@ static bool check_create_domain(dds_domainid_t did, rmw_localhost_only_t localho
       RCUTILS_LOG_ERROR_NAMED(
         "rmw_cyclonedds_cpp",
         "rmw_create_node: failed to create domain, error %s", dds_strretcode(dom.domain_handle));
-      dds_delete(dom.domain_handle);
       gcdds.domains.erase(did);
       return false;
     } else {
