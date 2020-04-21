@@ -2195,11 +2195,19 @@ static rmw_ret_t rmw_take_seq(
     return RMW_RET_ERROR;
   }
 
+  // Keep track of taken/not taken to reorder sequence with valid messages at the front
+  std::vector<void *> taken_msg;
+  std::vector<void *> not_taken_msg;
+
   for (int ii = 0; ii < ret; ++ii) {
     const dds_sample_info_t & info = infos[ii];
-    rmw_message_info_t * message_info = &message_info_sequence->data[ii];
+
+    void * message = &message_sequence->data[ii];
+    rmw_message_info_t * message_info = &message_info_sequence->data[*taken];
 
     if (info.valid_data) {
+      taken_msg.push_back(message);
+      (*taken)++;
       if (message_info) {
         message_info->publisher_gid.implementation_identifier = eclipse_cyclonedds_identifier;
         memset(message_info->publisher_gid.data, 0, sizeof(message_info->publisher_gid.data));
@@ -2208,12 +2216,22 @@ static rmw_ret_t rmw_take_seq(
           message_info->publisher_gid.data, &info.publication_handle,
           sizeof(info.publication_handle));
       }
+    } else {
+      not_taken_msg.push_back(message);
     }
   }
 
-  *taken = ret;
-  message_sequence->size = ret;
-  message_info_sequence->size = ret;
+  for (size_t ii = 0; ii < taken_msg.size(); ++ii) {
+    message_sequence->data[ii] = taken_msg[ii];
+  }
+
+  for (size_t ii = 0; ii < not_taken_msg.size(); ++ii) {
+    message_sequence->data[ii + taken_msg.size()] = not_taken_msg[ii];
+  }
+
+  *taken = taken_msg.size();
+  message_sequence->size = taken_msg.size();
+  message_info_sequence->size = taken_msg.size();
 
   return RMW_RET_OK;
 }
