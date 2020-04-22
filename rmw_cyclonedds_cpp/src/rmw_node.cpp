@@ -576,8 +576,9 @@ static void handle_DCPSPublication(dds_entity_t reader, void * arg)
 
 static void discovery_thread(rmw_context_impl_t * impl)
 {
-  auto sub = static_cast<CddsSubscription const * const>(impl->common.sub->data);
-  auto gc = static_cast<CddsGuardCondition const * const>(impl->common.listener_thread_gc->data);
+  const CddsSubscription * sub = static_cast<const CddsSubscription *>(impl->common.sub->data);
+  const CddsGuardCondition * gc =
+    static_cast<const CddsGuardCondition *>(impl->common.listener_thread_gc->data);
   dds_entity_t ws;
   /* deleting ppant will delete waitset as well, so there is no real need to delete
      the waitset here on error, but it is more hygienic */
