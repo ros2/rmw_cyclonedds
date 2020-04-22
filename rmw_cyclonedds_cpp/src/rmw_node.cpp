@@ -1979,6 +1979,10 @@ static rmw_ret_t rmw_take_int(
         memcpy(
           message_info->publisher_gid.data, &info.publication_handle,
           sizeof(info.publication_handle));
+        message_info->source_timestamp = info.source_timestamp;
+        if(rcutils_system_time_now(&(message_info->received_timestamp)) != RCUTILS_RET_OK) {
+          message_info->received_timestamp = 0;
+        }
       }
 #if REPORT_LATE_MESSAGES > 0
       dds_time_t tnow = dds_time();
