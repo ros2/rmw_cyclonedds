@@ -2191,13 +2191,15 @@ static rmw_ret_t rmw_take_seq(
   std::vector<dds_sample_info_t> infos(count);
   auto ret = dds_take(sub->enth, message_sequence->data, infos.data(), count, count);
 
-  if (ret <= 0) {
+  // Returning 0 should not be an error, as it just indicates that no messages were available.
+  if (ret < 0) {
     return RMW_RET_ERROR;
   }
 
   // Keep track of taken/not taken to reorder sequence with valid messages at the front
   std::vector<void *> taken_msg;
   std::vector<void *> not_taken_msg;
+  *taken = 0u;
 
   for (int ii = 0; ii < ret; ++ii) {
     const dds_sample_info_t & info = infos[ii];
@@ -2229,9 +2231,8 @@ static rmw_ret_t rmw_take_seq(
     message_sequence->data[ii + taken_msg.size()] = not_taken_msg[ii];
   }
 
-  *taken = taken_msg.size();
-  message_sequence->size = taken_msg.size();
-  message_info_sequence->size = taken_msg.size();
+  message_sequence->size = *taken;
+  message_info_sequence->size = *taken;
 
   return RMW_RET_OK;
 }
