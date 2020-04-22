@@ -118,6 +118,26 @@ static int graphrhc_take(
   return 0;
 }
 
+#if DDS_HAS_READCDR
+static int graphrhc_readcdr(
+  struct dds_rhc * rhc_cmn, bool lock, struct ddsi_serdata ** values,
+  dds_sample_info_t * info_seq, uint32_t max_samples,
+  uint32_t sample_states, uint32_t view_states, uint32_t instance_states,
+  dds_instance_handle_t handle)
+{
+  static_cast<void>(rhc_cmn);
+  static_cast<void>(lock);
+  static_cast<void>(values);
+  static_cast<void>(info_seq);
+  static_cast<void>(max_samples);
+  static_cast<void>(sample_states);
+  static_cast<void>(view_states);
+  static_cast<void>(instance_states);
+  static_cast<void>(handle);
+  return 0;
+}
+#endif
+
 static int graphrhc_takecdr(
   struct dds_rhc * rhc_cmn, bool lock, struct ddsi_serdata ** values,
   dds_sample_info_t * info_seq, uint32_t max_samples,
@@ -165,6 +185,9 @@ static const struct dds_rhc_ops graphrhc_ops = {
   },
   graphrhc_read,
   graphrhc_take,
+#if DDS_HAS_READCDR
+  graphrhc_readcdr,
+#endif
   graphrhc_takecdr,
   graphrhc_add_readcondition,
   graphrhc_remove_readcondition,
