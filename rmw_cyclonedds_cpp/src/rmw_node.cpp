@@ -2856,7 +2856,7 @@ extern "C" rmw_ret_t rmw_wait(
 /////////////////////////////////////////////////////////////////////////////////////////
 
 static rmw_ret_t rmw_take_response_request(
-  CddsCS * cs, rmw_request_id_t * request_header,
+  CddsCS * cs, rmw_service_info_t * request_header,
   void * ros_data, bool * taken, dds_time_t * source_timestamp,
   dds_instance_handle_t srcfilter)
 {
@@ -2870,9 +2870,13 @@ static rmw_ret_t rmw_take_response_request(
   while (dds_take(cs->sub->enth, &wrap_ptr, &info, 1, 1) == 1) {
     if (info.valid_data) {
       memset(request_header, 0, sizeof(wrap.header));
-      assert(sizeof(wrap.header.guid) <= sizeof(request_header->writer_guid));
-      memcpy(request_header->writer_guid, &wrap.header.guid, sizeof(wrap.header.guid));
-      request_header->sequence_number = wrap.header.seq;
+      assert(sizeof(wrap.header.guid) <= sizeof(request_header->request_id.writer_guid));
+      memcpy(request_header->request_id.writer_guid, &wrap.header.guid, sizeof(wrap.header.guid));
+      request_header->request_id.sequence_number = wrap.header.seq;
+      request_header->source_timestamp = info.source_timestamp;
+      if (rcutils_system_time_now(&(request_header->received_timestamp)) != RCUTILS_RET_OK) {
+        request_header->received_timestamp = 0;
+      }
       if (source_timestamp) {
         *source_timestamp = info.source_timestamp;
       }
@@ -2886,9 +2890,9 @@ static rmw_ret_t rmw_take_response_request(
   return RMW_RET_OK;
 }
 
-extern "C" rmw_ret_t rmw_take_response_with_info(
+extern "C" rmw_ret_t rmw_take_response(
   const rmw_client_t * client,
-  rmw_request_id_t * request_header, void * ros_response,
+  rmw_service_info_t * request_header, void * ros_response,
   bool * taken)
 {
   RET_WRONG_IMPLID(client);
@@ -2933,9 +2937,9 @@ static void check_for_blocked_requests(CddsClient & client)
 }
 #endif
 
-extern "C" rmw_ret_t rmw_take_request_with_info(
+extern "C" rmw_ret_t rmw_take_request(
   const rmw_service_t * service,
-  rmw_request_id_t * request_header, void * ros_request,
+  rmw_service_info_t * request_header, void * ros_request,
   bool * taken)
 {
   RET_WRONG_IMPLID(service);
