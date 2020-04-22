@@ -2886,7 +2886,7 @@ static rmw_ret_t rmw_take_response_request(
   return RMW_RET_OK;
 }
 
-extern "C" rmw_ret_t rmw_take_response(
+extern "C" rmw_ret_t rmw_take_response_with_info(
   const rmw_client_t * client,
   rmw_request_id_t * request_header, void * ros_response,
   bool * taken)
@@ -2933,7 +2933,7 @@ static void check_for_blocked_requests(CddsClient & client)
 }
 #endif
 
-extern "C" rmw_ret_t rmw_take_request(
+extern "C" rmw_ret_t rmw_take_request_with_info(
   const rmw_service_t * service,
   rmw_request_id_t * request_header, void * ros_request,
   bool * taken)
