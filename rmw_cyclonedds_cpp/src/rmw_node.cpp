@@ -1972,6 +1972,7 @@ static rmw_ret_t rmw_take_int(
   dds_sample_info_t info;
   while (dds_take(sub->enth, &ros_message, &info, 1, 1) == 1) {
     if (info.valid_data) {
+      *taken = true;
       if (message_info) {
         message_info->publisher_gid.implementation_identifier = eclipse_cyclonedds_identifier;
         memset(message_info->publisher_gid.data, 0, sizeof(message_info->publisher_gid.data));
@@ -1980,8 +1981,10 @@ static rmw_ret_t rmw_take_int(
           message_info->publisher_gid.data, &info.publication_handle,
           sizeof(info.publication_handle));
         message_info->source_timestamp = info.source_timestamp;
+        // TODO(iluetkeb) this must be replaced by a better received timestamp
         if(rcutils_system_time_now(&(message_info->received_timestamp)) != RCUTILS_RET_OK) {
-          message_info->received_timestamp = 0;
+          // this may appear rather severe, but if the clock failed, something is really wrong
+          return RMW_RET_ERROR;
         }
       }
 #if REPORT_LATE_MESSAGES > 0
@@ -1991,7 +1994,6 @@ static rmw_ret_t rmw_take_int(
         fprintf(stderr, "** sample in history for %.fms\n", static_cast<double>(dt) / 1e6);
       }
 #endif
-      *taken = true;
       return RMW_RET_OK;
     }
   }
