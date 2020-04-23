@@ -2874,9 +2874,8 @@ static rmw_ret_t rmw_take_response_request(
       memcpy(request_header->request_id.writer_guid, &wrap.header.guid, sizeof(wrap.header.guid));
       request_header->request_id.sequence_number = wrap.header.seq;
       request_header->source_timestamp = info.source_timestamp;
-      if (rcutils_system_time_now(&(request_header->received_timestamp)) != RCUTILS_RET_OK) {
-        request_header->received_timestamp = 0;
-      }
+      // TODO(iluetkeb) replace with real received timestamp when available in cyclone
+      request_header->received_timestamp = 0;
       if (source_timestamp) {
         *source_timestamp = info.source_timestamp;
       }
