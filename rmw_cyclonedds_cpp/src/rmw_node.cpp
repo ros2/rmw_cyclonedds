@@ -1981,11 +1981,8 @@ static rmw_ret_t rmw_take_int(
           message_info->publisher_gid.data, &info.publication_handle,
           sizeof(info.publication_handle));
         message_info->source_timestamp = info.source_timestamp;
-        // TODO(iluetkeb) this must be replaced by a better received timestamp
-        if(rcutils_system_time_now(&(message_info->received_timestamp)) != RCUTILS_RET_OK) {
-          // this may appear rather severe, but if the clock failed, something is really wrong
-          return RMW_RET_ERROR;
-        }
+        // TODO(iluetkeb) add received timestamp, when implemented by Cyclone
+        message_info->received_timestamp = 0;
       }
 #if REPORT_LATE_MESSAGES > 0
       dds_time_t tnow = dds_time();
