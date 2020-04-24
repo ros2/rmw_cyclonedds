@@ -1970,7 +1970,8 @@ fail_topic:
 
 extern "C" rmw_ret_t rmw_init_subscription_allocation(
   const rosidl_message_type_support_t * type_support,
-  const rosidl_runtime_c__Sequence__bound * message_bounds, rmw_subscription_allocation_t * allocation)
+  const rosidl_runtime_c__Sequence__bound * message_bounds,
+  rmw_subscription_allocation_t * allocation)
 {
   static_cast<void>(type_support);
   static_cast<void>(message_bounds);
