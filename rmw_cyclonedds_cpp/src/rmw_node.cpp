@@ -1192,7 +1192,7 @@ using MessageTypeSupport_cpp =
 
 extern "C" rmw_ret_t rmw_get_serialized_message_size(
   const rosidl_message_type_support_t * type_support,
-  const rosidl_message_bounds_t * message_bounds, size_t * size)
+  const rosidl_runtime_c__Sequence__bound * message_bounds, size_t * size)
 {
   static_cast<void>(type_support);
   static_cast<void>(message_bounds);
@@ -1703,7 +1703,7 @@ fail_topic:
 
 extern "C" rmw_ret_t rmw_init_publisher_allocation(
   const rosidl_message_type_support_t * type_support,
-  const rosidl_message_bounds_t * message_bounds, rmw_publisher_allocation_t * allocation)
+  const rosidl_runtime_c__Sequence__bound * message_bounds, rmw_publisher_allocation_t * allocation)
 {
   static_cast<void>(type_support);
   static_cast<void>(message_bounds);
@@ -1970,7 +1970,7 @@ fail_topic:
 
 extern "C" rmw_ret_t rmw_init_subscription_allocation(
   const rosidl_message_type_support_t * type_support,
-  const rosidl_message_bounds_t * message_bounds, rmw_subscription_allocation_t * allocation)
+  const rosidl_runtime_c__Sequence__bound * message_bounds, rmw_subscription_allocation_t * allocation)
 {
   static_cast<void>(type_support);
   static_cast<void>(message_bounds);
