@@ -922,6 +922,8 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
     if (context->options.security_options.enforce_security == RMW_SECURITY_ENFORCEMENT_ENFORCE) {
       return RMW_RET_ERROR;
     }
+    // No security enforced, lack of support is not an error.
+    rmw_reset_error();
   }
   impl->ppant = dds_create_participant(domain_id, ppant_qos.get(), nullptr);
   if (impl->ppant < 0) {
