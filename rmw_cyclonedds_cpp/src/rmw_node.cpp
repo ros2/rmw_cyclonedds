@@ -26,6 +26,7 @@
 #include <tuple>
 #include <utility>
 #include <regex>
+#include <limits>
 
 #include "rcutils/filesystem.h"
 #include "rcutils/format_string.h"
@@ -2183,6 +2184,13 @@ static rmw_ret_t rmw_take_seq(
 
   if (count > message_info_sequence->capacity) {
     RMW_SET_ERROR_MSG("Insuffient capacity in message_info_sequence");
+    return RMW_RET_ERROR;
+  }
+
+  if (count > std::numeric_limits<uint32_t>::max()) {
+    RMW_SET_ERROR_MSG_WITH_FORMAT_STRING(
+      "Cannot take %ld samples at once, limit is %d",
+      count, std::numeric_limits<uint32_t>::max());
     return RMW_RET_ERROR;
   }
 
