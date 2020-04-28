@@ -26,6 +26,7 @@
 #include <tuple>
 #include <utility>
 #include <regex>
+#include <limits>
 
 #include "rcutils/filesystem.h"
 #include "rcutils/format_string.h"
@@ -2186,11 +2187,19 @@ static rmw_ret_t rmw_take_seq(
     return RMW_RET_ERROR;
   }
 
+  if (count > (std::numeric_limits<uint32_t>::max)()) {
+    RMW_SET_ERROR_MSG_WITH_FORMAT_STRING(
+      "Cannot take %ld samples at once, limit is %d",
+      count, (std::numeric_limits<uint32_t>::max)());
+    return RMW_RET_ERROR;
+  }
+
   CddsSubscription * sub = static_cast<CddsSubscription *>(subscription->data);
   RET_NULL(sub);
 
   std::vector<dds_sample_info_t> infos(count);
-  auto ret = dds_take(sub->enth, message_sequence->data, infos.data(), count, count);
+  auto maxsamples = static_cast<uint32_t>(count);
+  auto ret = dds_take(sub->enth, message_sequence->data, infos.data(), count, maxsamples);
 
   // Returning 0 should not be an error, as it just indicates that no messages were available.
   if (ret < 0) {
