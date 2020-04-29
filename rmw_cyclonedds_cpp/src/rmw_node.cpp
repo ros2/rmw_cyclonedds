@@ -851,11 +851,12 @@ rmw_ret_t configure_qos_for_security(
   return ret;
 #else
   (void) qos;
-  (void) security_options;
-  RMW_SET_ERROR_MSG(
-    "Security was requested but the Cyclone DDS being used does not have security "
-    "support enabled. Recompile Cyclone DDS with the '-DENABLE_SECURITY=ON' "
-    "CMake option");
+  if (security_options->enforce_security == RMW_SECURITY_ENFORCEMENT_ENFORCE) {
+    RMW_SET_ERROR_MSG(
+      "Security was requested but the Cyclone DDS being used does not have security "
+      "support enabled. Recompile Cyclone DDS with the '-DENABLE_SECURITY=ON' "
+      "CMake option");
+  }
   return RMW_RET_UNSUPPORTED;
 #endif
 }
