@@ -280,11 +280,10 @@ struct rmw_context_impl_t
   ~rmw_context_impl_t()
   {
     if (0u != this->node_count) {
-      fprintf(
-        stderr,
+      RCUTILS_SAFE_FWRITE_TO_STDERR(
         "Not all nodes were finished before finishing the context\n."
         "Ensure `rcl_node_fini` is called for all nodes before `rcl_context_fini`,"
-        "to avoid leaking.");
+        "to avoid leaking.\n");
     }
   }
 
@@ -948,7 +947,6 @@ rmw_context_impl_t::init(rmw_init_options_t * options)
       "rmw_cyclonedds_cpp", "rmw_create_node: failed to create DCPSPublication reader");
     return RMW_RET_ERROR;
   }
-
   /* Create DDS publisher/subscriber objects that will be used for all DDS writers/readers
     to be created for RMW publishers/subscriptions. */
   if ((this->dds_pub = dds_create_publisher(this->ppant, nullptr, nullptr)) < 0) {
