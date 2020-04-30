@@ -883,6 +883,7 @@ rmw_context_impl_t::init(rmw_init_options_t * options)
   std::lock_guard<std::mutex> guard(initialization_mutex);
   if (0u != this->node_count) {
     // initialization has already been done
+    this->node_count++;
     return RMW_RET_OK;
   }
 
