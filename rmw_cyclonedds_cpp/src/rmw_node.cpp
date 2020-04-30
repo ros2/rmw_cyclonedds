@@ -151,7 +151,7 @@ static rmw_subscription_t * create_subscription(
 );
 static rmw_ret_t destroy_subscription(rmw_subscription_t * subscription);
 
-static rmw_guard_condition_t * create_guard_condition(rmw_context_impl_t * impl);
+static rmw_guard_condition_t * create_guard_condition();
 static rmw_ret_t destroy_guard_condition(rmw_guard_condition_t * gc);
 
 struct CddsDomain;
@@ -580,7 +580,7 @@ static void discovery_thread(rmw_context_impl_t * impl)
   dds_entity_t ws;
   /* deleting ppant will delete waitset as well, so there is no real need to delete
      the waitset here on error, but it is more hygienic */
-  if ((ws = dds_create_waitset(impl->ppant)) < 0) {
+  if ((ws = dds_create_waitset(DDS_CYCLONEDDS_HANDLE)) < 0) {
     RCUTILS_SAFE_FWRITE_TO_STDERR(
       "ros discovery info listener thread: failed to create waitset, will shutdown ...\n");
     return;
@@ -634,7 +634,7 @@ static rmw_ret_t discovery_thread_start(rmw_context_impl_t * impl)
 {
   auto common_context = &impl->common;
   common_context->thread_is_running.store(true);
-  common_context->listener_thread_gc = create_guard_condition(impl);
+  common_context->listener_thread_gc = create_guard_condition();
   if (common_context->listener_thread_gc) {
     try {
       common_context->listener_thread = std::thread(discovery_thread, impl);
@@ -971,7 +971,7 @@ rmw_context_impl_t::init(rmw_init_options_t * options)
     return RMW_RET_ERROR;
   }
 
-  this->common.graph_guard_condition = create_guard_condition(this);
+  this->common.graph_guard_condition = create_guard_condition();
   if (this->common.graph_guard_condition == nullptr) {
     return RMW_RET_BAD_ALLOC;
   }
@@ -2611,11 +2611,11 @@ extern "C" rmw_ret_t rmw_take_event(
 ///////////                                                                   ///////////
 /////////////////////////////////////////////////////////////////////////////////////////
 
-static rmw_guard_condition_t * create_guard_condition(rmw_context_impl_t * impl)
+static rmw_guard_condition_t * create_guard_condition()
 {
   rmw_guard_condition_t * guard_condition_handle;
   auto * gcond_impl = new CddsGuardCondition();
-  if ((gcond_impl->gcondh = dds_create_guardcondition(impl->ppant)) < 0) {
+  if ((gcond_impl->gcondh = dds_create_guardcondition(DDS_CYCLONEDDS_HANDLE)) < 0) {
     RMW_SET_ERROR_MSG("failed to create guardcondition");
     goto fail_guardcond;
   }
@@ -2631,7 +2631,8 @@ fail_guardcond:
 
 extern "C" rmw_guard_condition_t * rmw_create_guard_condition(rmw_context_t * context)
 {
-  return create_guard_condition(context->impl);
+  (void)context;
+  return create_guard_condition();
 }
 
 static rmw_ret_t destroy_guard_condition(rmw_guard_condition_t * guard_condition_handle)
