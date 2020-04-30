@@ -287,6 +287,10 @@ struct rmw_context_impl_t
         "to avoid leaking.");
     }
   }
+
+private:
+  void
+  clean_up();
 };
 
 struct CddsNode
@@ -742,6 +746,21 @@ static bool check_create_domain(dds_domainid_t did, rmw_localhost_only_t localho
   }
 }
 
+static
+void
+check_destroy_domain(dds_domainid_t domain_id)
+{
+  if (domain_id != UINT32_MAX) {
+    std::lock_guard<std::mutex> lock(gcdds.domains_lock);
+    CddsDomain & dom = gcdds.domains[domain_id];
+    assert(dom.refcount > 0);
+    if (--dom.refcount == 0) {
+      static_cast<void>(dds_delete(dom.domain_handle));
+      gcdds.domains.erase(domain_id);
+    }
+  }
+}
+
 #if RMW_SUPPORT_SECURITY
 /*  Returns the full URI of a security file properly formatted for DDS  */
 bool get_security_file_URI(
@@ -863,7 +882,7 @@ rmw_ret_t
 rmw_context_impl_t::init(rmw_init_options_t * options)
 {
   std::lock_guard<std::mutex> guard(initialization_mutex);
-  if (1u != ++this->node_count) {
+  if (0u != this->node_count) {
     // initialization has already been done
     return RMW_RET_OK;
   }
@@ -880,6 +899,7 @@ rmw_context_impl_t::init(rmw_init_options_t * options)
   std::unique_ptr<dds_qos_t, std::function<void(dds_qos_t *)>>
   ppant_qos(dds_create_qos(), &dds_delete_qos);
   if (ppant_qos == nullptr) {
+    this->clean_up();
     return RMW_RET_BAD_ALLOC;
   }
   std::string user_data = std::string("enclave=") + std::string(
@@ -890,12 +910,14 @@ rmw_context_impl_t::init(rmw_init_options_t * options)
       &options->security_options) != RMW_RET_OK)
   {
     if (RMW_SECURITY_ENFORCEMENT_ENFORCE == options->security_options.enforce_security) {
+      this->clean_up();
       return RMW_RET_ERROR;
     }
   }
 
   this->ppant = dds_create_participant(this->domain_id, ppant_qos.get(), nullptr);
   if (this->ppant < 0) {
+    this->clean_up();
     RCUTILS_LOG_ERROR_NAMED(
       "rmw_cyclonedds_cpp", "rmw_create_node: failed to create DDS participant");
     return RMW_RET_ERROR;
@@ -905,6 +927,7 @@ rmw_context_impl_t::init(rmw_init_options_t * options)
   if ((this->rd_participant =
     dds_create_reader(this->ppant, DDS_BUILTIN_TOPIC_DCPSPARTICIPANT, nullptr, nullptr)) < 0)
   {
+    this->clean_up();
     RCUTILS_LOG_ERROR_NAMED(
       "rmw_cyclonedds_cpp", "rmw_create_node: failed to create DCPSParticipant reader");
     return RMW_RET_ERROR;
@@ -912,6 +935,7 @@ rmw_context_impl_t::init(rmw_init_options_t * options)
   if ((this->rd_subscription =
     dds_create_reader(this->ppant, DDS_BUILTIN_TOPIC_DCPSSUBSCRIPTION, nullptr, nullptr)) < 0)
   {
+    this->clean_up();
     RCUTILS_LOG_ERROR_NAMED(
       "rmw_cyclonedds_cpp", "rmw_create_node: failed to create DCPSSubscription reader");
     return RMW_RET_ERROR;
@@ -919,6 +943,7 @@ rmw_context_impl_t::init(rmw_init_options_t * options)
   if ((this->rd_publication =
     dds_create_reader(this->ppant, DDS_BUILTIN_TOPIC_DCPSPUBLICATION, nullptr, nullptr)) < 0)
   {
+    this->clean_up();
     RCUTILS_LOG_ERROR_NAMED(
       "rmw_cyclonedds_cpp", "rmw_create_node: failed to create DCPSPublication reader");
     return RMW_RET_ERROR;
@@ -927,11 +952,13 @@ rmw_context_impl_t::init(rmw_init_options_t * options)
   /* Create DDS publisher/subscriber objects that will be used for all DDS writers/readers
     to be created for RMW publishers/subscriptions. */
   if ((this->dds_pub = dds_create_publisher(this->ppant, nullptr, nullptr)) < 0) {
+    this->clean_up();
     RCUTILS_LOG_ERROR_NAMED(
       "rmw_cyclonedds_cpp", "rmw_create_node: failed to create DDS publisher");
     return RMW_RET_ERROR;
   }
   if ((this->dds_sub = dds_create_subscriber(this->ppant, nullptr, nullptr)) < 0) {
+    this->clean_up();
     RCUTILS_LOG_ERROR_NAMED(
       "rmw_cyclonedds_cpp", "rmw_create_node: failed to create DDS subscriber");
     return RMW_RET_ERROR;
@@ -954,6 +981,7 @@ rmw_context_impl_t::init(rmw_init_options_t * options)
     &pubsub_qos,
     &publisher_options);
   if (this->common.pub == nullptr) {
+    this->clean_up();
     return RMW_RET_ERROR;
   }
 
@@ -968,11 +996,13 @@ rmw_context_impl_t::init(rmw_init_options_t * options)
     &pubsub_qos,
     &subscription_options);
   if (this->common.sub == nullptr) {
+    this->clean_up();
     return RMW_RET_ERROR;
   }
 
   this->common.graph_guard_condition = create_guard_condition();
   if (this->common.graph_guard_condition == nullptr) {
+    this->clean_up();
     return RMW_RET_BAD_ALLOC;
   }
 
@@ -996,19 +1026,16 @@ rmw_context_impl_t::init(rmw_init_options_t * options)
   // the thread receiving data from the network may not be wise.
   rmw_ret_t ret;
   if ((ret = discovery_thread_start(this)) != RMW_RET_OK) {
+    this->clean_up();
     return ret;
   }
+  ++this->node_count;
   return RMW_RET_OK;
 }
 
-rmw_ret_t
-rmw_context_impl_t::fini()
+void
+rmw_context_impl_t::clean_up()
 {
-  std::lock_guard<std::mutex> guard(initialization_mutex);
-  if (0u != --this->node_count) {
-    // destruction shouldn't happen yet
-    return RMW_RET_OK;
-  }
   discovery_thread_stop(common);
   common.graph_cache.clear_on_change_callback();
   if (common.graph_guard_condition) {
@@ -1024,15 +1051,18 @@ rmw_context_impl_t::fini()
     RCUTILS_SAFE_FWRITE_TO_STDERR(
       "Failed to destroy domain in destructor\n");
   }
-  if (domain_id != UINT32_MAX) {
-    std::lock_guard<std::mutex> lock(gcdds.domains_lock);
-    CddsDomain & dom = gcdds.domains[domain_id];
-    assert(dom.refcount > 0);
-    if (--dom.refcount == 0) {
-      static_cast<void>(dds_delete(dom.domain_handle));
-      gcdds.domains.erase(domain_id);
-    }
+  check_destroy_domain(domain_id);
+}
+
+rmw_ret_t
+rmw_context_impl_t::fini()
+{
+  std::lock_guard<std::mutex> guard(initialization_mutex);
+  if (0u != --this->node_count) {
+    // destruction shouldn't happen yet
+    return RMW_RET_OK;
   }
+  this->clean_up();
   return RMW_RET_OK;
 }
 
@@ -1216,9 +1246,9 @@ extern "C" rmw_ret_t rmw_destroy_node(rmw_node_t * node)
 
   rmw_free(const_cast<char *>(node->name));
   rmw_free(const_cast<char *>(node->namespace_));
+  node->context->impl->fini();
   rmw_node_free(node);
   delete node_impl;
-  node->context->impl->fini();
   return result_ret;
 }
 
