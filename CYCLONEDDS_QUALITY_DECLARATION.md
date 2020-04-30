@@ -22,7 +22,7 @@ It is possible that these release categories align align with changes to the thr
 
 ### Version Stability [1.ii]
 
-The latest release of `CycloneDDS`, `0.5.1`, does not have a stable version, i.e. `>= 1.0.0`.
+The latest release of `CycloneDDS` is considered stable, but there is no documentation about whether all future releases should be considered stable.
 
 ### Public API Declaration [1.iii]
 
