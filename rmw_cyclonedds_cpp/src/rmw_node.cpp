@@ -283,7 +283,8 @@ struct rmw_context_impl_t
       fprintf(
         stderr,
         "Not all nodes were finished before finishing the context\n."
-        "Ensure `rcl_node_fini` is called for all nodes before `rcl_context_fini`, to avoid leaking.");
+        "Ensure `rcl_node_fini` is called for all nodes before `rcl_context_fini`,"
+        "to avoid leaking.");
     }
   }
 };
