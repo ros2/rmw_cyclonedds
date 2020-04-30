@@ -2690,7 +2690,8 @@ extern "C" rmw_ret_t rmw_trigger_guard_condition(
 
 extern "C" rmw_wait_set_t * rmw_create_wait_set(rmw_context_t * context, size_t max_conditions)
 {
-  (void) max_conditions;
+  (void)context;
+  (void)max_conditions;
   rmw_wait_set_t * wait_set = rmw_wait_set_allocate();
   CddsWaitset * ws = nullptr;
   RET_ALLOC_X(wait_set, goto fail_alloc_wait_set);
@@ -2717,7 +2718,7 @@ extern "C" rmw_wait_set_t * rmw_create_wait_set(rmw_context_t * context, size_t 
     std::lock_guard<std::mutex> lock(gcdds.lock);
     // Lazily create dummy guard condition
     if (gcdds.waitsets.size() == 0) {
-      if ((gcdds.gc_for_empty_waitset = dds_create_guardcondition(context->impl->ppant)) < 0) {
+      if ((gcdds.gc_for_empty_waitset = dds_create_guardcondition(DDS_CYCLONEDDS_HANDLE)) < 0) {
         RMW_SET_ERROR_MSG("failed to create guardcondition for handling empty waitsets");
         goto fail_create_dummy;
       }
