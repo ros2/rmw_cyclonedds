@@ -24,8 +24,8 @@
 
 #include "bytewise.hpp"
 #include "rmw_cyclonedds_cpp/exception.hpp"
-#include "rosidl_generator_c/string_functions.h"
-#include "rosidl_generator_c/u16string_functions.h"
+#include "rosidl_runtime_c/string_functions.h"
+#include "rosidl_runtime_c/u16string_functions.h"
 #include "rosidl_typesupport_introspection_c/identifier.h"
 #include "rosidl_typesupport_introspection_c/message_introspection.h"
 #include "rosidl_typesupport_introspection_c/service_introspection.h"
@@ -429,7 +429,7 @@ public:
 struct ROSIDLC_StringValueType : public U8StringValueType
 {
 public:
-  using type = rosidl_generator_c__String;
+  using type = rosidl_runtime_c__String;
 
   TypedSpan<const char_traits::char_type> data(const void * ptr) const override
   {
@@ -454,7 +454,7 @@ public:
 class ROSIDLC_WStringValueType : public U16StringValueType
 {
 public:
-  using type = rosidl_generator_c__U16String;
+  using type = rosidl_runtime_c__U16String;
 
   TypedSpan<const char_traits::char_type> data(const void * ptr) const override
   {

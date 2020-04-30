@@ -210,8 +210,9 @@ protected:
   void serialize_u32(AbstractCDRWritingCursor * cursor, size_t value) const
   {
     assert(value <= std::numeric_limits<uint32_t>::max());
+    auto u32_value = static_cast<uint32_t>(value);
     cursor->align(4);
-    cursor->put_bytes(&value, 4);
+    cursor->put_bytes(&u32_value, 4);
   }
 
   static size_t get_cdr_size_of_primitive(ROSIDL_TypeKind tk)

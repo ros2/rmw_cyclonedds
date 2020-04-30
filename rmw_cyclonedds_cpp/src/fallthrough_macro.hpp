@@ -1,4 +1,4 @@
-// Copyright 2019 ADLINK Technology
+// Copyright 2019 ADLINK Technology via Rover Robotics and Dan Rose
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,17 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef RMW_CYCLONEDDS_CPP__GRAPHRHC_HPP_
-#define RMW_CYCLONEDDS_CPP__GRAPHRHC_HPP_
 
-#include "dds/dds.h"
+#ifndef FALLTHROUGH_MACRO_HPP_
+#define FALLTHROUGH_MACRO_HPP_
 
-/* Introduction of custom RHC coincides with promoting the library instance & domains to entities,
-   and so with the introduction of DDS_CYCLONEDDS_HANDLE. */
-#ifdef DDS_CYCLONEDDS_HANDLE
-#include "dds/ddsc/dds_rhc.h"
+#if __cplusplus >= 201603L
+// C++17
+#define FALLTHROUGH [[fallthrough]]
+#elif __has_cpp_attribute(clang::fallthrough)
+// Clang
+#define FALLTHROUGH [[clang::fallthrough]]
+#elif __has_cpp_attribute(gnu::fallthrough)
+// gcc with gnu extension
+#define FALLTHROUGH [[gnu::fallthrough]]
+#else
+// gcc
+#define FALLTHROUGH /* FALLTHROUGH */
+#endif
 
-struct dds_rhc * graphrhc_new();
-#endif  // DDS_CYCLONEDDS_HANDLE
-
-#endif  // RMW_CYCLONEDDS_CPP__GRAPHRHC_HPP_
+#endif  // FALLTHROUGH_MACRO_HPP_

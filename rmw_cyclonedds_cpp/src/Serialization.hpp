@@ -17,7 +17,7 @@
 #include <memory>
 
 #include "TypeSupport2.hpp"
-#include "rosidl_generator_c/service_type_support_struct.h"
+#include "rosidl_runtime_c/service_type_support_struct.h"
 #include "serdata.hpp"
 
 namespace rmw_cyclonedds_cpp
