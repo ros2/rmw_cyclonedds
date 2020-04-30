@@ -2,7 +2,7 @@ This document is a declaration of software quality for the `CycloneDDS` external
 
 # `CycloneDDS` Quality Declaration
 
-The package `CycloneDDS` claims to be in the **Quality Level 4** category.
+This quality declaration claims that `CycloneDDS` is in the **Quality Level 4** category.
 
 The `CycloneDDS` project meets a substantial number of the criteria stated for software quality.
 The developers have taken many steps to ensure that `CycloneDDS` is a software product which can be relied upon, however there is a significant lack of documentation regarding the interpretation of versions, features, and testing.
