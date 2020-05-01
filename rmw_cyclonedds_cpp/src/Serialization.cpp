@@ -339,7 +339,8 @@ protected:
   }
 
   void serialize(
-    AbstractCDRWritingCursor * cursor, const void * data, const PrimitiveValueType & value_type) const
+    AbstractCDRWritingCursor * cursor, const void * data,
+    const PrimitiveValueType & value_type) const
   {
     cursor->align(get_cdr_alignof_primitive(value_type.type_kind()));
     size_t n_bytes = get_cdr_size_of_primitive(value_type.type_kind());
@@ -385,7 +386,8 @@ protected:
   }
 
   void serialize(
-    AbstractCDRWritingCursor * cursor, const void * data, const U8StringValueType & value_type) const
+    AbstractCDRWritingCursor * cursor, const void * data,
+    const U8StringValueType & value_type) const
   {
     auto str = value_type.data(data);
     serialize_u32(cursor, str.size() + 1);
@@ -395,7 +397,8 @@ protected:
   }
 
   void serialize(
-    AbstractCDRWritingCursor * cursor, const void * data, const U16StringValueType & value_type) const
+    AbstractCDRWritingCursor * cursor, const void * data,
+    const U16StringValueType & value_type) const
   {
     auto str = value_type.data(data);
     if (eversion == EncodingVersion::CDR_Legacy) {

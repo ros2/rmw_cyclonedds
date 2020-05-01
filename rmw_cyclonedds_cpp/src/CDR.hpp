@@ -8,6 +8,8 @@
 #include <cstddef>
 #include <cstdint>
 
+
+// https://www.omg.org/spec/DDS-XTypes/1.3/PDF
 #include "bytewise.hpp"
 namespace rmw_cyclonedds_cpp
 {
@@ -18,13 +20,23 @@ enum class EncodingVersion
   CDR2,
 };
 
+enum class EncodingType
+{
+  PLAIN_CDR,
+  PL_CDR,
+  PLAIN_CDR2,
+  PL_CDR2,
+  DELIMIT_CDR,
+  XML,
+};
+
 /// aka ENC_HEADER
 struct EncapsulationHeader
 {
   /// stream endianness
   endian m_endian = native_endian();
-  /// encoding version
-  EncodingVersion m_eversion;
+  /// encoding type
+  EncodingType m_enc_type;
   /// encoding options
   std::array<byte, 2> m_options;
 };
@@ -32,7 +44,7 @@ struct EncapsulationHeader
 /// aka DHEADER
 struct DelimiterHeaderData
 {
-  int32_t size;
+  uint32_t size;
 };
 
 /// aka LC

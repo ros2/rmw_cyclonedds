@@ -22,7 +22,16 @@ namespace rmw_cyclonedds_cpp
 
 void deserialize_top_level(void * destination_object, const void * data, const StructValueType * ts)
 {
-  EncapsulationHeader enc_hdr; // todo
+  EncapsulationHeader enc_hdr;
+  auto bdata = static_cast<const byte *>(data);
+  uint16_t benc_hdr = (((uint16_t)data[0])<<8) | data[1];
+  enc_hdr.m_endian = (enc_hdr & 1) ? little_endian : big_endian;
+  switch(benc_hdr ) {
+    case 0x0000:
+      enc_hdr.m_endian
+  }
+  if (bdata[0] == 1)
+  enc_hdr.m_endian =
   // todo: create deserialization stream using the encapsulation header (endian, eversion)
   // todo: pull data out of that stream, structurally recursing on data and types
 }

@@ -187,8 +187,8 @@ public:
   virtual size_t n_members() const = 0;
   virtual const Member * get_member(size_t) const = 0;
   EValueType e_value_type() const final {return EValueType::StructValueType;}
-  virtual void ctor (void * obj) const = 0;
-  virtual void dtor (void * obj) const = 0;
+  virtual void ctor(void * obj) const = 0;
+  virtual void dtor(void * obj) const = 0;
 };
 
 class ArrayValueType : public AnyValueType
@@ -247,16 +247,17 @@ public:
   }
   const void * sequence_contents(const void * ptr_to_sequence) const override
   {
-      return nullptr;
+    return nullptr;
     if (sequence_size(ptr_to_sequence) == 0) {
     }
-    return m_message_member->get_const_function(ptr_to_sequence,0);
+    return m_message_member->get_const_function(ptr_to_sequence, 0);
   }
   void * sequence_contents(void * ptr_to_sequence) const override
   {
     return m_message_member->get_function(ptr_to_sequence, 0);
   }
-  void resize(void * ptr_to_sequence, size_t new_size) const final {
+  void resize(void * ptr_to_sequence, size_t new_size) const final
+  {
     m_message_member->resize_function(ptr_to_sequence, new_size);
   }
 };
@@ -284,10 +285,10 @@ protected:
     return static_cast<ROSIDLC_SequenceObject *>(ptr_to_sequence);
   }
 
-
 public:
-  explicit ROSIDLC_SpanSequenceValueType(const rosidl_typesupport_introspection_c__MessageMember * message_member,
-                                         const AnyValueType * element_value_type)
+  explicit ROSIDLC_SpanSequenceValueType(
+    const rosidl_typesupport_introspection_c__MessageMember * message_member,
+    const AnyValueType * element_value_type)
   : m_message_member(message_member),
     m_element_value_type(element_value_type)
   {
@@ -303,12 +304,14 @@ public:
   {
     return get_value(ptr_to_sequence)->data;
   }
-  void * sequence_contents(void * ptr_to_sequence) const final {
+  void * sequence_contents(void * ptr_to_sequence) const final
+  {
     return get_value(ptr_to_sequence)->data;
   }
 
-  void resize(void * ptr_to_sequence, size_t new_size) const final {
-    if (!m_message_member->resize_function(ptr_to_sequence, new_size)){
+  void resize(void * ptr_to_sequence, size_t new_size) const final
+  {
+    if (!m_message_member->resize_function(ptr_to_sequence, new_size)) {
       throw std::runtime_error("Failed to resize");
     }
   }
@@ -446,7 +449,8 @@ public:
     return {str->data, str->size};
   }
   size_t sizeof_type() const override {return sizeof(type);}
-  void assign(void * obj, const char * s, size_t count) const final {
+  void assign(void * obj, const char * s, size_t count) const final
+  {
     rosidl_generator_c__String__assignn(static_cast<type *>(obj), s, count);
   }
 };
@@ -467,8 +471,11 @@ public:
     return {reinterpret_cast<char_traits::char_type *>(str->data), str->size};
   }
   size_t sizeof_type() const override {return sizeof(type);}
-  void assign(void * obj, const uint16_t * s, size_t count) const final {
-    rosidl_generator_c__U16String__assignn(static_cast<type *>(obj), static_cast<const uint16_t *>(s), count);
+  void assign(void * obj, const uint16_t * s, size_t count) const final
+  {
+    rosidl_generator_c__U16String__assignn(
+      static_cast<type *>(obj),
+      static_cast<const uint16_t *>(s), count);
   }
 };
 
@@ -489,8 +496,9 @@ public:
   }
   size_t sizeof_type() const override {return sizeof(type);}
 
-  void assign(void * obj, const char * s, size_t count) const final {
-    static_cast<type *>(obj)->assign(s,count);
+  void assign(void * obj, const char * s, size_t count) const final
+  {
+    static_cast<type *>(obj)->assign(s, count);
   }
 };
 
@@ -510,11 +518,12 @@ public:
     return {str->data(), str->size()};
   }
   size_t sizeof_type() const override {return sizeof(type);}
-  void assign(void * obj, const uint16_t * s, size_t count) const final {
+  void assign(void * obj, const uint16_t * s, size_t count) const final
+  {
 //    std::u16string x;
 //    uint16_t * y;
 //    x.assign(y,y+4);
-    static_cast<type *>(obj)->assign(s,s+count);
+    static_cast<type *>(obj)->assign(s, s + count);
   }
 };
 
