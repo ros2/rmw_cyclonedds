@@ -11,7 +11,9 @@
 
   <depend>cyclonedds</depend>
   <depend>rcutils</depend>
+  <depend>rcpputils</depend>
   <depend>rmw</depend>
+  <depend>rmw_dds_common</depend>
   <depend>rosidl_runtime_c</depend>
   <depend>rosidl_typesupport_introspection_c</depend>
   <depend>rosidl_typesupport_introspection_cpp</depend>
