@@ -1470,7 +1470,7 @@ static std::string make_fqtopic(
   bool avoid_ros_namespace_conventions)
 {
   if (avoid_ros_namespace_conventions) {
-    return std::string(topic_name) + "__" + std::string(suffix);
+    return std::string(topic_name) + std::string(suffix);
   } else {
     return std::string(prefix) + std::string(topic_name) + std::string(suffix);
   }
