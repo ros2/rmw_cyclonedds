@@ -26,6 +26,5 @@ jobs:
       with:
         package-name: |
           rcl
-          rclcpp
-          rclpy
+          rmw_implementation
         vcs-repo-file-url: https://raw.githubusercontent.com/ros2/ros2/${{ matrix.rosdistro }}/ros2.repos
