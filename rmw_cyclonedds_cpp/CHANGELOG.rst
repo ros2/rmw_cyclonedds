@@ -2,8 +2,41 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-0.5.1 (2020-03-12)
+0.6.0 (2020-05-04)
+------------------
+* Fix how topic name should be when not using ros topic name conventions (`#177 <https://github.com/ros2/rmw_cyclonedds/issues/177>`_)
+* Initialize participant on first use and destroy participant after last node is destroyed (`#176 <https://github.com/ros2/rmw_cyclonedds/issues/176>`_)
+* Fix error message (`#175 <https://github.com/ros2/rmw_cyclonedds/issues/175>`_)
+  Only generate "Recompile with '-DENABLESECURITY=ON' error when
+  ROS_SECURITY_STRATEGY="Enforce"
+* Cast size_t to uint32_t explicitly (`#171 <https://github.com/ros2/rmw_cyclonedds/issues/171>`_)
+* Rename rosidl_message_bounds_t (`#166 <https://github.com/ros2/rmw_cyclonedds/issues/166>`_)
+* Add support for taking a sequence of messages (`#148 <https://github.com/ros2/rmw_cyclonedds/issues/148>`_)
+* Implement with_info version of take (`#161 <https://github.com/ros2/rmw_cyclonedds/issues/161>`_)
+* Fill in message_info timestamps (`#163 <https://github.com/ros2/rmw_cyclonedds/issues/163>`_)
+* Fix build warnings (`#162 <https://github.com/ros2/rmw_cyclonedds/issues/162>`_)
+* Switch to one participant per context model (`#145 <https://github.com/ros2/rmw_cyclonedds/issues/145>`_)
+* Fix serialization on non-32-bit, big-endian systems (`#159 <https://github.com/ros2/rmw_cyclonedds/issues/159>`_)
+* Correct fallthrough macro (`#154 <https://github.com/ros2/rmw_cyclonedds/issues/154>`_)
+* Register RMW output filters.
+* Implement safer align\_ function (`#141 <https://github.com/ros2/rmw_cyclonedds/issues/141>`_)
+* Make case fallthrough explicit (`#153 <https://github.com/ros2/rmw_cyclonedds/issues/153>`_)
+* Implement rmw_set_log_severity (`#149 <https://github.com/ros2/rmw_cyclonedds/issues/149>`_)
+* security-context -> enclave (`#146 <https://github.com/ros2/rmw_cyclonedds/issues/146>`_)
+* Rename rosidl_generator_c namespace to rosidl_runtime_c (`#150 <https://github.com/ros2/rmw_cyclonedds/issues/150>`_)
+* Added rosidl_runtime c and cpp dependencies (`#138 <https://github.com/ros2/rmw_cyclonedds/issues/138>`_)
+* Remove cyclonedds_cmake_module (`#139 <https://github.com/ros2/rmw_cyclonedds/issues/139>`_)
+* Enable use of DDS security (`#123 <https://github.com/ros2/rmw_cyclonedds/issues/123>`_)
+* Clean up package xml dependencies (`#132 <https://github.com/ros2/rmw_cyclonedds/issues/132>`_)
+* API changes to sync with one Participant per Context change in rmw_fastrtps (`#106 <https://github.com/ros2/rmw_cyclonedds/issues/106>`_)
+* Support for ON_REQUESTED_INCOMPATIBLE_QOS and ON_OFFERED_INCOMPATIBLE_QOS events (`#125 <https://github.com/ros2/rmw_cyclonedds/issues/125>`_)
+* Uncrustify (`#124 <https://github.com/ros2/rmw_cyclonedds/issues/124>`_)
+* Prevent undefined behavior when serializing empty vector (`#122 <https://github.com/ros2/rmw_cyclonedds/issues/122>`_)
+* Add rmw\_*_event_init() functions (`#115 <https://github.com/ros2/rmw_cyclonedds/issues/115>`_)
+* Contributors: Alejandro Hernández Cordero, Dan Rose, Dirk Thomas, Erik Boasson, Ingo Lütkebohle, Ivan Santiago Paunovic, Karsten Knese, Miaofei Mei, Michael Carroll, Michel Hidalgo, Mikael Arguedas, Sid Faber, dodsonmg
 
+0.5.1 (2020-03-12)
+------------------
 * Use a list instead of a set for node names list
 * Update for changes on Cyclone DDS security branch
 * Fix leak in client/service topic error handling
@@ -27,7 +60,7 @@ Changelog for package rmw_cyclonedds_cpp
 * Serialize into initialized memory, not vector (`#75 <https://github.com/ros2/rmw_cyclonedds/issues/75>`_)
 * Rework serialization (`#42 <https://github.com/ros2/rmw_cyclonedds/issues/42>`_)
 * Use rcutils_get_env() instead of getenv() (`#71 <https://github.com/ros2/rmw_cyclonedds/issues/71>`_) (`#72 <https://github.com/ros2/rmw_cyclonedds/issues/72>`_)
-* Contributors: Erik Boasson, Dan Rose, Ivan Santiago Paunovic, Dirk Thomas, Dennis Potman, Emerson Knapp, Michael Carroll 
+* Contributors: Erik Boasson, Dan Rose, Ivan Santiago Paunovic, Dirk Thomas, Dennis Potman, Emerson Knapp, Michael Carroll
 
 0.4.4 (2019-11-19)
 ------------------
@@ -39,7 +72,7 @@ Changelog for package rmw_cyclonedds_cpp
 * Address "Precondition not met" on rmw_create_node (`#65 <https://github.com/ros2/rmw_cyclonedds/issues/65>`_) (`#66 <https://github.com/ros2/rmw_cyclonedds/issues/66>`_)
 * Fix dashing breakage (`#64 <https://github.com/ros2/rmw_cyclonedds/issues/64>`_)
 * Support localhost-only communications (`#60 <https://github.com/ros2/rmw_cyclonedds/issues/60>`_)
-* Contributors: eboasson 
+* Contributors: Erik Boasson
 
 0.4.2 (2019-11-01)
 ------------------
