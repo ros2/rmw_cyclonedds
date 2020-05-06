@@ -187,6 +187,8 @@ public:
   virtual size_t n_members() const = 0;
   virtual const Member * get_member(size_t) const = 0;
   EValueType e_value_type() const final {return EValueType::StructValueType;}
+  virtual void ctor(void * obj) const = 0;
+  virtual void dtor(void * obj) const = 0;
 };
 
 class ArrayValueType : public AnyValueType
@@ -214,48 +216,58 @@ public:
   virtual const AnyValueType * element_value_type() const = 0;
   virtual size_t sequence_size(const void * ptr_to_sequence) const = 0;
   virtual const void * sequence_contents(const void * ptr_to_sequence) const = 0;
+  virtual void * sequence_contents(void * ptr_to_sequence) const = 0;
   EValueType e_value_type() const final {return EValueType::SpanSequenceValueType;}
+
+  virtual void resize(void * ptr_to_sequence, size_t new_size) const = 0;
 };
 
-class CallbackSpanSequenceValueType : public SpanSequenceValueType
+class ROSIDLCPP_SpanSequenceValueType : public SpanSequenceValueType
 {
 protected:
+  const rosidl_typesupport_introspection_cpp::MessageMember * m_message_member;
   const AnyValueType * m_element_value_type;
-  std::function<size_t(const void *)> m_size_function;
-  std::function<const void * (const void *, size_t index)> m_get_const_function;
 
 public:
-  CallbackSpanSequenceValueType(
-    const AnyValueType * element_value_type, decltype(m_size_function) size_function,
-    decltype(m_get_const_function) get_const_function)
-  : m_element_value_type(element_value_type),
-    m_size_function(size_function),
-    m_get_const_function(get_const_function)
+  ROSIDLCPP_SpanSequenceValueType(
+    const rosidl_typesupport_introspection_cpp::MessageMember * message_member,
+    const AnyValueType * element_value_type)
+  : m_message_member(message_member),
+    m_element_value_type(element_value_type)
   {
     assert(m_element_value_type);
-    assert(size_function);
-    assert(get_const_function);
+    assert(m_message_member);
   }
 
   size_t sizeof_type() const override {throw std::logic_error("not implemented");}
   const AnyValueType * element_value_type() const override {return m_element_value_type;}
   size_t sequence_size(const void * ptr_to_sequence) const override
   {
-    return m_size_function(ptr_to_sequence);
+    return m_message_member->size_function(ptr_to_sequence);
   }
   const void * sequence_contents(const void * ptr_to_sequence) const override
   {
+    return nullptr;
     if (sequence_size(ptr_to_sequence) == 0) {
-      return nullptr;
     }
-    return m_get_const_function(ptr_to_sequence, 0);
+    return m_message_member->get_const_function(ptr_to_sequence, 0);
+  }
+  void * sequence_contents(void * ptr_to_sequence) const override
+  {
+    return m_message_member->get_function(ptr_to_sequence, 0);
+  }
+  void resize(void * ptr_to_sequence, size_t new_size) const final
+  {
+    m_message_member->resize_function(ptr_to_sequence, new_size);
   }
 };
 
 class ROSIDLC_SpanSequenceValueType : public SpanSequenceValueType
 {
 protected:
+  const rosidl_typesupport_introspection_c__MessageMember * m_message_member;
   const AnyValueType * m_element_value_type;
+
   struct ROSIDLC_SequenceObject
   {
     void * data;
@@ -268,9 +280,17 @@ protected:
     return static_cast<const ROSIDLC_SequenceObject *>(ptr_to_sequence);
   }
 
+  const ROSIDLC_SequenceObject * get_value(void * ptr_to_sequence) const
+  {
+    return static_cast<ROSIDLC_SequenceObject *>(ptr_to_sequence);
+  }
+
 public:
-  explicit ROSIDLC_SpanSequenceValueType(const AnyValueType * element_value_type)
-  : m_element_value_type(element_value_type)
+  explicit ROSIDLC_SpanSequenceValueType(
+    const rosidl_typesupport_introspection_c__MessageMember * message_member,
+    const AnyValueType * element_value_type)
+  : m_message_member(message_member),
+    m_element_value_type(element_value_type)
   {
   }
 
@@ -283,6 +303,17 @@ public:
   const void * sequence_contents(const void * ptr_to_sequence) const final
   {
     return get_value(ptr_to_sequence)->data;
+  }
+  void * sequence_contents(void * ptr_to_sequence) const final
+  {
+    return get_value(ptr_to_sequence)->data;
+  }
+
+  void resize(void * ptr_to_sequence, size_t new_size) const final
+  {
+    if (!m_message_member->resize_function(ptr_to_sequence, new_size)) {
+      throw std::runtime_error("Failed to resize");
+    }
   }
 };
 
@@ -380,18 +411,22 @@ class U8StringValueType : public AnyValueType
 {
 public:
   using char_traits = std::char_traits<char>;
+  EValueType e_value_type() const final {return EValueType::U8StringValueType;}
+  // member functions
   virtual TypedSpan<char_traits::char_type> data(void *) const = 0;
   virtual TypedSpan<const char_traits::char_type> data(const void *) const = 0;
-  EValueType e_value_type() const final {return EValueType::U8StringValueType;}
+  virtual void assign(void * obj, const char * s, size_t count) const = 0;
 };
 
 class U16StringValueType : public AnyValueType
 {
 public:
   using char_traits = std::char_traits<char16_t>;
+  EValueType e_value_type() const final {return EValueType::U16StringValueType;}
+  // member functions
   virtual TypedSpan<char_traits::char_type> data(void *) const = 0;
   virtual TypedSpan<const char_traits::char_type> data(const void *) const = 0;
-  EValueType e_value_type() const final {return EValueType::U16StringValueType;}
+  virtual void assign(void * obj, const uint16_t * s, size_t count) const = 0;
 };
 
 struct ROSIDLC_StringValueType : public U8StringValueType
@@ -414,6 +449,10 @@ public:
     return {str->data, str->size};
   }
   size_t sizeof_type() const override {return sizeof(type);}
+  void assign(void * obj, const char * s, size_t count) const final
+  {
+    rosidl_generator_c__String__assignn(static_cast<type *>(obj), s, count);
+  }
 };
 
 class ROSIDLC_WStringValueType : public U16StringValueType
@@ -432,6 +471,12 @@ public:
     return {reinterpret_cast<char_traits::char_type *>(str->data), str->size};
   }
   size_t sizeof_type() const override {return sizeof(type);}
+  void assign(void * obj, const uint16_t * s, size_t count) const final
+  {
+    rosidl_generator_c__U16String__assignn(
+      static_cast<type *>(obj),
+      static_cast<const uint16_t *>(s), count);
+  }
 };
 
 class ROSIDLCPP_StringValueType : public U8StringValueType
@@ -450,6 +495,11 @@ public:
     return {str->data(), str->size()};
   }
   size_t sizeof_type() const override {return sizeof(type);}
+
+  void assign(void * obj, const char * s, size_t count) const final
+  {
+    static_cast<type *>(obj)->assign(s, count);
+  }
 };
 
 class ROSIDLCPP_U16StringValueType : public U16StringValueType
@@ -468,6 +518,13 @@ public:
     return {str->data(), str->size()};
   }
   size_t sizeof_type() const override {return sizeof(type);}
+  void assign(void * obj, const uint16_t * s, size_t count) const final
+  {
+//    std::u16string x;
+//    uint16_t * y;
+//    x.assign(y,y+4);
+    static_cast<type *>(obj)->assign(s, s + count);
+  }
 };
 
 template<typename UnaryFunction>

@@ -24,7 +24,7 @@
 
 namespace rmw_cyclonedds_cpp
 {
-class BaseCDRWriter;
+class AbstractCDRWriter;
 }
 
 struct CddsTypeSupport
@@ -42,7 +42,7 @@ struct sertopic_rmw : ddsi_sertopic
   std::string cpp_type_name;
   std::string cpp_name_type_name;
 #endif
-  std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRWriter> cdr_writer;
+  std::unique_ptr<const rmw_cyclonedds_cpp::AbstractCDRWriter> cdr_writer;
 };
 
 class serdata_rmw : public ddsi_serdata

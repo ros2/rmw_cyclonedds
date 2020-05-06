@@ -27,103 +27,15 @@
 #include <utility>
 #include <vector>
 
+#include "CDR.hpp"
+#include "CDRCursor.hpp"
 #include "TypeSupport2.hpp"
 #include "bytewise.hpp"
 
 namespace rmw_cyclonedds_cpp
 {
 
-struct CDRCursor
-{
-  CDRCursor() = default;
-  ~CDRCursor() = default;
-
-  // don't want to accidentally copy
-  explicit CDRCursor(CDRCursor const &) = delete;
-  void operator=(CDRCursor const & x) = delete;
-
-  // virtual functions to be implemented
-  // get the cursor's current offset.
-  virtual size_t offset() const = 0;
-  // advance the cursor.
-  virtual void advance(size_t n_bytes) = 0;
-  // Copy bytes to the current cursor location (if needed) and advance the cursor
-  virtual void put_bytes(const void * data, size_t size) = 0;
-  virtual bool ignores_data() const = 0;
-  // Move the logical origin this many places
-  virtual void rebase(ptrdiff_t relative_origin) = 0;
-
-  void align(size_t n_bytes)
-  {
-    assert(n_bytes > 0);
-    size_t start_offset = offset();
-    if (n_bytes == 1 || start_offset % n_bytes == 0) {
-      return;
-    }
-    advance(n_bytes - start_offset % n_bytes);
-    assert(offset() - start_offset < n_bytes);
-    assert(offset() % n_bytes == 0);
-  }
-  ptrdiff_t operator-(const CDRCursor & other) const
-  {
-    return static_cast<ptrdiff_t>(offset()) - static_cast<ptrdiff_t>(other.offset());
-  }
-};
-
-struct SizeCursor : public CDRCursor
-{
-  SizeCursor()
-  : SizeCursor(0) {}
-  explicit SizeCursor(size_t initial_offset)
-  : m_offset(initial_offset) {}
-  explicit SizeCursor(CDRCursor & c)
-  : m_offset(c.offset()) {}
-
-  size_t m_offset;
-  size_t offset() const final {return m_offset;}
-  void advance(size_t n_bytes) final {m_offset += n_bytes;}
-  void put_bytes(const void *, size_t n_bytes) final {advance(n_bytes);}
-  bool ignores_data() const final {return true;}
-  void rebase(ptrdiff_t relative_origin) override
-  {
-    // we're moving the *origin* so this has to change in the *opposite* direction
-    m_offset -= relative_origin;
-  }
-};
-
-struct DataCursor : public CDRCursor
-{
-  const void * origin;
-  void * position;
-
-  explicit DataCursor(void * position)
-  : origin(position), position(position) {}
-
-  size_t offset() const final {return (const byte *)position - (const byte *)origin;}
-  void advance(size_t n_bytes) final
-  {
-    std::memset(position, '\0', n_bytes);
-    position = byte_offset(position, n_bytes);
-  }
-  void put_bytes(const void * bytes, size_t n_bytes) final
-  {
-    if (n_bytes == 0) {
-      return;
-    }
-    std::memcpy(position, bytes, n_bytes);
-    position = byte_offset(position, n_bytes);
-  }
-  bool ignores_data() const final {return false;}
-  void rebase(ptrdiff_t relative_origin) final {origin = byte_offset(origin, relative_origin);}
-};
-
-enum class EncodingVersion
-{
-  CDR_Legacy,
-  CDR1,
-};
-
-class CDRWriter : public BaseCDRWriter
+class CDRWriter : public AbstractCDRWriter
 {
 public:
   struct CacheKey
@@ -208,7 +120,7 @@ public:
   }
   size_t get_serialized_size(const void * data) const override
   {
-    SizeCursor cursor;
+    CDRDummyWritingCursor cursor;
 
     serialize_top_level(&cursor, data);
     return cursor.offset();
@@ -216,14 +128,14 @@ public:
 
   void serialize(void * dest, const void * data) const override
   {
-    DataCursor cursor(dest);
+    CDRWritingCursor cursor(dest);
     serialize_top_level(&cursor, data);
   }
 
   size_t get_serialized_size(
     const cdds_request_wrapper_t & request) const override
   {
-    SizeCursor cursor;
+    CDRDummyWritingCursor cursor;
     serialize_top_level(&cursor, request);
     return cursor.offset();
   }
@@ -231,12 +143,11 @@ public:
   void serialize(
     void * dest, const cdds_request_wrapper_t & request) const override
   {
-    DataCursor cursor(dest);
+    CDRWritingCursor cursor(dest);
     serialize_top_level(&cursor, request);
   }
 
-  void serialize_top_level(
-    CDRCursor * cursor, const void * data) const
+  void serialize_top_level(AbstractCDRWritingCursor * cursor, const void * data) const
   {
     put_rtps_header(cursor);
 
@@ -257,7 +168,7 @@ public:
   }
 
   void serialize_top_level(
-    CDRCursor * cursor, const cdds_request_wrapper_t & request) const
+    AbstractCDRWritingCursor * cursor, const cdds_request_wrapper_t & request) const
   {
     put_rtps_header(cursor);
     if (eversion == EncodingVersion::CDR_Legacy) {
@@ -274,7 +185,7 @@ public:
   }
 
 protected:
-  void put_rtps_header(CDRCursor * cursor) const
+  void put_rtps_header(AbstractCDRWritingCursor * cursor) const
   {
     // beginning of message
     char eversion_byte;
@@ -296,7 +207,7 @@ protected:
     cursor->put_bytes(rtps_header.data(), rtps_header.size());
   }
 
-  void serialize_u32(CDRCursor * cursor, size_t value) const
+  void serialize_u32(AbstractCDRWritingCursor * cursor, size_t value) const
   {
     assert(value <= std::numeric_limits<uint32_t>::max());
     auto u32_value = static_cast<uint32_t>(value);
@@ -427,7 +338,9 @@ protected:
     return sizeof_ < max_align ? sizeof_ : max_align;
   }
 
-  void serialize(CDRCursor * cursor, const void * data, const PrimitiveValueType & value_type) const
+  void serialize(
+    AbstractCDRWritingCursor * cursor, const void * data,
+    const PrimitiveValueType & value_type) const
   {
     cursor->align(get_cdr_alignof_primitive(value_type.type_kind()));
     size_t n_bytes = get_cdr_size_of_primitive(value_type.type_kind());
@@ -472,7 +385,9 @@ protected:
     }
   }
 
-  void serialize(CDRCursor * cursor, const void * data, const U8StringValueType & value_type) const
+  void serialize(
+    AbstractCDRWritingCursor * cursor, const void * data,
+    const U8StringValueType & value_type) const
   {
     auto str = value_type.data(data);
     serialize_u32(cursor, str.size() + 1);
@@ -481,7 +396,9 @@ protected:
     cursor->put_bytes(&terminator, 1);
   }
 
-  void serialize(CDRCursor * cursor, const void * data, const U16StringValueType & value_type) const
+  void serialize(
+    AbstractCDRWritingCursor * cursor, const void * data,
+    const U16StringValueType & value_type) const
   {
     auto str = value_type.data(data);
     if (eversion == EncodingVersion::CDR_Legacy) {
@@ -499,14 +416,15 @@ protected:
     }
   }
 
-  void serialize(CDRCursor * cursor, const void * data, const ArrayValueType & value_type) const
+  void serialize(
+    AbstractCDRWritingCursor * cursor, const void * data, const ArrayValueType & value_type) const
   {
     serialize_many(
       cursor, value_type.get_data(data), value_type.array_size(), value_type.element_value_type());
   }
 
   void serialize(
-    CDRCursor * cursor, const void * data,
+    AbstractCDRWritingCursor * cursor, const void * data,
     const SpanSequenceValueType & value_type) const
   {
     size_t count = value_type.sequence_size(data);
@@ -516,7 +434,7 @@ protected:
   }
 
   void serialize(
-    CDRCursor * cursor, const void * data,
+    AbstractCDRWritingCursor * cursor, const void * data,
     const BoolVectorValueType & value_type) const
   {
     size_t count = value_type.size(data);
@@ -531,7 +449,8 @@ protected:
     }
   }
 
-  void serialize(CDRCursor * cursor, const void * data, const AnyValueType * value_type) const
+  void serialize(
+    AbstractCDRWritingCursor * cursor, const void * data, const AnyValueType * value_type) const
   {
     if (lookup_trivially_serialized(cursor->offset(), value_type)) {
       cursor->put_bytes(data, value_type->sizeof_type());
@@ -563,7 +482,7 @@ protected:
   }
 
   void serialize_many(
-    CDRCursor * cursor, const void * data, size_t count,
+    AbstractCDRWritingCursor * cursor, const void * data, size_t count,
     const AnyValueType * vt) const
   {
     // nothing to do; not even alignment
@@ -597,7 +516,7 @@ protected:
   }
 
   void serialize(
-    CDRCursor * cursor, const void * struct_data,
+    AbstractCDRWritingCursor * cursor, const void * struct_data,
     const StructValueType & struct_info) const
   {
     for (size_t i = 0; i < struct_info.n_members(); i++) {
@@ -609,7 +528,7 @@ protected:
   }
 };
 
-std::unique_ptr<BaseCDRWriter> make_cdr_writer(std::unique_ptr<StructValueType> value_type)
+std::unique_ptr<AbstractCDRWriter> make_cdr_writer(std::unique_ptr<StructValueType> value_type)
 {
   return std::make_unique<CDRWriter>(std::move(value_type));
 }
