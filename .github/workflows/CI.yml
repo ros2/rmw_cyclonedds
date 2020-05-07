@@ -17,7 +17,9 @@ jobs:
     - name: Build and test ROS
       uses: ros-tooling/action-ros-ci@0.0.16
       with:
-        package-name: rmw_cyclonedds_cpp
+        package-name: >
+          rmw_cyclonedds_cpp
+          rmw_implementation
         vcs-repo-file-url: >
           https://raw.githubusercontent.com/ros2/ros2/${{ matrix.rosdistro }}/ros2.repos
           https://raw.githubusercontent.com/${{github.repository}}/${{github.sha}}/.github/resources/suppress_other_rmw.repos
