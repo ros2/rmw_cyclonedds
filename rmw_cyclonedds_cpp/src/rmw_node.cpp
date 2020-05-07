@@ -3045,7 +3045,6 @@ static rmw_ret_t rmw_take_response_request(
       }
     }
   }
-  fprintf(stderr, "taken is false !!!\n");
   *taken = false;
   return RMW_RET_OK;
 }
