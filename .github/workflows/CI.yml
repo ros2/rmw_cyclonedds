@@ -9,6 +9,12 @@ jobs:
           os: [ubuntu-18.04, macOS-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
+    - if: runner.os == 'Windows'
+      uses: actions/cache@v1
+      with:
+        path: ${{env.TEMP}}/chocolatey
+        key: ${{matrix.os}}-chocolatey-${{github.job_id}}
+        restore-keys: ${{matrix.os}}-chocolatey-
     - if: runner.os == 'Linux'
       # azure ubuntu repo can be flaky so add an alternate source
       run: sed -e 's/azure.archive.ubuntu.com/us.archive.ubuntu.com/g' -e t -e d /etc/apt/sources.list | sudo tee /etc/apt/sources.list.d/nonazure.list
