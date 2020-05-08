@@ -1683,7 +1683,7 @@ static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qo
       case DDS_LIVELINESS_AUTOMATIC:
         qos_policies->liveliness = RMW_QOS_POLICY_LIVELINESS_AUTOMATIC;
         break;
-      case DDS_LIVELINESS_MANUAL_BY_TOPIC:
+      case DDS_LIVELINESS_MANUAL_BY_PARTICIPANT:
         qos_policies->liveliness = RMW_QOS_POLICY_LIVELINESS_UNKNOWN;
         break;
       case DDS_LIVELINESS_MANUAL_BY_TOPIC:
