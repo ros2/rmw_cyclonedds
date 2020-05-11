@@ -1560,6 +1560,8 @@ static dds_qos_t * create_readwrite_qos(
     case RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC:
       dds_qset_liveliness(qos, DDS_LIVELINESS_MANUAL_BY_TOPIC, ldur);
       break;
+    default:
+      rmw_cyclonedds_cpp::unreachable();
   }
   if (ignore_local_publications) {
     dds_qset_ignorelocal(qos, DDS_IGNORELOCAL_PARTICIPANT);
