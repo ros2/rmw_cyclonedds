@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.7.0 (2020-05-12)
+------------------
 * Remove API related to manual by node liveliness. (`#178 <https://github.com/ros2/rmw_cyclonedds/issues/178>`_)
 * Contributors: Ivan Santiago Paunovic
 
