@@ -1135,15 +1135,6 @@ extern "C" rmw_ret_t rmw_context_fini(rmw_context_t * context)
 ///////////                                                                   ///////////
 /////////////////////////////////////////////////////////////////////////////////////////
 
-extern "C" rmw_ret_t rmw_node_assert_liveliness(const rmw_node_t * node)
-{
-  RET_WRONG_IMPLID(node);
-  if (dds_assert_liveliness(node->context->impl->ppant) != DDS_RETCODE_OK) {
-    return RMW_RET_ERROR;
-  }
-  return RMW_RET_OK;
-}
-
 extern "C" rmw_node_t * rmw_create_node(
   rmw_context_t * context, const char * name,
   const char * namespace_, size_t domain_id,
@@ -1566,12 +1557,11 @@ static dds_qos_t * create_readwrite_qos(
     case RMW_QOS_POLICY_LIVELINESS_UNKNOWN:
       dds_qset_liveliness(qos, DDS_LIVELINESS_AUTOMATIC, ldur);
       break;
-    case RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_NODE:
-      dds_qset_liveliness(qos, DDS_LIVELINESS_MANUAL_BY_PARTICIPANT, ldur);
-      break;
     case RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC:
       dds_qset_liveliness(qos, DDS_LIVELINESS_MANUAL_BY_TOPIC, ldur);
       break;
+    default:
+      rmw_cyclonedds_cpp::unreachable();
   }
   if (ignore_local_publications) {
     dds_qset_ignorelocal(qos, DDS_IGNORELOCAL_PARTICIPANT);
@@ -1696,7 +1686,7 @@ static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qo
         qos_policies->liveliness = RMW_QOS_POLICY_LIVELINESS_AUTOMATIC;
         break;
       case DDS_LIVELINESS_MANUAL_BY_PARTICIPANT:
-        qos_policies->liveliness = RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_NODE;
+        qos_policies->liveliness = RMW_QOS_POLICY_LIVELINESS_UNKNOWN;
         break;
       case DDS_LIVELINESS_MANUAL_BY_TOPIC:
         qos_policies->liveliness = RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC;
