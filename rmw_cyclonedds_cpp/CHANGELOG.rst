@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Remove API related to manual by node liveliness. (`#178 <https://github.com/ros2/rmw_cyclonedds/issues/178>`_)
+* Contributors: Ivan Santiago Paunovic
+
 0.6.0 (2020-05-04)
 ------------------
 * Fix how topic name should be when not using ros topic name conventions (`#177 <https://github.com/ros2/rmw_cyclonedds/issues/177>`_)
