@@ -263,8 +263,8 @@ public:
     if (eversion == EncodingVersion::CDR_Legacy) {
       cursor->rebase(+4);
     }
-    cursor->put_bytes(&request.header.guid, sizeof(request.header.guid));
-    cursor->put_bytes(&request.header.seq, sizeof(request.header.seq));
+    cursor->put_bytes(&request.header.writer_guid, sizeof(request.header.writer_guid));
+    cursor->put_bytes(&request.header.sequence_number, sizeof(request.header.sequence_number));
 
     serialize(cursor, request.data, m_root_value_type.get());
 

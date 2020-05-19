@@ -17,6 +17,8 @@
 #include <memory>
 #include <string>
 
+#include "rmw/rmw.h"  // needed for rmw_request_id_t
+
 #include "TypeSupport2.hpp"
 #include "bytewise.hpp"
 #include "dds/ddsi/ddsi_serdata.h"
@@ -60,15 +62,9 @@ public:
   void * data() const {return m_data.get();}
 };
 
-typedef struct cdds_request_header
-{
-  uint64_t guid;
-  int64_t seq;
-} cdds_request_header_t;
-
 typedef struct cdds_request_wrapper
 {
-  cdds_request_header_t header;
+  rmw_request_id_t header;
   void * data;
 } cdds_request_wrapper_t;
 
