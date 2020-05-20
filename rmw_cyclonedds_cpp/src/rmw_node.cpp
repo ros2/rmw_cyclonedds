@@ -3124,6 +3124,18 @@ static rmw_ret_t rmw_send_response_request(
   }
 }
 
+static bool check_for_response_reader(dds_entity_t request_reader, dds_entity_t response_writer)
+{
+  dds_subscription_matched_status sm;
+  dds_publication_matched_status pm;
+  if (dds_get_subscription_matched_status(request_reader, &sm) < 0 ||
+    dds_get_publication_matched_status(response_writer, &pm) < 0)
+  {
+    return RMW_RET_ERROR;
+  }
+  return pm.current_count == sm.current_count;
+}
+
 extern "C" rmw_ret_t rmw_send_response(
   const rmw_service_t * service,
   rmw_request_id_t * request_header, void * ros_response)
@@ -3135,6 +3147,16 @@ extern "C" rmw_ret_t rmw_send_response(
   cdds_request_header_t header;
   memcpy(&header.guid, request_header->writer_guid, sizeof(header.guid));
   header.seq = request_header->sequence_number;
+  // if the number of writers matching our request reader equals the number
+  // of readers matching our response writer, we have a pretty decent claim
+  // to have discovered this client's response reader.
+  //
+  // it is pretty horrid ... but blocking the service is the only option if
+  // the client is unable to determine that it has been fully discovered by
+  // the service.
+  while (!check_for_response_reader(info->service.sub->enth, info->service.pub->enth)) {
+    dds_sleepfor(DDS_MSECS(10));
+  }
   return rmw_send_response_request(&info->service, header, ros_response);
 }
 
