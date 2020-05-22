@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
+#include <iomanip>
 #include <map>
 #include <set>
 #include <functional>
@@ -244,6 +245,7 @@ struct rmw_context_impl_t
   rmw_dds_common::Context common;
   dds_domainid_t domain_id;
   dds_entity_t ppant;
+  rmw_gid_t ppant_gid;
 
   /* handles for built-in topic readers */
   dds_entity_t rd_participant;
@@ -258,8 +260,12 @@ struct rmw_context_impl_t
   size_t node_count{0};
   std::mutex initialization_mutex;
 
+  /* suffix for GUIDs to construct unique client/service ids
+     (protected by initialization_mutex) */
+  uint32_t client_service_id;
+
   rmw_context_impl_t()
-  : common(), domain_id(UINT32_MAX), ppant(0)
+  : common(), domain_id(UINT32_MAX), ppant(0), client_service_id(0)
   {
     /* destructor relies on these being initialized properly */
     common.thread_is_running.store(false);
@@ -308,10 +314,23 @@ struct CddsSubscription : CddsEntity
   dds_entity_t rdcondh;
 };
 
+struct client_service_id_t
+{
+  // strangely, the writer_guid in a request id is smaller than the rmw_gid_t
+  // cpplint erroneously complains that
+  //
+  //   sizeof((reinterpret_cast<rmw_request_id_t *>(0))->writer_guid)
+  //
+  // is not a constant, and the 16 is a hard-coded magic number in
+  // rmw_request_id_t ...
+  uint8_t data[16];
+};
+
 struct CddsCS
 {
   CddsPublisher * pub;
   CddsSubscription * sub;
+  client_service_id_t id;
 };
 
 struct CddsClient
@@ -489,6 +508,33 @@ static void get_entity_gid(dds_entity_t h, rmw_gid_t & gid)
   convert_guid_to_gid(guid, gid);
 }
 
+static std::map<std::string, std::vector<uint8_t>> parse_user_data(const dds_qos_t * qos)
+{
+  void * ud;
+  size_t udsz;
+  if (!dds_qget_userdata(qos, &ud, &udsz)) {
+    std::map<std::string, std::vector<uint8_t>> emptymap;
+    return emptymap;
+  } else {
+    std::vector<uint8_t> udvec(static_cast<uint8_t *>(ud), static_cast<uint8_t *>(ud) + udsz);
+    dds_free(ud);
+    return rmw::impl::cpp::parse_key_value(udvec);
+  }
+}
+
+static bool get_user_data_key(const dds_qos_t * qos, const std::string key, std::string & value)
+{
+  if (qos != nullptr) {
+    auto map = parse_user_data(qos);
+    auto name_found = map.find(key);
+    if (name_found != map.end()) {
+      value = std::string(name_found->second.begin(), name_found->second.end());
+      return true;
+    }
+  }
+  return false;
+}
+
 static void handle_ParticipantEntitiesInfo(dds_entity_t reader, void * arg)
 {
   static_cast<void>(reader);
@@ -515,18 +561,9 @@ static void handle_DCPSParticipant(dds_entity_t reader, void * arg)
     } else if (si.instance_state != DDS_ALIVE_INSTANCE_STATE) {
       impl->common.graph_cache.remove_participant(gid);
     } else if (si.valid_data) {
-      void * ud;
-      size_t udsz;
-      if (dds_qget_userdata(s->qos, &ud, &udsz)) {
-        std::vector<uint8_t> udvec(static_cast<uint8_t *>(ud), static_cast<uint8_t *>(ud) + udsz);
-        dds_free(ud);
-        auto map = rmw::impl::cpp::parse_key_value(udvec);
-        auto name_found = map.find("enclave");
-        if (name_found != map.end()) {
-          auto enclave =
-            std::string(name_found->second.begin(), name_found->second.end());
-          impl->common.graph_cache.add_participant(gid, enclave);
-        }
+      std::string enclave;
+      if (get_user_data_key(s->qos, "enclave", enclave)) {
+        impl->common.graph_cache.add_participant(gid, enclave);
       }
     }
     dds_return_loan(reader, &raw, 1);
@@ -921,6 +958,7 @@ rmw_context_impl_t::init(rmw_init_options_t * options)
       "rmw_cyclonedds_cpp", "rmw_create_node: failed to create DDS participant");
     return RMW_RET_ERROR;
   }
+  get_entity_gid(this->ppant, this->ppant_gid);
 
   /* Create readers for DDS built-in topics for monitoring discovery */
   if ((this->rd_participant =
@@ -3008,10 +3046,79 @@ extern "C" rmw_ret_t rmw_wait(
 ///////////                                                                   ///////////
 /////////////////////////////////////////////////////////////////////////////////////////
 
+static rmw_ret_t get_matched_endpoints(
+  dds_entity_t h, dds_return_t (* fn)(
+    dds_entity_t h,
+    dds_instance_handle_t * xs, size_t nxs), std::vector<dds_instance_handle_t> & res)
+{
+  dds_return_t ret;
+  if ((ret = fn(h, res.data(), res.size())) < 0) {
+    return RMW_RET_ERROR;
+  }
+  while ((size_t) ret >= res.size()) {
+    // 128 is a completely arbitrary margin to reduce the risk of having to retry
+    // when matches are create/deleted in parallel
+    res.resize((size_t) ret + 128);
+    if ((ret = fn(h, res.data(), res.size())) < 0) {
+      return RMW_RET_ERROR;
+    }
+  }
+  res.resize((size_t) ret);
+  return RMW_RET_OK;
+}
+
+static void free_builtintopic_endpoint(dds_builtintopic_endpoint_t * e)
+{
+  dds_delete_qos(e->qos);
+  dds_free(e->topic_name);
+  dds_free(e->type_name);
+  dds_free(e);
+}
+
+static std::unique_ptr<dds_builtintopic_endpoint_t,
+  std::function<void(dds_builtintopic_endpoint_t *)>> get_matched_subscription_data(
+  dds_entity_t writer, dds_instance_handle_t readerih)
+{
+  std::unique_ptr<dds_builtintopic_endpoint_t, std::function<void(dds_builtintopic_endpoint_t *)>>
+  ep(dds_get_matched_subscription_data(writer, readerih), &free_builtintopic_endpoint);
+  return ep;
+}
+
+static std::unique_ptr<dds_builtintopic_endpoint_t,
+  std::function<void(dds_builtintopic_endpoint_t *)>> get_matched_publication_data(
+  dds_entity_t reader, dds_instance_handle_t writerih)
+{
+  std::unique_ptr<dds_builtintopic_endpoint_t, std::function<void(dds_builtintopic_endpoint_t *)>>
+  ep(dds_get_matched_publication_data(reader, writerih), &free_builtintopic_endpoint);
+  return ep;
+}
+
+static const std::string request_id_writer_guid_to_string(const rmw_request_id_t & id)
+{
+  std::ostringstream os;
+  os << std::hex;
+  os << std::setw(2) << static_cast<int>(static_cast<uint8_t>(id.writer_guid[0]));
+  for (size_t i = 1; i < sizeof(id.writer_guid) - 1; i++) {
+    os << "." << static_cast<int>(static_cast<uint8_t>(id.writer_guid[i]));
+  }
+  return os.str();
+}
+
+static const std::string csid_to_string(const client_service_id_t & id)
+{
+  std::ostringstream os;
+  os << std::hex;
+  os << std::setw(2) << static_cast<int>(id.data[0]);
+  for (size_t i = 1; i < sizeof(id.data) - 1; i++) {
+    os << "." << static_cast<int>(id.data[i]);
+  }
+  return os.str();
+}
+
 static rmw_ret_t rmw_take_response_request(
   CddsCS * cs, rmw_service_info_t * request_header,
   void * ros_data, bool * taken, dds_time_t * source_timestamp,
-  const rmw_gid_t *srcfilter)
+  bool is_response)
 {
   RET_NULL(taken);
   RET_NULL(ros_data);
@@ -3029,8 +3136,10 @@ static rmw_ret_t rmw_take_response_request(
       if (source_timestamp) {
         *source_timestamp = info.source_timestamp;
       }
-      static_assert(sizeof(request_header->request_id.writer_guid) <= sizeof(srcfilter->data), "rmw_request_id::writer_guid must not be larger than rmw_gid_t");
-      if (srcfilter == nullptr || memcmp(wrap.header.writer_guid, srcfilter->data, sizeof(wrap.header.writer_guid)) == 0) {
+      static_assert(
+        sizeof(request_header->request_id.writer_guid) == sizeof(cs->id.data),
+        "rmw_request_id::writer_guid must have the same size as a client_service_id_t");
+      if (!is_response || memcmp(wrap.header.writer_guid, cs->id.data, sizeof(cs->id.data)) == 0) {
         *taken = true;
         return RMW_RET_OK;
       }
@@ -3050,7 +3159,7 @@ extern "C" rmw_ret_t rmw_take_response(
   dds_time_t source_timestamp;
   rmw_ret_t ret = rmw_take_response_request(
     &info->client, request_header, ros_response, taken,
-    &source_timestamp, &info->client.pub->gid);
+    &source_timestamp, true);
 
 #if REPORT_BLOCKED_REQUESTS
   if (ret == RMW_RET_OK && *taken) {
@@ -3094,7 +3203,9 @@ extern "C" rmw_ret_t rmw_take_request(
 {
   RET_WRONG_IMPLID(service);
   auto info = static_cast<CddsService *>(service->data);
-  return rmw_take_response_request(&info->service, request_header, ros_request, taken, nullptr, 0);
+  return rmw_take_response_request(
+    &info->service, request_header, ros_request, taken, nullptr,
+    false);
 }
 
 static rmw_ret_t rmw_send_response_request(
@@ -3110,16 +3221,54 @@ static rmw_ret_t rmw_send_response_request(
   }
 }
 
-static bool check_for_response_reader(dds_entity_t request_reader, dds_entity_t response_writer)
+enum class client_present_t
 {
-  dds_subscription_matched_status sm;
-  dds_publication_matched_status pm;
-  if (dds_get_subscription_matched_status(request_reader, &sm) < 0 ||
-    dds_get_publication_matched_status(response_writer, &pm) < 0)
-  {
-    return RMW_RET_ERROR;
+  ERROR,  // an error occurred when checking
+  MAYBE,  // reader not matched, writer still present
+  YES,    // reader matched
+  GONE    // neither reader nor writer
+};
+
+static bool check_client_service_endpoint(
+  const dds_builtintopic_endpoint_t * ep,
+  const std::string key, const std::string needle)
+{
+  if (ep != nullptr) {
+    std::string clientid;
+    get_user_data_key(ep->qos, key, clientid);
+    return clientid == needle;
   }
-  return pm.current_count == sm.current_count;
+  return false;
+}
+
+static client_present_t check_for_response_reader(
+  const CddsCS & service,
+  const rmw_request_id_t & reqid)
+{
+  std::vector<dds_instance_handle_t> rds, wrs;
+  if (get_matched_endpoints(service.pub->enth, dds_get_matched_subscriptions, rds) < 0 ||
+    get_matched_endpoints(service.sub->enth, dds_get_matched_publications, wrs) < 0)
+  {
+    RMW_SET_ERROR_MSG("rmw_send_response: failed to get reader/writer matches");
+    return client_present_t::ERROR;
+  }
+  const std::string needle = request_id_writer_guid_to_string(reqid);
+  // if we have matched this client's reader, all is well
+  for (auto rdih : rds) {
+    auto rd = get_matched_subscription_data(service.pub->enth, rdih);
+    if (check_client_service_endpoint(rd.get(), "clientid", needle)) {
+      return client_present_t::YES;
+    }
+  }
+  // if not, we should stop waiting if the writer is no longer there,
+  // as that implies the client no longer exists
+  for (auto wrih : wrs) {
+    auto wr = get_matched_publication_data(service.sub->enth, wrih);
+    if (check_client_service_endpoint(wr.get(), "clientid", needle)) {
+      return client_present_t::MAYBE;
+    }
+  }
+  return client_present_t::GONE;
 }
 
 extern "C" rmw_ret_t rmw_send_response(
@@ -3130,20 +3279,27 @@ extern "C" rmw_ret_t rmw_send_response(
   RET_NULL(request_header);
   RET_NULL(ros_response);
   CddsService * info = static_cast<CddsService *>(service->data);
-  cdds_request_header_t header;
-  memcpy(&header.guid, request_header->writer_guid, sizeof(header.guid));
-  header.seq = request_header->sequence_number;
-  // if the number of writers matching our request reader equals the number
-  // of readers matching our response writer, we have a pretty decent claim
-  // to have discovered this client's response reader.
-  //
-  // it is pretty horrid ... but blocking the service is the only option if
-  // the client is unable to determine that it has been fully discovered by
-  // the service.
-  while (!check_for_response_reader(info->service.sub->enth, info->service.pub->enth)) {
+  // Block until the response reader has been matched by the response writer (this is a
+  // workaround: rmw_service_server_is_available should keep returning false until this
+  // is a given).
+  client_present_t st;
+  while ((st =
+    check_for_response_reader(info->service, *request_header)) == client_present_t::MAYBE)
+  {
     dds_sleepfor(DDS_MSECS(10));
   }
-  return rmw_send_response_request(&info->service, *request_header, ros_response);
+  switch (st) {
+    case client_present_t::ERROR:
+      // break instead of returns makes gcc happy
+      break;
+    case client_present_t::MAYBE:
+      return RMW_RET_TIMEOUT;
+    case client_present_t::YES:
+      return rmw_send_response_request(&info->service, *request_header, ros_response);
+    case client_present_t::GONE:
+      return RMW_RET_OK;
+  }
+  return RMW_RET_ERROR;
 }
 
 extern "C" rmw_ret_t rmw_send_request(
@@ -3156,9 +3312,10 @@ extern "C" rmw_ret_t rmw_send_request(
   RET_NULL(sequence_id);
   auto info = static_cast<CddsClient *>(client->data);
   rmw_request_id_t reqid;
-  static_assert(sizeof(dds_guid_t) <= sizeof(reqid.writer_guid), "dds_guid_t must not be larger than rmw_request_id::writer_guid");
-  static_assert(sizeof(reqid.writer_guid) <= sizeof(info->client.pub->gid.data), "rmw_request_id::writer_guid must not be larger than rmw_gid_t");
-  memcpy(reqid.writer_guid, info->client.pub->gid.data, sizeof(reqid.writer_guid));
+  static_assert(
+    sizeof(reqid.writer_guid) == sizeof(info->client.id.data),
+    "rmw_request_id::writer_guid should be equiv to rmw_gid_t::data");
+  memcpy(reqid.writer_guid, info->client.id.data, sizeof(reqid.writer_guid));
   reqid.sequence_number = *sequence_id = ++next_request_id;
 
 #if REPORT_BLOCKED_REQUESTS
@@ -3190,6 +3347,31 @@ static const rosidl_service_type_support_t * get_service_typesupport(
       RMW_SET_ERROR_MSG("service type support not from this implementation");
       return nullptr;
     }
+  }
+}
+
+static void get_unique_csid(const rmw_node_t * node, client_service_id_t & id)
+{
+  auto impl = node->context->impl;
+  static_assert(
+    sizeof(dds_guid_t) <= sizeof(id.data),
+    "client/service id assumed it can hold a DDSI GUID");
+  static_assert(
+    sizeof(dds_guid_t) <= sizeof((reinterpret_cast<rmw_gid_t *>(0))->data),
+    "client/service id assumes rmw_gid_t can hold a DDSI GUID");
+  uint32_t x;
+
+  {
+    std::lock_guard<std::mutex> guard(impl->initialization_mutex);
+    x = ++impl->client_service_id;
+  }
+
+  // construct id by taking the entity prefix (which is just the first 12
+  // bytes of the GID, which itself is just the GUID padded with 0's; then
+  // overwriting the entity id with the big-endian counter value
+  memcpy(id.data, impl->ppant_gid.data, 12);
+  for (size_t i = 0, s = 24; i < 4; i++, s -= 8) {
+    id.data[12 + i] = static_cast<uint8_t>(x >> s);
   }
 }
 
@@ -3270,6 +3452,16 @@ static rmw_ret_t rmw_init_cs(
   }
   dds_qset_reliability(qos, DDS_RELIABILITY_RELIABLE, DDS_SECS(1));
   dds_qset_history(qos, DDS_HISTORY_KEEP_ALL, DDS_LENGTH_UNLIMITED);
+
+  // store a unique identifier for this client/service in the user
+  // data of the reader and writer so that we can always determine
+  // which pairs belong together
+  get_unique_csid(node, cs->id);
+  {
+    std::string user_data = std::string(is_service ? "serviceid=" : "clientid=") + csid_to_string(
+      cs->id) + std::string(";");
+    dds_qset_userdata(qos, user_data.c_str(), user_data.size());
+  }
   if ((pub->enth = dds_create_writer(node->context->impl->dds_pub, pubtopic, qos, nullptr)) < 0) {
     RMW_SET_ERROR_MSG("failed to create writer");
     goto fail_writer;
@@ -3601,6 +3793,43 @@ static rmw_ret_t get_topic_name(dds_entity_t endpoint_handle, std::string & name
   } while (true);
 }
 
+static rmw_ret_t check_for_service_reader_writer(const CddsCS & client, bool * is_available)
+{
+  std::vector<dds_instance_handle_t> rds, wrs;
+  if (get_matched_endpoints(client.pub->enth, dds_get_matched_subscriptions, rds) < 0 ||
+    get_matched_endpoints(client.sub->enth, dds_get_matched_publications, wrs) < 0)
+  {
+    RMW_SET_ERROR_MSG("rmw_service_server_is_available: failed to get reader/writer matches");
+    return RMW_RET_ERROR;
+  }
+  // first extract all service ids from matched readers
+  std::set<std::string> needles;
+  for (auto rdih : rds) {
+    auto rd = get_matched_subscription_data(client.pub->enth, rdih);
+    std::string serviceid;
+    if (rd.get() && get_user_data_key(rd->qos, "serviceid", serviceid)) {
+      needles.insert(serviceid);
+    }
+  }
+  if (needles.size() == 0) {
+    return RMW_RET_OK;
+  }
+  // then scan the writers to see if there is at least one with a service id in the set
+  for (auto wrih : wrs) {
+    auto wr = get_matched_publication_data(client.sub->enth, wrih);
+    std::string serviceid;
+    if (wr.get() &&
+      get_user_data_key(
+        wr->qos, "serviceid",
+        serviceid) && needles.find(serviceid) != needles.end())
+    {
+      *is_available = true;
+      return RMW_RET_OK;
+    }
+  }
+  return RMW_RET_OK;
+}
+
 extern "C" rmw_ret_t rmw_service_server_is_available(
   const rmw_node_t * node,
   const rmw_client_t * client,
@@ -3634,16 +3863,7 @@ extern "C" rmw_ret_t rmw_service_server_is_available(
   if (ret != RMW_RET_OK || 0 == number_of_response_publishers) {
     return ret;
   }
-  dds_publication_matched_status_t ps;
-  dds_subscription_matched_status_t cs;
-  if (dds_get_publication_matched_status(info->client.pub->enth, &ps) < 0 ||
-    dds_get_subscription_matched_status(info->client.sub->enth, &cs) < 0)
-  {
-    RMW_SET_ERROR_MSG("rmw_service_server_is_available: get_..._matched_status failed");
-    return RMW_RET_ERROR;
-  }
-  *is_available = ps.current_count > 0 && cs.current_count > 0;
-  return RMW_RET_OK;
+  return check_for_service_reader_writer(info->client, is_available);
 }
 
 extern "C" rmw_ret_t rmw_count_publishers(
