@@ -316,14 +316,9 @@ struct CddsSubscription : CddsEntity
 
 struct client_service_id_t
 {
-  // strangely, the writer_guid in a request id is smaller than the rmw_gid_t
-  // cpplint erroneously complains that
-  //
-  //   sizeof((reinterpret_cast<rmw_request_id_t *>(0))->writer_guid)
-  //
-  // is not a constant, and the 16 is a hard-coded magic number in
-  // rmw_request_id_t ...
-  uint8_t data[16];
+  // strangely, the writer_guid in an rmw_request_id_t is smaller than the identifier in
+  // an rmw_gid_t
+  uint8_t data[sizeof((reinterpret_cast<rmw_request_id_t *>(0))->writer_guid)]; // NOLINT
 };
 
 struct CddsCS
@@ -510,16 +505,15 @@ static void get_entity_gid(dds_entity_t h, rmw_gid_t & gid)
 
 static std::map<std::string, std::vector<uint8_t>> parse_user_data(const dds_qos_t * qos)
 {
+  std::map<std::string, std::vector<uint8_t>> map;
   void * ud;
   size_t udsz;
-  if (!dds_qget_userdata(qos, &ud, &udsz)) {
-    std::map<std::string, std::vector<uint8_t>> emptymap;
-    return emptymap;
-  } else {
+  if (dds_qget_userdata(qos, &ud, &udsz)) {
     std::vector<uint8_t> udvec(static_cast<uint8_t *>(ud), static_cast<uint8_t *>(ud) + udsz);
     dds_free(ud);
-    return rmw::impl::cpp::parse_key_value(udvec);
+    map = rmw::impl::cpp::parse_key_value(udvec);
   }
+  return map;
 }
 
 static bool get_user_data_key(const dds_qos_t * qos, const std::string key, std::string & value)
@@ -3046,10 +3040,14 @@ extern "C" rmw_ret_t rmw_wait(
 ///////////                                                                   ///////////
 /////////////////////////////////////////////////////////////////////////////////////////
 
+using get_matched_endpoints_fn_t = dds_return_t (*)(
+  dds_entity_t h,
+  dds_instance_handle_t * xs, size_t nxs);
+using BuiltinTopicEndpoint = std::unique_ptr<dds_builtintopic_endpoint_t,
+    std::function<void (dds_builtintopic_endpoint_t *)>>;
+
 static rmw_ret_t get_matched_endpoints(
-  dds_entity_t h, dds_return_t (* fn)(
-    dds_entity_t h,
-    dds_instance_handle_t * xs, size_t nxs), std::vector<dds_instance_handle_t> & res)
+  dds_entity_t h, get_matched_endpoints_fn_t fn, std::vector<dds_instance_handle_t> & res)
 {
   dds_return_t ret;
   if ((ret = fn(h, res.data(), res.size())) < 0) {
@@ -3075,21 +3073,19 @@ static void free_builtintopic_endpoint(dds_builtintopic_endpoint_t * e)
   dds_free(e);
 }
 
-static std::unique_ptr<dds_builtintopic_endpoint_t,
-  std::function<void(dds_builtintopic_endpoint_t *)>> get_matched_subscription_data(
+static BuiltinTopicEndpoint get_matched_subscription_data(
   dds_entity_t writer, dds_instance_handle_t readerih)
 {
-  std::unique_ptr<dds_builtintopic_endpoint_t, std::function<void(dds_builtintopic_endpoint_t *)>>
-  ep(dds_get_matched_subscription_data(writer, readerih), &free_builtintopic_endpoint);
+  BuiltinTopicEndpoint ep(dds_get_matched_subscription_data(writer, readerih),
+    free_builtintopic_endpoint);
   return ep;
 }
 
-static std::unique_ptr<dds_builtintopic_endpoint_t,
-  std::function<void(dds_builtintopic_endpoint_t *)>> get_matched_publication_data(
+static BuiltinTopicEndpoint get_matched_publication_data(
   dds_entity_t reader, dds_instance_handle_t writerih)
 {
-  std::unique_ptr<dds_builtintopic_endpoint_t, std::function<void(dds_builtintopic_endpoint_t *)>>
-  ep(dds_get_matched_publication_data(reader, writerih), &free_builtintopic_endpoint);
+  BuiltinTopicEndpoint ep(dds_get_matched_publication_data(reader, writerih),
+    free_builtintopic_endpoint);
   return ep;
 }
 
@@ -3098,7 +3094,7 @@ static const std::string request_id_writer_guid_to_string(const rmw_request_id_t
   std::ostringstream os;
   os << std::hex;
   os << std::setw(2) << static_cast<int>(static_cast<uint8_t>(id.writer_guid[0]));
-  for (size_t i = 1; i < sizeof(id.writer_guid) - 1; i++) {
+  for (size_t i = 1; i < sizeof(id.writer_guid); i++) {
     os << "." << static_cast<int>(static_cast<uint8_t>(id.writer_guid[i]));
   }
   return os.str();
@@ -3109,7 +3105,7 @@ static const std::string csid_to_string(const client_service_id_t & id)
   std::ostringstream os;
   os << std::hex;
   os << std::setw(2) << static_cast<int>(id.data[0]);
-  for (size_t i = 1; i < sizeof(id.data) - 1; i++) {
+  for (size_t i = 1; i < sizeof(id.data); i++) {
     os << "." << static_cast<int>(id.data[i]);
   }
   return os.str();
@@ -3290,10 +3286,8 @@ extern "C" rmw_ret_t rmw_send_response(
   }
   switch (st) {
     case client_present_t::ERROR:
-      // break instead of returns makes gcc happy
-      break;
     case client_present_t::MAYBE:
-      return RMW_RET_TIMEOUT;
+      break;
     case client_present_t::YES:
       return rmw_send_response_request(&info->service, *request_header, ros_response);
     case client_present_t::GONE:
@@ -3796,6 +3790,7 @@ static rmw_ret_t get_topic_name(dds_entity_t endpoint_handle, std::string & name
 static rmw_ret_t check_for_service_reader_writer(const CddsCS & client, bool * is_available)
 {
   std::vector<dds_instance_handle_t> rds, wrs;
+  assert(is_available != nullptr && !*is_available);
   if (get_matched_endpoints(client.pub->enth, dds_get_matched_subscriptions, rds) < 0 ||
     get_matched_endpoints(client.sub->enth, dds_get_matched_publications, wrs) < 0)
   {
@@ -3807,18 +3802,18 @@ static rmw_ret_t check_for_service_reader_writer(const CddsCS & client, bool * i
   for (auto rdih : rds) {
     auto rd = get_matched_subscription_data(client.pub->enth, rdih);
     std::string serviceid;
-    if (rd.get() && get_user_data_key(rd->qos, "serviceid", serviceid)) {
+    if (rd && get_user_data_key(rd->qos, "serviceid", serviceid)) {
       needles.insert(serviceid);
     }
   }
-  if (needles.size() == 0) {
+  if (needles.empty()) {
     return RMW_RET_OK;
   }
   // then scan the writers to see if there is at least one with a service id in the set
   for (auto wrih : wrs) {
     auto wr = get_matched_publication_data(client.sub->enth, wrih);
     std::string serviceid;
-    if (wr.get() &&
+    if (wr &&
       get_user_data_key(
         wr->qos, "serviceid",
         serviceid) && needles.find(serviceid) != needles.end())
