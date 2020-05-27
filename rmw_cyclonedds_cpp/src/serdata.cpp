@@ -263,27 +263,6 @@ static void serdata_rmw_to_ser_unref(struct ddsi_serdata * dcmn, const ddsrt_iov
   ddsi_serdata_unref(static_cast<serdata_rmw *>(dcmn));
 }
 
-typedef std::array<uint8_t,
-    sizeof((reinterpret_cast<rmw_request_id_t *>(0))->writer_guid)> rmw_request_id_writer_guid_t;
-
-static void get_rmw_request_id_writer_guid(
-  const rmw_request_id_t & reqid,
-  rmw_request_id_writer_guid_t & guid)
-{
-  for (size_t i = 0; i < sizeof(reqid.writer_guid); i++) {
-    guid[i] = reqid.writer_guid[i];
-  }
-}
-
-static void set_rmw_request_id_writer_guid(
-  rmw_request_id_t & reqid,
-  const rmw_request_id_writer_guid_t & guid)
-{
-  for (size_t i = 0; i < sizeof(reqid.writer_guid); i++) {
-    reqid.writer_guid[i] = guid[i];
-  }
-}
-
 static bool serdata_rmw_to_sample(
   const struct ddsi_serdata * dcmn, void * sample, void ** bufptr,
   void * buflim)
@@ -313,12 +292,7 @@ static bool serdata_rmw_to_sample(
         stream -- I haven't checked how it is done in the official RMW implementations, so it is
         probably incompatible. */
       cdds_request_wrapper_t * const wrap = static_cast<cdds_request_wrapper_t *>(sample);
-      auto prefix = [wrap](cycdeser & ser) {
-          rmw_request_id_writer_guid_t writer_guid;
-          ser >> writer_guid;
-          set_rmw_request_id_writer_guid(wrap->header, writer_guid);
-          ser >> wrap->header.sequence_number;
-        };
+      auto prefix = [wrap](cycdeser & ser) {ser >> wrap->header.guid; ser >> wrap->header.seq;};
       cycdeser sd(d->data(), d->size());
       if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
@@ -390,9 +364,7 @@ static size_t serdata_rmw_print(
         probably incompatible. */
       cdds_request_wrapper_t wrap;
       auto prefix = [&wrap](cycprint & ser) {
-          rmw_request_id_writer_guid_t writer_guid;
-          get_rmw_request_id_writer_guid(wrap.header, writer_guid);
-          ser >> writer_guid; ser.print_constant(","); ser >> wrap.header.sequence_number;
+          ser >> wrap.header.guid; ser.print_constant(","); ser >> wrap.header.seq;
         };
       cycprint sd(buf, bufsize, d->data(), d->size());
       if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
