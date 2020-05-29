@@ -3628,7 +3628,6 @@ extern "C" rmw_ret_t rmw_service_server_is_available(
   ret =
     common_context->graph_cache.get_writer_count(sub_topic_name, &number_of_response_publishers);
   if (ret != RMW_RET_OK || 0 == number_of_response_publishers) {
-    // error
     return ret;
   }
   dds_publication_matched_status_t ps;
