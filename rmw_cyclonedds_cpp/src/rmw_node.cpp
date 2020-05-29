@@ -3636,9 +3636,9 @@ extern "C" rmw_ret_t rmw_service_server_is_available(
     dds_get_subscription_matched_status(info->client.sub->enth, &cs) < 0)
   {
     RMW_SET_ERROR_MSG("rmw_service_server_is_available: get_..._matched_status failed");
+    return RMW_RET_ERROR;
   }
-  // all conditions met, there is a service server available
-  *is_available = true;
+  *is_available = ps.current_count > 0 && cs.current_count > 0;
   return RMW_RET_OK;
 }
 
