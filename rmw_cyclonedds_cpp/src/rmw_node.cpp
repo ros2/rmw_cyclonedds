@@ -3628,7 +3628,6 @@ extern "C" rmw_ret_t rmw_service_server_is_available(
   ret =
     common_context->graph_cache.get_writer_count(sub_topic_name, &number_of_response_publishers);
   if (ret != RMW_RET_OK || 0 == number_of_response_publishers) {
-    // error
     return ret;
   }
   dds_publication_matched_status_t ps;
@@ -3637,9 +3636,9 @@ extern "C" rmw_ret_t rmw_service_server_is_available(
     dds_get_subscription_matched_status(info->client.sub->enth, &cs) < 0)
   {
     RMW_SET_ERROR_MSG("rmw_service_server_is_available: get_..._matched_status failed");
+    return RMW_RET_ERROR;
   }
-  // all conditions met, there is a service server available
-  *is_available = true;
+  *is_available = ps.current_count > 0 && cs.current_count > 0;
   return RMW_RET_OK;
 }
 
