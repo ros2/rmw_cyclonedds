@@ -3227,10 +3227,10 @@ static rmw_ret_t rmw_send_response_request(
 
 enum class client_present_t
 {
-  ERROR,  // an error occurred when checking
-  MAYBE,  // reader not matched, writer still present
-  YES,    // reader matched
-  GONE    // neither reader nor writer
+  FAILURE,  // an error occurred when checking
+  MAYBE,    // reader not matched, writer still present
+  YES,      // reader matched
+  GONE      // neither reader nor writer
 };
 
 static bool check_client_service_endpoint(
@@ -3262,7 +3262,7 @@ static client_present_t check_for_response_reader(
     std::vector<dds_instance_handle_t> rds;
     if (get_matched_endpoints(service.pub->enth, dds_get_matched_subscriptions, rds) < 0) {
       RMW_SET_ERROR_MSG("rmw_send_response: failed to get reader/writer matches");
-      return client_present_t::ERROR;
+      return client_present_t::FAILURE;
     }
     // if we have matched this client's reader, all is well
     for (auto rdih : rds) {
@@ -3303,7 +3303,7 @@ extern "C" rmw_ret_t rmw_send_response(
     dds_sleepfor(DDS_MSECS(10));
   }
   switch (st) {
-    case client_present_t::ERROR:
+    case client_present_t::FAILURE:
     case client_present_t::MAYBE:
       break;
     case client_present_t::YES:
