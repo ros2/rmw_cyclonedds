@@ -3268,7 +3268,7 @@ static client_present_t check_for_response_reader(
       return client_present_t::FAILURE;
     }
     // if we have matched this client's reader, all is well
-    for (auto rdih : rds) {
+    for (const auto & rdih : rds) {
       auto rd = get_matched_subscription_data(service.pub->enth, rdih);
       if (check_client_service_endpoint(rd.get(), "clientid", clientid)) {
         return client_present_t::YES;
@@ -3831,7 +3831,7 @@ static rmw_ret_t check_for_service_reader_writer(const CddsCS & client, bool * i
   }
   // first extract all service ids from matched readers
   std::set<std::string> needles;
-  for (auto rdih : rds) {
+  for (const auto & rdih : rds) {
     auto rd = get_matched_subscription_data(client.pub->enth, rdih);
     std::string serviceid;
     if (rd && get_user_data_key(rd->qos, "serviceid", serviceid)) {
@@ -3846,7 +3846,7 @@ static rmw_ret_t check_for_service_reader_writer(const CddsCS & client, bool * i
   } else {
     // scan the writers to see if there is at least one response writer
     // matching a discovered request reader
-    for (auto wrih : wrs) {
+    for (const auto & wrih : wrs) {
       auto wr = get_matched_publication_data(client.sub->enth, wrih);
       std::string serviceid;
       if (wr &&
