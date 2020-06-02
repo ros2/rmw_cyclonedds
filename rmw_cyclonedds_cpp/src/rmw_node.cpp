@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
+#include <chrono>
 #include <iomanip>
 #include <map>
 #include <set>
@@ -75,6 +76,8 @@
 #include "rmw_cyclonedds_cpp/serdes.hpp"
 #include "serdata.hpp"
 #include "demangle.hpp"
+
+using namespace std::literals::chrono_literals;
 
 /* Security must be enabled when compiling and requires cyclone to support QOS property lists */
 #if DDS_HAS_SECURITY && DDS_HAS_PROPERTY_LIST_QOS
@@ -3299,13 +3302,21 @@ extern "C" rmw_ret_t rmw_send_response(
   // workaround: rmw_service_server_is_available should keep returning false until this
   // is a given).
   client_present_t st;
-  while ((st = check_for_response_reader(info->service, reqwrih)) == client_present_t::MAYBE) {
+  std::chrono::system_clock::time_point tnow = std::chrono::system_clock::now();
+  std::chrono::system_clock::time_point tend = tnow + 100ms;
+  while ((st =
+    check_for_response_reader(
+      info->service,
+      reqwrih)) == client_present_t::MAYBE && tnow < tend)
+  {
     dds_sleepfor(DDS_MSECS(10));
+    tnow = std::chrono::system_clock::now();
   }
   switch (st) {
     case client_present_t::FAILURE:
-    case client_present_t::MAYBE:
       break;
+    case client_present_t::MAYBE:
+      return RMW_RET_TIMEOUT;
     case client_present_t::YES:
       return rmw_send_response_request(&info->service, header, ros_response);
     case client_present_t::GONE:
