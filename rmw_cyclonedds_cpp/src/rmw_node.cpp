@@ -3301,6 +3301,7 @@ extern "C" rmw_ret_t rmw_send_response(
   // Block until the response reader has been matched by the response writer (this is a
   // workaround: rmw_service_server_is_available should keep returning false until this
   // is a given).
+  // TODO(eboasson): rmw_service_server_is_available should block the request instead (#191)
   client_present_t st;
   std::chrono::system_clock::time_point tnow = std::chrono::system_clock::now();
   std::chrono::system_clock::time_point tend = tnow + 100ms;
