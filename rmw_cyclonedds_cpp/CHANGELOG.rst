@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.7.1 (2020-06-02)
+------------------
+* Restore dashing/eloquent behaviour of "service_is_available" (`#190 <https://github.com/ros2/rmw_cyclonedds/issues/190>`_)
+* Contributors: Erik Boasson
+
 0.7.0 (2020-05-12)
 ------------------
 * Remove API related to manual by node liveliness. (`#178 <https://github.com/ros2/rmw_cyclonedds/issues/178>`_)
