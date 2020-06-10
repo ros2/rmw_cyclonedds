@@ -2570,19 +2570,13 @@ extern "C" rmw_ret_t rmw_take_event(
     case RMW_EVENT_MESSAGE_LOST: {
         auto ei = static_cast<rmw_message_lost_status_t *>(event_info);
         auto sub = static_cast<CddsSubscription *>(event_handle->data);
-        dds_sample_lost_status_t st1;
-        dds_sample_rejected_status_t st2;
-        if (dds_get_sample_lost_status(sub->enth, &st1) < 0) {
+        dds_sample_lost_status_t st;
+        if (dds_get_sample_lost_status(sub->enth, &st) < 0) {
           *taken = false;
           return RMW_RET_ERROR;
         }
-        if (dds_get_sample_rejected_status(sub->enth, &st2) < 0) {
-          *taken = false;
-          return RMW_RET_ERROR;
-        }
-        ei->total_count = static_cast<size_t>(st1.total_count + st2.total_count);
-        ei->total_count_change =
-          static_cast<size_t>(st1.total_count_change + st2.total_count_change);
+        ei->total_count = static_cast<size_t>(st.total_count);
+        ei->total_count_change = static_cast<size_t>(st.total_count_change);
         *taken = true;
         return RMW_RET_OK;
       }
