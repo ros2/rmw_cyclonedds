@@ -2493,6 +2493,7 @@ static const std::unordered_map<rmw_event_type_t, uint32_t> mask_map{
   {RMW_EVENT_OFFERED_DEADLINE_MISSED, DDS_OFFERED_DEADLINE_MISSED_STATUS},
   {RMW_EVENT_REQUESTED_QOS_INCOMPATIBLE, DDS_REQUESTED_INCOMPATIBLE_QOS_STATUS},
   {RMW_EVENT_OFFERED_QOS_INCOMPATIBLE, DDS_OFFERED_INCOMPATIBLE_QOS_STATUS},
+  {RMW_EVENT_MESSAGE_LOST, DDS_SAMPLE_LOST_STATUS},
 };
 
 static bool is_event_supported(const rmw_event_type_t event_t)
@@ -2599,6 +2600,20 @@ extern "C" rmw_ret_t rmw_take_event(
           *taken = true;
           return RMW_RET_OK;
         }
+      }
+
+    case RMW_EVENT_MESSAGE_LOST: {
+        auto ei = static_cast<rmw_message_lost_status_t *>(event_info);
+        auto sub = static_cast<CddsSubscription *>(event_handle->data);
+        dds_sample_lost_status_t st;
+        if (dds_get_sample_lost_status(sub->enth, &st) < 0) {
+          *taken = false;
+          return RMW_RET_ERROR;
+        }
+        ei->total_count = static_cast<size_t>(st.total_count);
+        ei->total_count_change = static_cast<size_t>(st.total_count_change);
+        *taken = true;
+        return RMW_RET_OK;
       }
 
     case RMW_EVENT_LIVELINESS_LOST: {
