@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.8.0 (2020-06-18)
+------------------
 * Add support to message lost event (`#192 <https://github.com/ros2/rmw_cyclonedds/issues/192>`_)
 * Mitigate lost service responses discovery issue (`#187 <https://github.com/ros2/rmw_cyclonedds/issues/187>`_)
 * Contributors: Ivan Santiago Paunovic, eboasson
