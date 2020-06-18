@@ -2,6 +2,12 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Add support to message lost event (`#192 <https://github.com/ros2/rmw_cyclonedds/issues/192>`_)
+* Mitigate lost service responses discovery issue (`#187 <https://github.com/ros2/rmw_cyclonedds/issues/187>`_)
+* Contributors: Ivan Santiago Paunovic, eboasson
+
 0.7.1 (2020-06-02)
 ------------------
 * Restore dashing/eloquent behaviour of "service_is_available" (`#190 <https://github.com/ros2/rmw_cyclonedds/issues/190>`_)
