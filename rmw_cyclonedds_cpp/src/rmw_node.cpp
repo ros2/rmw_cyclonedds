@@ -259,7 +259,7 @@ struct rmw_context_impl_t
   dds_entity_t rd_subscription;
   dds_entity_t rd_publication;
 
-  /* DDS publisher, subscriber used for ROS2 publishers and subscriptions */
+  /* DDS publisher, subscriber used for ROS 2 publishers and subscriptions */
   dds_entity_t dds_pub;
   dds_entity_t dds_sub;
 
