@@ -263,6 +263,9 @@ struct rmw_context_impl_t
   size_t node_count{0};
   std::mutex initialization_mutex;
 
+  /* Shutdown flag */
+  bool is_shutdown{false};
+
   /* suffix for GUIDs to construct unique client/service ids
      (protected by initialization_mutex) */
   uint32_t client_service_id;
@@ -1148,8 +1151,8 @@ extern "C" rmw_ret_t rmw_shutdown(rmw_context_t * context)
     context->implementation_identifier,
     eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
-  // Nothing to do here for now.
-  // This is just the middleware's notification that shutdown was called.
+  RCUTILS_CHECK_ARGUMENT_FOR_NULL(context->impl, RMW_RET_INVALID_ARGUMENT);
+  context->impl->is_shutdown = true;
   return RMW_RET_OK;
 }
 
@@ -1161,6 +1164,11 @@ extern "C" rmw_ret_t rmw_context_fini(rmw_context_t * context)
     context->implementation_identifier,
     eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RCUTILS_CHECK_ARGUMENT_FOR_NULL(context->impl, RMW_RET_INVALID_ARGUMENT);
+  if (!context->impl->is_shutdown) {
+    RCUTILS_SET_ERROR_MSG("context has not been shutdown");
+    return RMW_RET_INVALID_ARGUMENT;
+  }
   delete context->impl;
   *context = rmw_get_zero_initialized_context();
   return RMW_RET_OK;
