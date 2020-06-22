@@ -1125,19 +1125,24 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
 
   context->instance_id = options->instance_id;
   context->implementation_identifier = eclipse_cyclonedds_identifier;
-
-  context->impl = new(std::nothrow) rmw_context_impl_t();
-  if (nullptr == context->impl) {
-    return RMW_RET_BAD_ALLOC;
-  }
+  context->impl = nullptr;
 
   ret = rmw_init_options_copy(options, &context->options);
   if (RMW_RET_OK != ret) {
-    if (RMW_RET_OK != rmw_init_options_fini(&context->options)) {
-      RMW_SAFE_FWRITE_TO_STDERR(
-        "'rmw_init_options_fini' failed while being executed due to '"
-        RCUTILS_STRINGIFY(__function__) "' failing.\n");
-    }
+    goto fail;
+  }
+
+  context->impl = new(std::nothrow) rmw_context_impl_t();
+  if (nullptr == context->impl) {
+    ret = RMW_RET_BAD_ALLOC;
+    goto fail;
+  }
+  return ret;
+fail:
+  if (RMW_RET_OK != rmw_init_options_fini(&context->options)) {
+    RMW_SAFE_FWRITE_TO_STDERR(
+      "'rmw_init_options_fini' failed while being executed due to '"
+      RCUTILS_STRINGIFY(__function__) "' failing.\n");
   }
   return ret;
 }
