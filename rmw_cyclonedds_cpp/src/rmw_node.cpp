@@ -1161,6 +1161,10 @@ extern "C" rmw_ret_t rmw_context_fini(rmw_context_t * context)
     context->implementation_identifier,
     eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  rmw_ret_t ret = rmw_init_options_fini(&context->options);
+  if (RMW_RET_OK != ret) {
+    return ret;
+  }
   delete context->impl;
   *context = rmw_get_zero_initialized_context();
   return RMW_RET_OK;
