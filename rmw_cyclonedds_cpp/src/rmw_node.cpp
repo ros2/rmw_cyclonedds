@@ -1125,19 +1125,21 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
 
   context->instance_id = options->instance_id;
   context->implementation_identifier = eclipse_cyclonedds_identifier;
-  context->impl = nullptr;
 
-  if ((ret = rmw_init_options_copy(options, &context->options)) != RMW_RET_OK) {
-    return ret;
-  }
-
-  rmw_context_impl_t * impl = new(std::nothrow) rmw_context_impl_t();
-  if (nullptr == impl) {
+  context->impl = new(std::nothrow) rmw_context_impl_t();
+  if (nullptr == context->impl) {
     return RMW_RET_BAD_ALLOC;
   }
 
-  context->impl = impl;
-  return RMW_RET_OK;
+  ret = rmw_init_options_copy(options, &context->options);
+  if (RMW_RET_OK != ret) {
+    if (RMW_RET_OK != rmw_init_options_fini(&context->options)) {
+      RMW_SAFE_FWRITE_TO_STDERR(
+        "'rmw_init_options_fini' failed while being executed due to '"
+        RCUTILS_STRINGIFY(__function__) "' failing.\n");
+    }
+  }
+  return ret;
 }
 
 extern "C" rmw_ret_t rmw_shutdown(rmw_context_t * context)
@@ -1161,6 +1163,10 @@ extern "C" rmw_ret_t rmw_context_fini(rmw_context_t * context)
     context->implementation_identifier,
     eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  rmw_ret_t ret = rmw_init_options_fini(&context->options);
+  if (RMW_RET_OK != ret) {
+    return ret;
+  }
   delete context->impl;
   *context = rmw_get_zero_initialized_context();
   return RMW_RET_OK;
