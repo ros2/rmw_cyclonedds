@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Handle RMW_DEFAULT_DOMAIN_ID. (`#194 <https://github.com/ros2/rmw_cyclonedds/issues/194>`_)
+* Contributors: Michel Hidalgo
+
 0.8.0 (2020-06-18)
 ------------------
 * Add support to message lost event (`#192 <https://github.com/ros2/rmw_cyclonedds/issues/192>`_)
