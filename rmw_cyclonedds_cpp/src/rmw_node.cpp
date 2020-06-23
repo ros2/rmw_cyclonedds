@@ -891,7 +891,10 @@ rmw_context_impl_t::init(rmw_init_options_t * options)
     failed: otherwise there is a race with rmw_destroy_node deleting the last participant
     and tearing down the domain for versions of Cyclone that implement the original
     version of dds_create_domain that doesn't return a handle.  */
-  this->domain_id = static_cast<dds_domainid_t>(options->domain_id);
+  this->domain_id = static_cast<dds_domainid_t>(
+    // No custom handling of RMW_DEFAULT_DOMAIN_ID. Simply use a reasonable domain id.
+    options->domain_id != RMW_DEFAULT_DOMAIN_ID ? options->domain_id : 0u);
+
   if (!check_create_domain(this->domain_id, options->localhost_only)) {
     return RMW_RET_ERROR;
   }
@@ -1079,8 +1082,7 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
     eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
 
-  /* domain_id = UINT32_MAX = Cyclone DDS' "default domain id".*/
-  if (options->domain_id >= UINT32_MAX) {
+  if (options->domain_id >= UINT32_MAX && options->domain_id != RMW_DEFAULT_DOMAIN_ID) {
     RCUTILS_LOG_ERROR_NAMED(
       "rmw_cyclonedds_cpp", "rmw_create_node: domain id out of range");
     return RMW_RET_INVALID_ARGUMENT;
