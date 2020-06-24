@@ -448,6 +448,10 @@ extern "C" rmw_ret_t rmw_init_options_copy(const rmw_init_options_t * src, rmw_i
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(src, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_ARGUMENT_FOR_NULL(dst, RMW_RET_INVALID_ARGUMENT);
+  if (NULL == src->implementation_identifier) {
+    RMW_SET_ERROR_MSG("expected initialized dst");
+    return RMW_RET_INVALID_ARGUMENT;
+  }
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
     src,
     src->implementation_identifier,
@@ -457,40 +461,43 @@ extern "C" rmw_ret_t rmw_init_options_copy(const rmw_init_options_t * src, rmw_i
     RMW_SET_ERROR_MSG("expected zero-initialized dst");
     return RMW_RET_INVALID_ARGUMENT;
   }
-
   const rcutils_allocator_t * allocator = &src->allocator;
-  rmw_ret_t ret = RMW_RET_OK;
 
-  allocator->deallocate(dst->enclave, allocator->state);
-  *dst = *src;
-  dst->enclave = NULL;
-  dst->security_options = rmw_get_zero_initialized_security_options();
-
-  dst->enclave = rcutils_strdup(src->enclave, *allocator);
-  if (src->enclave && !dst->enclave) {
-    ret = RMW_RET_BAD_ALLOC;
-    goto fail;
+  rmw_init_options_t tmp = *src;
+  tmp.enclave = rcutils_strdup(tmp.enclave, *allocator);
+  if (NULL != src->enclave && NULL == tmp.enclave) {
+    return RMW_RET_BAD_ALLOC;
   }
-  return rmw_security_options_copy(&src->security_options, allocator, &dst->security_options);
-fail:
-  allocator->deallocate(dst->enclave, allocator->state);
-  return ret;
+  tmp.security_options = rmw_get_zero_initialized_security_options();
+  rmw_ret_t ret =
+    rmw_security_options_copy(&src->security_options, allocator, &tmp.security_options);
+  if (RMW_RET_OK != ret) {
+    allocator->deallocate(tmp.enclave, allocator->state);
+    return ret;
+  }
+  *dst = tmp;
+  return RMW_RET_OK;
 }
 
 extern "C" rmw_ret_t rmw_init_options_fini(rmw_init_options_t * init_options)
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(init_options, RMW_RET_INVALID_ARGUMENT);
-  rcutils_allocator_t & allocator = init_options->allocator;
-  RCUTILS_CHECK_ALLOCATOR(&allocator, return RMW_RET_INVALID_ARGUMENT);
+  if (NULL == init_options->implementation_identifier) {
+    RMW_SET_ERROR_MSG("expected initialized init_options");
+    return RMW_RET_INVALID_ARGUMENT;
+  }
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
     init_options,
     init_options->implementation_identifier,
     eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
-  allocator.deallocate(init_options->enclave, allocator.state);
-  rmw_security_options_fini(&init_options->security_options, &allocator);
+  rcutils_allocator_t * allocator = &init_options->allocator;
+  RCUTILS_CHECK_ALLOCATOR(allocator, return RMW_RET_INVALID_ARGUMENT);
+
+  allocator->deallocate(init_options->enclave, allocator->state);
+  rmw_ret_t ret = rmw_security_options_fini(&init_options->security_options, allocator);
   *init_options = rmw_get_zero_initialized_init_options();
-  return RMW_RET_OK;
+  return ret;
 }
 
 static void convert_guid_to_gid(const dds_guid_t & guid, rmw_gid_t & gid)
