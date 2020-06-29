@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cassert>
+#include <cstring>
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
@@ -50,6 +52,7 @@
 
 #include "fallthrough_macro.hpp"
 #include "Serialization.hpp"
+#include "rcpputils/scope_exit.hpp"
 #include "rmw/impl/cpp/macros.hpp"
 #include "rmw/impl/cpp/key_value.hpp"
 
@@ -1117,15 +1120,21 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
 {
   rmw_ret_t ret;
 
-  static_cast<void>(options);
-  static_cast<void>(context);
   RCUTILS_CHECK_ARGUMENT_FOR_NULL(options, RMW_RET_INVALID_ARGUMENT);
   RCUTILS_CHECK_ARGUMENT_FOR_NULL(context, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_FOR_NULL_WITH_MSG(
+    options->implementation_identifier,
+    "expected initialized init options",
+    return RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
     options,
     options->implementation_identifier,
     eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  if (NULL != context->implementation_identifier) {
+    RMW_SET_ERROR_MSG("expected a zero-initialized context");
+    return RMW_RET_INVALID_ARGUMENT;
+  }
 
   if (options->domain_id >= UINT32_MAX && options->domain_id != RMW_DEFAULT_DOMAIN_ID) {
     RCUTILS_LOG_ERROR_NAMED(
@@ -1133,52 +1142,67 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
     return RMW_RET_INVALID_ARGUMENT;
   }
 
+  const rmw_context_t zero_context = rmw_get_zero_initialized_context();
+  assert(0 == std::memcmp(context, &zero_context, sizeof(rmw_context_t)));
+  auto restore_context = rcpputils::make_scope_exit(
+    [context, &zero_context]() {*context = zero_context;});
+
   context->instance_id = options->instance_id;
   context->implementation_identifier = eclipse_cyclonedds_identifier;
-  context->impl = nullptr;
+
+  context->impl = new (std::nothrow) rmw_context_impl_t();
+  if (nullptr == context->impl) {
+    RMW_SET_ERROR_MSG("failed to allocate context impl");
+    return RMW_RET_BAD_ALLOC;
+  }
+  auto cleanup_impl = rcpputils::make_scope_exit(
+    [context]() {delete context->impl;});
 
   if ((ret = rmw_init_options_copy(options, &context->options)) != RMW_RET_OK) {
     return ret;
   }
 
-  rmw_context_impl_t * impl = new(std::nothrow) rmw_context_impl_t();
-  if (nullptr == impl) {
-    return RMW_RET_BAD_ALLOC;
-  }
-
-  context->impl = impl;
+  cleanup_impl.cancel();
+  restore_context.cancel();
   return RMW_RET_OK;
 }
 
 extern "C" rmw_ret_t rmw_shutdown(rmw_context_t * context)
 {
-  RCUTILS_CHECK_ARGUMENT_FOR_NULL(context, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(context, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_FOR_NULL_WITH_MSG(
+    context->impl,
+    "expected initialized context",
+    return RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
     context,
     context->implementation_identifier,
     eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
-  RCUTILS_CHECK_ARGUMENT_FOR_NULL(context->impl, RMW_RET_INVALID_ARGUMENT);
   context->impl->is_shutdown = true;
   return RMW_RET_OK;
 }
 
 extern "C" rmw_ret_t rmw_context_fini(rmw_context_t * context)
 {
-  RCUTILS_CHECK_ARGUMENT_FOR_NULL(context, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(context, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_FOR_NULL_WITH_MSG(
+    context->impl,
+    "expected initialized context",
+    return RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
     context,
     context->implementation_identifier,
     eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
-  RCUTILS_CHECK_ARGUMENT_FOR_NULL(context->impl, RMW_RET_INVALID_ARGUMENT);
   if (!context->impl->is_shutdown) {
-    RCUTILS_SET_ERROR_MSG("context has not been shutdown");
+    RMW_SET_ERROR_MSG("context has not been shutdown");
     return RMW_RET_INVALID_ARGUMENT;
   }
+  rmw_ret_t ret = rmw_init_options_fini(&context->options);
   delete context->impl;
   *context = rmw_get_zero_initialized_context();
-  return RMW_RET_OK;
+  return ret;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
