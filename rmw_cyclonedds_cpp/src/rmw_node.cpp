@@ -2158,6 +2158,7 @@ static rmw_subscription_t * create_subscription(
   memcpy(const_cast<char *>(rmw_subscription->topic_name), topic_name, strlen(topic_name) + 1);
   rmw_subscription->options = *subscription_options;
   rmw_subscription->can_loan_messages = false;
+  rmw_subscription->is_cft_supported = false;
   return rmw_subscription;
 fail_topic_name:
   rmw_subscription_free(rmw_subscription);
