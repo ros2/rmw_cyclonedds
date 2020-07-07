@@ -48,6 +48,7 @@
 #include "rmw/names_and_types.h"
 #include "rmw/rmw.h"
 #include "rmw/sanity_checks.h"
+#include "rmw/validate_namespace.h"
 #include "rmw/validate_node_name.h"
 
 #include "fallthrough_macro.hpp"
@@ -1218,14 +1219,37 @@ extern "C" rmw_ret_t rmw_context_fini(rmw_context_t * context)
 extern "C" rmw_node_t * rmw_create_node(
   rmw_context_t * context, const char * name, const char * namespace_)
 {
-  RET_NULL_X(name, return nullptr);
-  RET_NULL_X(namespace_, return nullptr);
-  rmw_ret_t ret;
-  int dummy_validation_result;
-  size_t dummy_invalid_index;
-  if ((ret =
-    rmw_validate_node_name(name, &dummy_validation_result, &dummy_invalid_index)) != RMW_RET_OK)
-  {
+  RMW_CHECK_ARGUMENT_FOR_NULL(context, nullptr);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    context,
+    context->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return nullptr);
+  RMW_CHECK_FOR_NULL_WITH_MSG(
+    context->impl,
+    "expected initialized context",
+    return nullptr);
+  if (context->impl->is_shutdown) {
+    RCUTILS_SET_ERROR_MSG("context has been shutdown");
+    return nullptr;
+  }
+
+  int validation_result = -1;
+  rmw_ret_t ret = rmw_validate_node_name(name, &validation_result, nullptr);
+  if (RMW_RET_OK != ret || RMW_NODE_NAME_VALID != validation_result) {
+    const char * reason = RMW_RET_OK == ret ?
+      rmw_node_name_validation_result_string(validation_result) :
+      rmw_get_error_string().str;
+    RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("invalid node name: %s", reason);
+    return nullptr;
+  }
+  validation_result = -1;
+  ret = rmw_validate_namespace(namespace_, &validation_result, nullptr);
+  if (RMW_RET_OK != ret || RMW_NAMESPACE_VALID != validation_result) {
+    const char * reason = RMW_RET_OK == ret ?
+      rmw_node_name_validation_result_string(validation_result) :
+      rmw_get_error_string().str;
+    RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("invalid node namespace: %s", reason);
     return nullptr;
   }
 
@@ -1233,25 +1257,27 @@ extern "C" rmw_node_t * rmw_create_node(
   if (RMW_RET_OK != ret) {
     return nullptr;
   }
+  auto finalize_context = rcpputils::make_scope_exit(
+    [context]() {context->impl->fini();});
 
-  auto * node_impl = new CddsNode();
-  rmw_node_t * node_handle = nullptr;
-  RET_ALLOC_X(node_impl, goto fail_node_impl);
+  std::unique_ptr<CddsNode> node_impl(new (std::nothrow) CddsNode());
+  RET_ALLOC_X(node_impl, return nullptr);
 
-  node_handle = rmw_node_allocate();
-  RET_ALLOC_X(node_handle, goto fail_node_handle);
-  node_handle->implementation_identifier = eclipse_cyclonedds_identifier;
-  node_handle->data = node_impl;
-  node_handle->context = context;
+  rcutils_allocator_t allocator = context->options.allocator;
+  rmw_node_t * node = reinterpret_cast<rmw_node_t *>(
+    allocator.zero_allocate(1u, sizeof(rmw_node_t), allocator.state));
+  RET_ALLOC_X(node, return nullptr);
+  auto cleanup_node = rcpputils::make_scope_exit(
+    [node, allocator]() {
+      allocator.deallocate(const_cast<char *>(node->name), allocator.state);
+      allocator.deallocate(const_cast<char *>(node->namespace_), allocator.state);
+      allocator.deallocate(node, allocator.state);
+    });
 
-  node_handle->name = static_cast<const char *>(rmw_allocate(sizeof(char) * strlen(name) + 1));
-  RET_ALLOC_X(node_handle->name, goto fail_node_handle_name);
-  memcpy(const_cast<char *>(node_handle->name), name, strlen(name) + 1);
-
-  node_handle->namespace_ =
-    static_cast<const char *>(rmw_allocate(sizeof(char) * strlen(namespace_) + 1));
-  RET_ALLOC_X(node_handle->namespace_, goto fail_node_handle_namespace);
-  memcpy(const_cast<char *>(node_handle->namespace_), namespace_, strlen(namespace_) + 1);
+  node->name = rcutils_strdup(name, allocator);
+  RET_ALLOC_X(node->name, return nullptr);
+  node->namespace_ = rcutils_strdup(namespace_, allocator);
+  RET_ALLOC_X(node->namespace_, return nullptr);
 
   {
     // Though graph_cache methods are thread safe, both cache update and publishing have to also
@@ -1271,30 +1297,32 @@ extern "C" rmw_node_t * rmw_create_node(
       // If publishing the message failed, we don't have to publish an update
       // after removing it from the graph cache */
       static_cast<void>(common->graph_cache.remove_node(common->gid, name, namespace_));
-      goto fail_pub_info;
+      return nullptr;
     }
   }
-  return node_handle;
 
-fail_pub_info:
-  rmw_free(const_cast<char *>(node_handle->namespace_));
-fail_node_handle_namespace:
-  rmw_free(const_cast<char *>(node_handle->name));
-fail_node_handle_name:
-  rmw_node_free(node_handle);
-fail_node_handle:
-  delete node_impl;
-fail_node_impl:
-  context->impl->fini();
-  return nullptr;
+  cleanup_node.cancel();
+  node->implementation_identifier = eclipse_cyclonedds_identifier;
+  node->data = node_impl.release();
+  node->context = context;
+  finalize_context.cancel();
+  return node;
 }
 
 extern "C" rmw_ret_t rmw_destroy_node(rmw_node_t * node)
 {
   rmw_ret_t result_ret = RMW_RET_OK;
-  RET_WRONG_IMPLID(node);
+  RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    node,
+    node->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_FOR_NULL_WITH_MSG(
+    node->data,
+    "expected initialized node",
+    return RMW_RET_INVALID_ARGUMENT);
   auto node_impl = static_cast<CddsNode *>(node->data);
-  RET_NULL(node_impl);
 
   {
     // Though graph_cache methods are thread safe, both cache update and publishing have to also
@@ -1310,11 +1338,14 @@ extern "C" rmw_ret_t rmw_destroy_node(rmw_node_t * node)
       common->pub, static_cast<void *>(&participant_msg), nullptr);
   }
 
-  rmw_free(const_cast<char *>(node->name));
-  rmw_free(const_cast<char *>(node->namespace_));
-  node->context->impl->fini();
-  rmw_node_free(node);
+  assert(node->context != nullptr);
+  rmw_context_t * context = node->context;
+  rcutils_allocator_t allocator = context->options.allocator;
+  allocator.deallocate(const_cast<char *>(node->name), allocator.state);
+  allocator.deallocate(const_cast<char *>(node->namespace_), allocator.state);
+  allocator.deallocate(node, allocator.state);
   delete node_impl;
+  context->impl->fini();
   return result_ret;
 }
 
