@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.7.2 (2020-07-07)
+------------------
+* Handle RMW_DEFAULT_DOMAIN_ID (`#194 <https://github.com/ros2/rmw_cyclonedds/issues/194>`_) (`#199 <https://github.com/ros2/rmw_cyclonedds/issues/199>`_)
+* Contributors: Michel Hidalgo
+
 0.7.1 (2020-06-02)
 ------------------
 * Restore dashing/eloquent behaviour of "service_is_available" (`#190 <https://github.com/ros2/rmw_cyclonedds/issues/190>`_)
