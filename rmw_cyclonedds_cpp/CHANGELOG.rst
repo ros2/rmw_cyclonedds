@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.10.0 (2020-07-08)
+-------------------
 * Remove domain_id and localhost_only from node API (`#205 <https://github.com/ros2/rmw_cyclonedds/issues/205>`_)
 * Amend rmw_init() implementation: require enclave. (`#204 <https://github.com/ros2/rmw_cyclonedds/issues/204>`_)
 * Contributors: Ivan Santiago Paunovic, Michel Hidalgo
