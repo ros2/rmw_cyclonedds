@@ -1216,12 +1216,8 @@ extern "C" rmw_ret_t rmw_context_fini(rmw_context_t * context)
 /////////////////////////////////////////////////////////////////////////////////////////
 
 extern "C" rmw_node_t * rmw_create_node(
-  rmw_context_t * context, const char * name,
-  const char * namespace_, size_t domain_id,
-  bool localhost_only)
+  rmw_context_t * context, const char * name, const char * namespace_)
 {
-  static_cast<void>(domain_id);
-  static_cast<void>(localhost_only);
   RET_NULL_X(name, return nullptr);
   RET_NULL_X(namespace_, return nullptr);
   rmw_ret_t ret;
