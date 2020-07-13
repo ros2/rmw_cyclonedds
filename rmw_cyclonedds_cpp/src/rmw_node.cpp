@@ -1263,21 +1263,23 @@ extern "C" rmw_node_t * rmw_create_node(
   std::unique_ptr<CddsNode> node_impl(new (std::nothrow) CddsNode());
   RET_ALLOC_X(node_impl, return nullptr);
 
-  rcutils_allocator_t allocator = context->options.allocator;
-  rmw_node_t * node = reinterpret_cast<rmw_node_t *>(
-    allocator.zero_allocate(1u, sizeof(rmw_node_t), allocator.state));
+  rmw_node_t * node = rmw_node_allocate();
   RET_ALLOC_X(node, return nullptr);
   auto cleanup_node = rcpputils::make_scope_exit(
-    [node, allocator]() {
-      allocator.deallocate(const_cast<char *>(node->name), allocator.state);
-      allocator.deallocate(const_cast<char *>(node->namespace_), allocator.state);
-      allocator.deallocate(node, allocator.state);
+    [node]() {
+      rmw_free(const_cast<char *>(node->name));
+      rmw_free(const_cast<char *>(node->namespace_));
+      rmw_node_free(node);
     });
 
-  node->name = rcutils_strdup(name, allocator);
+  node->name = static_cast<const char *>(rmw_allocate(sizeof(char) * strlen(name) + 1));
   RET_ALLOC_X(node->name, return nullptr);
-  node->namespace_ = rcutils_strdup(namespace_, allocator);
+  memcpy(const_cast<char *>(node->name), name, strlen(name) + 1);
+
+  node->namespace_ =
+    static_cast<const char *>(rmw_allocate(sizeof(char) * strlen(namespace_) + 1));
   RET_ALLOC_X(node->namespace_, return nullptr);
+  memcpy(const_cast<char *>(node->namespace_), namespace_, strlen(namespace_) + 1);
 
   {
     // Though graph_cache methods are thread safe, both cache update and publishing have to also
