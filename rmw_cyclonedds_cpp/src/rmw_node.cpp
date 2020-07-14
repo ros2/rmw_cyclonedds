@@ -1340,7 +1340,6 @@ extern "C" rmw_ret_t rmw_destroy_node(rmw_node_t * node)
       common->pub, static_cast<void *>(&participant_msg), nullptr);
   }
 
-  assert(node->context != nullptr);
   rmw_context_t * context = node->context;
   rcutils_allocator_t allocator = context->options.allocator;
   allocator.deallocate(const_cast<char *>(node->name), allocator.state);
