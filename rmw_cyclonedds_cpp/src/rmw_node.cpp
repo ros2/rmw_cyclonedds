@@ -1322,10 +1322,6 @@ extern "C" rmw_ret_t rmw_destroy_node(rmw_node_t * node)
     node->implementation_identifier,
     eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
-  RMW_CHECK_FOR_NULL_WITH_MSG(
-    node->data,
-    "expected initialized node",
-    return RMW_RET_INVALID_ARGUMENT);
   auto node_impl = static_cast<CddsNode *>(node->data);
 
   {
