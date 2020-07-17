@@ -1154,6 +1154,8 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
 
   context->instance_id = options->instance_id;
   context->implementation_identifier = eclipse_cyclonedds_identifier;
+  context->actual_domain_id =
+    RMW_DEFAULT_DOMAIN_ID != options->domain_id ? options->domain_id : 0u;
 
   context->impl = new (std::nothrow) rmw_context_impl_t();
   if (nullptr == context->impl) {
