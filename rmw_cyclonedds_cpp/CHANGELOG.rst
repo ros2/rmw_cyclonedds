@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.11.0 (2020-07-20)
+-------------------
 * Ensure compliant node construction/destruction API (`#206 <https://github.com/ros2/rmw_cyclonedds/issues/206>`_)
 * Contributors: Michel Hidalgo
 
