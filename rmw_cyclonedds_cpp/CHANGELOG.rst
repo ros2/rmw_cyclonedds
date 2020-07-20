@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Ensure compliant node construction/destruction API (`#206 <https://github.com/ros2/rmw_cyclonedds/issues/206>`_)
+* Contributors: Michel Hidalgo
+
 0.10.0 (2020-07-08)
 -------------------
 * Remove domain_id and localhost_only from node API (`#205 <https://github.com/ros2/rmw_cyclonedds/issues/205>`_)
