@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.7.3 (2020-07-21)
+------------------
+* Fix lost service responses (`#183 <https://github.com/ros2/rmw_cyclonedds/issues/183>`_, `#74 <https://github.com/ros2/rmw_cyclonedds/issues/74>`_) (`#187 <https://github.com/ros2/rmw_cyclonedds/issues/187>`_) (`#209 <https://github.com/ros2/rmw_cyclonedds/issues/209>`_)
+* Contributors: Erik Boasson
+
 0.7.2 (2020-07-07)
 ------------------
 * Handle RMW_DEFAULT_DOMAIN_ID (`#194 <https://github.com/ros2/rmw_cyclonedds/issues/194>`_) (`#199 <https://github.com/ros2/rmw_cyclonedds/issues/199>`_)
