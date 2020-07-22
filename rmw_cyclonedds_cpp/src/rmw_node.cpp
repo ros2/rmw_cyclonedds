@@ -287,7 +287,7 @@ struct rmw_context_impl_t
   // Initializes the participant, if it wasn't done already.
   // node_count is increased
   rmw_ret_t
-  init(rmw_init_options_t * options);
+  init(rmw_init_options_t * options, size_t domain_id);
 
   // Destroys the participant, when node_count reaches 0.
   rmw_ret_t
@@ -926,7 +926,7 @@ rmw_ret_t configure_qos_for_security(
 }
 
 rmw_ret_t
-rmw_context_impl_t::init(rmw_init_options_t * options)
+rmw_context_impl_t::init(rmw_init_options_t * options, size_t domain_id)
 {
   std::lock_guard<std::mutex> guard(initialization_mutex);
   if (0u != this->node_count) {
@@ -939,9 +939,7 @@ rmw_context_impl_t::init(rmw_init_options_t * options)
     failed: otherwise there is a race with rmw_destroy_node deleting the last participant
     and tearing down the domain for versions of Cyclone that implement the original
     version of dds_create_domain that doesn't return a handle.  */
-  this->domain_id = static_cast<dds_domainid_t>(
-    // No custom handling of RMW_DEFAULT_DOMAIN_ID. Simply use a reasonable domain id.
-    options->domain_id != RMW_DEFAULT_DOMAIN_ID ? options->domain_id : 0u);
+  this->domain_id = static_cast<dds_domainid_t>(domain_id);
 
   if (!check_create_domain(this->domain_id, options->localhost_only)) {
     return RMW_RET_ERROR;
@@ -1147,13 +1145,14 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
     return RMW_RET_INVALID_ARGUMENT;
   }
 
-  const rmw_context_t zero_context = rmw_get_zero_initialized_context();
-  assert(0 == std::memcmp(context, &zero_context, sizeof(rmw_context_t)));
   auto restore_context = rcpputils::make_scope_exit(
-    [context, &zero_context]() {*context = zero_context;});
+    [context]() {*context = rmw_get_zero_initialized_context();});
 
   context->instance_id = options->instance_id;
   context->implementation_identifier = eclipse_cyclonedds_identifier;
+  // No custom handling of RMW_DEFAULT_DOMAIN_ID. Simply use a reasonable domain id.
+  context->actual_domain_id =
+    RMW_DEFAULT_DOMAIN_ID != options->domain_id ? options->domain_id : 0u;
 
   context->impl = new (std::nothrow) rmw_context_impl_t();
   if (nullptr == context->impl) {
@@ -1255,7 +1254,7 @@ extern "C" rmw_node_t * rmw_create_node(
     return nullptr;
   }
 
-  ret = context->impl->init(&context->options);
+  ret = context->impl->init(&context->options, context->actual_domain_id);
   if (RMW_RET_OK != ret) {
     return nullptr;
   }
