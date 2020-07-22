@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.12.0 (2020-07-22)
+-------------------
 * Set context actual domain id (`#208 <https://github.com/ros2/rmw_cyclonedds/issues/208>`_)
 * Contributors: Ivan Santiago Paunovic
 
