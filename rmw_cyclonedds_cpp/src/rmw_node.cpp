@@ -1588,7 +1588,6 @@ static dds_qos_t * create_readwrite_qos(
   dds_qset_writer_data_lifecycle(qos, false); /* disable autodispose */
   switch (qos_policies->history) {
     case RMW_QOS_POLICY_HISTORY_SYSTEM_DEFAULT:
-    case RMW_QOS_POLICY_HISTORY_UNKNOWN:
     case RMW_QOS_POLICY_HISTORY_KEEP_LAST:
       if (qos_policies->depth == RMW_QOS_POLICY_DEPTH_SYSTEM_DEFAULT) {
         dds_qset_history(qos, DDS_HISTORY_KEEP_LAST, 1);
@@ -1604,24 +1603,26 @@ static dds_qos_t * create_readwrite_qos(
     case RMW_QOS_POLICY_HISTORY_KEEP_ALL:
       dds_qset_history(qos, DDS_HISTORY_KEEP_ALL, DDS_LENGTH_UNLIMITED);
       break;
+    case RMW_QOS_POLICY_HISTORY_UNKNOWN:
+      return nullptr;
     default:
       rmw_cyclonedds_cpp::unreachable();
   }
   switch (qos_policies->reliability) {
     case RMW_QOS_POLICY_RELIABILITY_SYSTEM_DEFAULT:
-    case RMW_QOS_POLICY_RELIABILITY_UNKNOWN:
     case RMW_QOS_POLICY_RELIABILITY_RELIABLE:
       dds_qset_reliability(qos, DDS_RELIABILITY_RELIABLE, DDS_INFINITY);
       break;
     case RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT:
       dds_qset_reliability(qos, DDS_RELIABILITY_BEST_EFFORT, 0);
       break;
+    case RMW_QOS_POLICY_RELIABILITY_UNKNOWN:
+      return nullptr;
     default:
       rmw_cyclonedds_cpp::unreachable();
   }
   switch (qos_policies->durability) {
     case RMW_QOS_POLICY_DURABILITY_SYSTEM_DEFAULT:
-    case RMW_QOS_POLICY_DURABILITY_UNKNOWN:
     case RMW_QOS_POLICY_DURABILITY_VOLATILE:
       dds_qset_durability(qos, DDS_DURABILITY_VOLATILE);
       break;
@@ -1638,6 +1639,8 @@ static dds_qos_t * create_readwrite_qos(
           DDS_LENGTH_UNLIMITED);
         break;
       }
+    case RMW_QOS_POLICY_DURABILITY_UNKNOWN:
+      return nullptr;
     default:
       rmw_cyclonedds_cpp::unreachable();
   }
@@ -1659,12 +1662,13 @@ static dds_qos_t * create_readwrite_qos(
   switch (qos_policies->liveliness) {
     case RMW_QOS_POLICY_LIVELINESS_SYSTEM_DEFAULT:
     case RMW_QOS_POLICY_LIVELINESS_AUTOMATIC:
-    case RMW_QOS_POLICY_LIVELINESS_UNKNOWN:
       dds_qset_liveliness(qos, DDS_LIVELINESS_AUTOMATIC, ldur);
       break;
     case RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC:
       dds_qset_liveliness(qos, DDS_LIVELINESS_MANUAL_BY_TOPIC, ldur);
       break;
+    case RMW_QOS_POLICY_LIVELINESS_UNKNOWN:
+      return nullptr;
     default:
       rmw_cyclonedds_cpp::unreachable();
   }
@@ -2052,14 +2056,18 @@ rmw_ret_t rmw_publisher_assert_liveliness(const rmw_publisher_t * publisher)
 
 rmw_ret_t rmw_publisher_get_actual_qos(const rmw_publisher_t * publisher, rmw_qos_profile_t * qos)
 {
-  RET_NULL(qos);
-  RET_WRONG_IMPLID(publisher);
+  RMW_CHECK_ARGUMENT_FOR_NULL(publisher, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    publisher,
+    publisher->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_ARGUMENT_FOR_NULL(qos, RMW_RET_INVALID_ARGUMENT);
   auto pub = static_cast<CddsPublisher *>(publisher->data);
   if (get_readwrite_qos(pub->enth, qos)) {
     return RMW_RET_OK;
-  } else {
-    return RMW_RET_ERROR;
   }
+  return RMW_RET_ERROR;
 }
 
 extern "C" rmw_ret_t rmw_borrow_loaned_message(
