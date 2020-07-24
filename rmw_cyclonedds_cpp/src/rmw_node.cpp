@@ -1902,33 +1902,40 @@ static rmw_publisher_t * create_publisher(
 )
 {
   CddsPublisher * pub;
-  rmw_publisher_t * rmw_publisher;
   if ((pub =
     create_cdds_publisher(
       dds_ppant, dds_pub, type_supports, topic_name,
       qos_policies)) == nullptr)
   {
-    goto fail_common_init;
+    return nullptr;
   }
-  rmw_publisher = rmw_publisher_allocate();
-  RET_ALLOC_X(rmw_publisher, goto fail_publisher);
+  auto cleanup_cdds_publisher = rcpputils::make_scope_exit(
+    [pub]() {
+      if (dds_delete(pub->enth) < 0) {
+        RCUTILS_LOG_ERROR_NAMED(
+          "rmw_cyclonedds_cpp", "failed to delete writer during error handling");
+      }
+      delete pub;
+    });
+
+  rmw_publisher_t * rmw_publisher = rmw_publisher_allocate();
+  RET_ALLOC_X(rmw_publisher, return nullptr);
+  auto cleanup_rmw_publisher = rcpputils::make_scope_exit(
+    [rmw_publisher]() {
+      rmw_free(const_cast<char *>(rmw_publisher->topic_name));
+      rmw_publisher_free(rmw_publisher);
+    });
   rmw_publisher->implementation_identifier = eclipse_cyclonedds_identifier;
   rmw_publisher->data = pub;
   rmw_publisher->topic_name = reinterpret_cast<char *>(rmw_allocate(strlen(topic_name) + 1));
-  RET_ALLOC_X(rmw_publisher->topic_name, goto fail_topic_name);
+  RET_ALLOC_X(rmw_publisher->topic_name, return nullptr);
   memcpy(const_cast<char *>(rmw_publisher->topic_name), topic_name, strlen(topic_name) + 1);
   rmw_publisher->options = *publisher_options;
   rmw_publisher->can_loan_messages = false;
+
+  cleanup_rmw_publisher.cancel();
+  cleanup_cdds_publisher.cancel();
   return rmw_publisher;
-fail_topic_name:
-  rmw_publisher_free(rmw_publisher);
-fail_publisher:
-  if (dds_delete(pub->enth) < 0) {
-    RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp", "failed to delete writer during error handling");
-  }
-  delete pub;
-fail_common_init:
-  return nullptr;
 }
 
 extern "C" rmw_publisher_t * rmw_create_publisher(
@@ -1937,7 +1944,29 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
   const rmw_publisher_options_t * publisher_options
 )
 {
-  RET_WRONG_IMPLID_X(node, return nullptr);
+  RMW_CHECK_ARGUMENT_FOR_NULL(node, nullptr);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    node,
+    node->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return nullptr);
+  RMW_CHECK_ARGUMENT_FOR_NULL(type_supports, nullptr);
+  RMW_CHECK_ARGUMENT_FOR_NULL(topic_name, nullptr);
+  RMW_CHECK_ARGUMENT_FOR_NULL(qos_policies, nullptr);
+  if (!qos_policies->avoid_ros_namespace_conventions) {
+    int validation_result = RMW_TOPIC_VALID;
+    rmw_ret_t ret = rmw_validate_full_topic_name(topic_name, &validation_result, nullptr);
+    if (RMW_RET_OK != ret) {
+      return nullptr;
+    }
+    if (RMW_TOPIC_VALID != validation_result) {
+      const char * reason = rmw_full_topic_name_validation_result_string(validation_result);
+      RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("invalid topic name: %s", reason);
+      return nullptr;
+    }
+  }
+  RMW_CHECK_ARGUMENT_FOR_NULL(publisher_options, nullptr);
+
   rmw_publisher_t * pub = create_publisher(
     node->context->impl->ppant, node->context->impl->dds_pub,
     type_supports, topic_name, qos_policies,
@@ -1954,9 +1983,16 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
         static_cast<void *>(&msg),
         nullptr))
     {
+      rmw_error_state_t error_state = *rmw_get_error_state();
+      rmw_reset_error();
       static_cast<void>(common->graph_cache.dissociate_writer(
         cddspub->gid, common->gid, node->name, node->namespace_));
-      static_cast<void>(destroy_publisher(pub));
+      if (RMW_RET_OK != destroy_publisher(pub)) {
+        RMW_SAFE_FWRITE_TO_STDERR(rmw_get_error_string().str);
+        RMW_SAFE_FWRITE_TO_STDERR(" during '" RCUTILS_STRINGIFY(__function__) "' cleanup\n");
+        rmw_reset_error();
+      }
+      rmw_set_error_state(error_state.message, error_state.file, error_state.line_number);
       return nullptr;
     }
   }
@@ -2051,23 +2087,37 @@ extern "C" rmw_ret_t rmw_return_loaned_message_from_publisher(
 
 static rmw_ret_t destroy_publisher(rmw_publisher_t * publisher)
 {
-  RET_WRONG_IMPLID(publisher);
+  rmw_ret_t ret = RMW_RET_OK;
   auto pub = static_cast<CddsPublisher *>(publisher->data);
   if (pub != nullptr) {
     if (dds_delete(pub->enth) < 0) {
       RMW_SET_ERROR_MSG("failed to delete writer");
+      ret = RMW_RET_ERROR;
     }
     delete pub;
   }
   rmw_free(const_cast<char *>(publisher->topic_name));
-  publisher->topic_name = nullptr;
   rmw_publisher_free(publisher);
-  return RMW_RET_OK;
+  return ret;
 }
 
 extern "C" rmw_ret_t rmw_destroy_publisher(rmw_node_t * node, rmw_publisher_t * publisher)
 {
-  RET_WRONG_IMPLID(node);
+  RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(publisher, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    node,
+    node->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    publisher,
+    publisher->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+
+  rmw_ret_t ret = RMW_RET_OK;
+  rmw_error_state_t error_state;
   {
     auto common = &node->context->impl->common;
     const auto cddspub = static_cast<const CddsPublisher *>(publisher->data);
@@ -2076,12 +2126,32 @@ extern "C" rmw_ret_t rmw_destroy_publisher(rmw_node_t * node, rmw_publisher_t * 
       common->graph_cache.dissociate_writer(
       cddspub->gid, common->gid, node->name,
       node->namespace_);
-    if (RMW_RET_OK != rmw_publish(common->pub, static_cast<void *>(&msg), nullptr)) {
-      RMW_SET_ERROR_MSG(
-        "failed to publish ParticipantEntitiesInfo message after dissociating writer");
+    rmw_ret_t publish_ret =
+      rmw_publish(common->pub, static_cast<void *>(&msg), nullptr);
+    if (RMW_RET_OK != publish_ret) {
+      error_state = *rmw_get_error_state();
+      ret = publish_ret;
+      rmw_reset_error();
     }
   }
-  return destroy_publisher(publisher);
+
+  rmw_ret_t inner_ret = destroy_publisher(publisher);
+  if (RMW_RET_OK != inner_ret) {
+    if (RMW_RET_OK != ret) {
+      RMW_SAFE_FWRITE_TO_STDERR(rmw_get_error_string().str);
+      RMW_SAFE_FWRITE_TO_STDERR(" during '" RCUTILS_STRINGIFY(__function__) "'\n");
+    } else {
+      error_state = *rmw_get_error_state();
+      ret = inner_ret;
+    }
+    rmw_reset_error();
+  }
+
+  if (RMW_RET_OK != ret) {
+    rmw_set_error_state(error_state.message, error_state.file, error_state.line_number);
+  }
+
+  return ret;
 }
 
 
