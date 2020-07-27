@@ -1956,6 +1956,10 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
     return nullptr);
   RMW_CHECK_ARGUMENT_FOR_NULL(type_supports, nullptr);
   RMW_CHECK_ARGUMENT_FOR_NULL(topic_name, nullptr);
+  if (0 == strlen(topic_name)) {
+    RMW_SET_ERROR_MSG("topic_name argument is an empty string");
+    return nullptr;
+  }
   RMW_CHECK_ARGUMENT_FOR_NULL(qos_policies, nullptr);
   if (!qos_policies->avoid_ros_namespace_conventions) {
     int validation_result = RMW_TOPIC_VALID;
@@ -1975,31 +1979,36 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
     node->context->impl->ppant, node->context->impl->dds_pub,
     type_supports, topic_name, qos_policies,
     publisher_options);
-  if (pub != nullptr) {
-    // Update graph
-    auto common = &node->context->impl->common;
-    const auto cddspub = static_cast<const CddsPublisher *>(pub->data);
-    std::lock_guard<std::mutex> guard(common->node_update_mutex);
-    rmw_dds_common::msg::ParticipantEntitiesInfo msg =
-      common->graph_cache.associate_writer(cddspub->gid, common->gid, node->name, node->namespace_);
-    if (RMW_RET_OK != rmw_publish(
-        common->pub,
-        static_cast<void *>(&msg),
-        nullptr))
-    {
+  if (pub == nullptr) {
+    return nullptr;
+  }
+  auto cleanup_publisher = rcpputils::make_scope_exit(
+    [pub]() {
       rmw_error_state_t error_state = *rmw_get_error_state();
       rmw_reset_error();
-      static_cast<void>(common->graph_cache.dissociate_writer(
-        cddspub->gid, common->gid, node->name, node->namespace_));
       if (RMW_RET_OK != destroy_publisher(pub)) {
         RMW_SAFE_FWRITE_TO_STDERR(rmw_get_error_string().str);
         RMW_SAFE_FWRITE_TO_STDERR(" during '" RCUTILS_STRINGIFY(__function__) "' cleanup\n");
         rmw_reset_error();
       }
       rmw_set_error_state(error_state.message, error_state.file, error_state.line_number);
+    });
+
+  // Update graph
+  auto common = &node->context->impl->common;
+  const auto cddspub = static_cast<const CddsPublisher *>(pub->data);
+  {
+    std::lock_guard<std::mutex> guard(common->node_update_mutex);
+    rmw_dds_common::msg::ParticipantEntitiesInfo msg =
+      common->graph_cache.associate_writer(cddspub->gid, common->gid, node->name, node->namespace_);
+    if (RMW_RET_OK != rmw_publish(common->pub, static_cast<void *>(&msg), nullptr)) {
+      static_cast<void>(common->graph_cache.dissociate_writer(
+        cddspub->gid, common->gid, node->name, node->namespace_));
       return nullptr;
     }
   }
+
+  cleanup_publisher.cancel();
   return pub;
 }
 
