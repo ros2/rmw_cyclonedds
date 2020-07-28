@@ -1332,7 +1332,7 @@ extern "C" rmw_ret_t rmw_destroy_node(rmw_node_t * node)
     auto common = &node->context->impl->common;
     std::lock_guard<std::mutex> guard(common->node_update_mutex);
     rmw_dds_common::msg::ParticipantEntitiesInfo participant_msg =
-      common->graph_cache.add_node(common->gid, node->name, node->namespace_);
+      common->graph_cache.remove_node(common->gid, node->name, node->namespace_);
     result_ret = rmw_publish(
       common->pub, static_cast<void *>(&participant_msg), nullptr);
   }
