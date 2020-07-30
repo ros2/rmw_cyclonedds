@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.13.0 (2020-07-30)
+-------------------
 * Ensure compliant publisher API (`#210 <https://github.com/ros2/rmw_cyclonedds/issues/210>`_)
 * rmw_destroy_node must remove node from graph cache (`#213 <https://github.com/ros2/rmw_cyclonedds/issues/213>`_)
 * Add space between 'ROS' and '2' (`#195 <https://github.com/ros2/rmw_cyclonedds/issues/195>`_)
