@@ -2295,29 +2295,69 @@ extern "C" rmw_subscription_t * rmw_create_subscription(
   const char * topic_name, const rmw_qos_profile_t * qos_policies,
   const rmw_subscription_options_t * subscription_options)
 {
-  RET_WRONG_IMPLID_X(node, return nullptr);
+  RMW_CHECK_ARGUMENT_FOR_NULL(node, nullptr);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    node,
+    node->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return nullptr);
+  RMW_CHECK_ARGUMENT_FOR_NULL(type_supports, nullptr);
+  RMW_CHECK_ARGUMENT_FOR_NULL(topic_name, nullptr);
+  if (0 == strlen(topic_name)) {
+    RMW_SET_ERROR_MSG("topic_name argument is an empty string");
+    return nullptr;
+  }
+  RMW_CHECK_ARGUMENT_FOR_NULL(qos_policies, nullptr);
+  if (!qos_policies->avoid_ros_namespace_conventions) {
+    int validation_result = RMW_TOPIC_VALID;
+    rmw_ret_t ret = rmw_validate_full_topic_name(topic_name, &validation_result, nullptr);
+    if (RMW_RET_OK != ret) {
+      return nullptr;
+    }
+    if (RMW_TOPIC_VALID != validation_result) {
+      const char * reason = rmw_full_topic_name_validation_result_string(validation_result);
+      RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("invalid topic name: %s", reason);
+      return nullptr;
+    }
+  }
+  RMW_CHECK_ARGUMENT_FOR_NULL(subscription_options, nullptr);
+
   rmw_subscription_t * sub = create_subscription(
     node->context->impl->ppant, node->context->impl->dds_sub,
     type_supports, topic_name, qos_policies,
     subscription_options);
-  if (sub != nullptr) {
-    // Update graph
-    auto common = &node->context->impl->common;
-    const auto cddssub = static_cast<const CddsSubscription *>(sub->data);
-    std::lock_guard<std::mutex> guard(common->node_update_mutex);
-    rmw_dds_common::msg::ParticipantEntitiesInfo msg =
-      common->graph_cache.associate_reader(cddssub->gid, common->gid, node->name, node->namespace_);
-    if (RMW_RET_OK != rmw_publish(
-        common->pub,
-        static_cast<void *>(&msg),
-        nullptr))
-    {
-      static_cast<void>(common->graph_cache.dissociate_reader(
-        cddssub->gid, common->gid, node->name, node->namespace_));
-      static_cast<void>(destroy_subscription(sub));
-      return nullptr;
-    }
+  if (sub == nullptr) {
+    return nullptr;
   }
+  auto cleanup_subscription = rcpputils::make_scope_exit(
+    [sub]() {
+      rmw_error_state_t error_state = *rmw_get_error_state();
+      rmw_reset_error();
+      if (RMW_RET_OK != destroy_subscription(sub)) {
+        RMW_SAFE_FWRITE_TO_STDERR(rmw_get_error_string().str);
+        RMW_SAFE_FWRITE_TO_STDERR(" during '" RCUTILS_STRINGIFY(__function__) "' cleanup\n");
+        rmw_reset_error();
+      }
+      rmw_set_error_state(error_state.message, error_state.file, error_state.line_number);
+    });
+
+  // Update graph
+  auto common = &node->context->impl->common;
+  const auto cddssub = static_cast<const CddsSubscription *>(sub->data);
+  std::lock_guard<std::mutex> guard(common->node_update_mutex);
+  rmw_dds_common::msg::ParticipantEntitiesInfo msg =
+    common->graph_cache.associate_reader(cddssub->gid, common->gid, node->name, node->namespace_);
+  if (RMW_RET_OK != rmw_publish(
+      common->pub,
+      static_cast<void *>(&msg),
+      nullptr))
+  {
+    static_cast<void>(common->graph_cache.dissociate_reader(
+      cddssub->gid, common->gid, node->name, node->namespace_));
+    return nullptr;
+  }
+
+  cleanup_subscription.cancel();
   return sub;
 }
 
@@ -2339,14 +2379,19 @@ extern "C" rmw_ret_t rmw_subscription_get_actual_qos(
   const rmw_subscription_t * subscription,
   rmw_qos_profile_t * qos)
 {
-  RET_NULL(qos);
-  RET_WRONG_IMPLID(subscription);
+  RMW_CHECK_ARGUMENT_FOR_NULL(subscription, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    subscription,
+    subscription->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_ARGUMENT_FOR_NULL(qos, RMW_RET_INVALID_ARGUMENT);
+
   auto sub = static_cast<CddsSubscription *>(subscription->data);
   if (get_readwrite_qos(sub->enth, qos)) {
     return RMW_RET_OK;
-  } else {
-    return RMW_RET_ERROR;
   }
+  return RMW_RET_ERROR;
 }
 
 static rmw_ret_t destroy_subscription(rmw_subscription_t * subscription)
@@ -2371,7 +2416,21 @@ static rmw_ret_t destroy_subscription(rmw_subscription_t * subscription)
 
 extern "C" rmw_ret_t rmw_destroy_subscription(rmw_node_t * node, rmw_subscription_t * subscription)
 {
-  RET_WRONG_IMPLID(node);
+  RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(subscription, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    node,
+    node->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    subscription,
+    subscription->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+
+  rmw_ret_t ret = RMW_RET_OK;
+  rmw_error_state_t error_state;
   {
     auto common = &node->context->impl->common;
     const auto cddssub = static_cast<const CddsSubscription *>(subscription->data);
@@ -2380,12 +2439,27 @@ extern "C" rmw_ret_t rmw_destroy_subscription(rmw_node_t * node, rmw_subscriptio
       common->graph_cache.dissociate_writer(
       cddssub->gid, common->gid, node->name,
       node->namespace_);
-    if (RMW_RET_OK != rmw_publish(common->pub, static_cast<void *>(&msg), nullptr)) {
-      RMW_SET_ERROR_MSG(
-        "failed to publish ParticipantEntitiesInfo message after dissociating reader");
+    rmw_ret_t publish_ret = rmw_publish(common->pub, static_cast<void *>(&msg), nullptr);
+    if (RMW_RET_OK != publish_ret) {
+      error_state = *rmw_get_error_state();
+      ret = publish_ret;
+      rmw_reset_error();
     }
   }
-  return destroy_subscription(subscription);
+
+  rmw_ret_t inner_ret = destroy_subscription(subscription);
+  if (RMW_RET_OK != inner_ret) {
+    if (RMW_RET_OK != ret) {
+      RMW_SAFE_FWRITE_TO_STDERR(rmw_get_error_string().str);
+      RMW_SAFE_FWRITE_TO_STDERR(" after '" RCUTILS_STRINGIFY(__function__) "'\n");
+      rmw_reset_error();
+      rmw_set_error_state(error_state.message, error_state.file, error_state.line_number);
+    } else {
+      ret = inner_ret;
+    }
+  }
+
+  return ret;
 }
 
 static rmw_ret_t rmw_take_int(
