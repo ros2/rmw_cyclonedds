@@ -2262,32 +2262,41 @@ static rmw_subscription_t * create_subscription(
       dds_ppant, dds_sub, type_supports, topic_name, qos_policies,
       subscription_options->ignore_local_publications)) == nullptr)
   {
-    goto fail_common_init;
+    return nullptr;
   }
+  auto cleanup_subscription = rcpputils::make_scope_exit(
+    [sub]() {
+      if (dds_delete(sub->rdcondh) < 0) {
+        RMW_SAFE_FWRITE_TO_STDERR(
+          "failed to delete readcondition during '"
+          RCUTILS_STRINGIFY(__function__) "' cleanup\n");
+      }
+      if (dds_delete(sub->enth) < 0) {
+        RMW_SAFE_FWRITE_TO_STDERR(
+          "failed to delete reader during '"
+          RCUTILS_STRINGIFY(__function__) "' cleanup\n");
+      }
+      delete sub;
+    });
   rmw_subscription = rmw_subscription_allocate();
-  RET_ALLOC_X(rmw_subscription, goto fail_subscription);
+  RET_ALLOC_X(rmw_subscription, return nullptr);
+  auto cleanup_rmw_subscription = rcpputils::make_scope_exit(
+    [rmw_subscription]() {
+      rmw_free(const_cast<char *>(rmw_subscription->topic_name));
+      rmw_subscription_free(rmw_subscription);
+    });
   rmw_subscription->implementation_identifier = eclipse_cyclonedds_identifier;
   rmw_subscription->data = sub;
   rmw_subscription->topic_name =
-    reinterpret_cast<const char *>(rmw_allocate(strlen(topic_name) + 1));
-  RET_ALLOC_X(rmw_subscription->topic_name, goto fail_topic_name);
+    static_cast<const char *>(rmw_allocate(strlen(topic_name) + 1));
+  RET_ALLOC_X(rmw_subscription->topic_name, return nullptr);
   memcpy(const_cast<char *>(rmw_subscription->topic_name), topic_name, strlen(topic_name) + 1);
   rmw_subscription->options = *subscription_options;
   rmw_subscription->can_loan_messages = false;
+
+  cleanup_subscription.cancel();
+  cleanup_rmw_subscription.cancel();
   return rmw_subscription;
-fail_topic_name:
-  rmw_subscription_free(rmw_subscription);
-fail_subscription:
-  if (dds_delete(sub->rdcondh) < 0) {
-    RCUTILS_LOG_ERROR_NAMED(
-      "rmw_cyclonedds_cpp", "failed to delete readcondition during error handling");
-  }
-  if (dds_delete(sub->enth) < 0) {
-    RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp", "failed to delete reader during error handling");
-  }
-  delete sub;
-fail_common_init:
-  return nullptr;
 }
 
 extern "C" rmw_subscription_t * rmw_create_subscription(
@@ -2316,7 +2325,7 @@ extern "C" rmw_subscription_t * rmw_create_subscription(
     }
     if (RMW_TOPIC_VALID != validation_result) {
       const char * reason = rmw_full_topic_name_validation_result_string(validation_result);
-      RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("invalid topic name: %s", reason);
+      RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("invalid topic_name argument: %s", reason);
       return nullptr;
     }
   }
