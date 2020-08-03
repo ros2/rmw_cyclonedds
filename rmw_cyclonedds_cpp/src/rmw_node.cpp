@@ -2396,22 +2396,25 @@ extern "C" rmw_ret_t rmw_subscription_get_actual_qos(
 
 static rmw_ret_t destroy_subscription(rmw_subscription_t * subscription)
 {
-  RET_WRONG_IMPLID(subscription);
+  rmw_ret_t ret = RMW_RET_OK;
   auto sub = static_cast<CddsSubscription *>(subscription->data);
-  if (sub != nullptr) {
-    clean_waitset_caches();
-    if (dds_delete(sub->rdcondh) < 0) {
-      RMW_SET_ERROR_MSG("failed to delete readcondition");
-    }
-    if (dds_delete(sub->enth) < 0) {
-      RMW_SET_ERROR_MSG("failed to delete reader");
-    }
-    delete sub;
+  clean_waitset_caches();
+  if (dds_delete(sub->rdcondh) < 0) {
+    RMW_SET_ERROR_MSG("failed to delete readcondition");
+    ret = RMW_RET_ERROR;
   }
+  if (dds_delete(sub->enth) < 0) {
+    if (RMW_RET_OK == ret) {
+      RMW_SET_ERROR_MSG("failed to delete reader");
+      ret = RMW_RET_ERROR;
+    } else {
+      RMW_SAFE_FWRITE_TO_STDERR("failed to delete reader\n");
+    }
+  }
+  delete sub;
   rmw_free(const_cast<char *>(subscription->topic_name));
-  subscription->topic_name = nullptr;
   rmw_subscription_free(subscription);
-  return RMW_RET_OK;
+  return ret;
 }
 
 extern "C" rmw_ret_t rmw_destroy_subscription(rmw_node_t * node, rmw_subscription_t * subscription)
@@ -2431,6 +2434,7 @@ extern "C" rmw_ret_t rmw_destroy_subscription(rmw_node_t * node, rmw_subscriptio
 
   rmw_ret_t ret = RMW_RET_OK;
   rmw_error_state_t error_state;
+  rmw_error_string_t error_string;
   {
     auto common = &node->context->impl->common;
     const auto cddssub = static_cast<const CddsSubscription *>(subscription->data);
@@ -2439,24 +2443,23 @@ extern "C" rmw_ret_t rmw_destroy_subscription(rmw_node_t * node, rmw_subscriptio
       common->graph_cache.dissociate_writer(
       cddssub->gid, common->gid, node->name,
       node->namespace_);
-    rmw_ret_t publish_ret = rmw_publish(common->pub, static_cast<void *>(&msg), nullptr);
-    if (RMW_RET_OK != publish_ret) {
+    ret = rmw_publish(common->pub, static_cast<void *>(&msg), nullptr);
+    if (RMW_RET_OK != ret) {
       error_state = *rmw_get_error_state();
-      ret = publish_ret;
+      error_string = rmw_get_error_string();
       rmw_reset_error();
     }
   }
 
-  rmw_ret_t inner_ret = destroy_subscription(subscription);
-  if (RMW_RET_OK != inner_ret) {
+  rmw_ret_t local_ret = destroy_subscription(subscription);
+  if (RMW_RET_OK != local_ret) {
     if (RMW_RET_OK != ret) {
-      RMW_SAFE_FWRITE_TO_STDERR(rmw_get_error_string().str);
-      RMW_SAFE_FWRITE_TO_STDERR(" after '" RCUTILS_STRINGIFY(__function__) "'\n");
-      rmw_reset_error();
-      rmw_set_error_state(error_state.message, error_state.file, error_state.line_number);
-    } else {
-      ret = inner_ret;
+      RMW_SAFE_FWRITE_TO_STDERR(error_string.str);
+      RMW_SAFE_FWRITE_TO_STDERR(" during '" RCUTILS_STRINGIFY(__function__) "'\n");
     }
+    ret = local_ret;
+  } else if (RMW_RET_OK != ret) {
+    rmw_set_error_state(error_state.message, error_state.file, error_state.line_number);
   }
 
   return ret;
