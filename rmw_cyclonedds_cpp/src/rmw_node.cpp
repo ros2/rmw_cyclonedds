@@ -1383,13 +1383,13 @@ extern "C" rmw_ret_t rmw_serialize(
   const rosidl_message_type_support_t * type_support,
   rmw_serialized_message_t * serialized_message)
 {
-  rmw_ret_t ret;
   try {
     auto writer = rmw_cyclonedds_cpp::make_cdr_writer(
       rmw_cyclonedds_cpp::make_message_value_type(type_support));
 
     auto size = writer->get_serialized_size(ros_message);
-    if ((ret = rmw_serialized_message_resize(serialized_message, size) != RMW_RET_OK)) {
+    rmw_ret_t ret = rmw_serialized_message_resize(serialized_message, size);
+    if (RMW_RET_OK != ret) {
       RMW_SET_ERROR_MSG("rmw_serialize: failed to allocate space for message");
       return ret;
     }
