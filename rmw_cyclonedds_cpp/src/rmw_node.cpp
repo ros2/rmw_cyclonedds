@@ -36,6 +36,7 @@
 #include "rcutils/format_string.h"
 #include "rcutils/get_env.h"
 #include "rcutils/logging_macros.h"
+#include "rcutils/macros.h"
 #include "rcutils/strdup.h"
 
 #include "rmw/allocators.h"
