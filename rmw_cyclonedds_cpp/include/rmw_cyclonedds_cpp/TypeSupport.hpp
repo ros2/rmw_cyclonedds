@@ -122,6 +122,7 @@ public:
 
 protected:
   TypeSupport();
+  virtual ~TypeSupport() {}
 
   void setName(const std::string & name);
 

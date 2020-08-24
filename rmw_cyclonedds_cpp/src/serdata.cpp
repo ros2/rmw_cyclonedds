@@ -432,6 +432,15 @@ static void sertopic_rmw_free(struct ddsi_sertopic * tpcmn)
 #if DDSI_SERTOPIC_HAS_TOPICKIND_NO_KEY
   ddsi_sertopic_fini(tpcmn);
 #endif
+  if (tp->type_support.type_support_) {
+    if (using_introspection_c_typesupport(tp->type_support.typesupport_identifier_)) {
+      delete static_cast<MessageTypeSupport_c *>(tp->type_support.type_support_);
+    } else if (using_introspection_cpp_typesupport(tp->type_support.typesupport_identifier_)) {
+      delete static_cast<MessageTypeSupport_cpp *>(tp->type_support.type_support_);
+    }
+    tp->type_support.type_support_ = NULL;
+  }
+
   delete tp;
 }
 
