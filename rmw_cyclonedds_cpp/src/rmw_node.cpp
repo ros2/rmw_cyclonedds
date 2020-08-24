@@ -551,11 +551,12 @@ static void handle_ParticipantEntitiesInfo(dds_entity_t reader, void * arg)
 {
   static_cast<void>(reader);
   rmw_context_impl_t * impl = static_cast<rmw_context_impl_t *>(arg);
-  ParticipantEntitiesInfo msg;
+  auto msg = std::unique_ptr<ParticipantEntitiesInfo>(new ParticipantEntitiesInfo);
   bool taken;
-  while (rmw_take(impl->common.sub, &msg, &taken, nullptr) == RMW_RET_OK && taken) {
+  while (rmw_take(impl->common.sub, msg.get(), &taken, nullptr) == RMW_RET_OK && taken) {
     // locally published data is filtered because of the subscription QoS
-    impl->common.graph_cache.update_participant_entities(msg);
+    impl->common.graph_cache.update_participant_entities(*msg.get());
+    msg.reset();
   }
 }
 
