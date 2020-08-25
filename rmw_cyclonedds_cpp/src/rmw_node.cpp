@@ -2781,7 +2781,7 @@ extern "C" rmw_ret_t rmw_publisher_event_init(
   rmw_event_t * rmw_event, const rmw_publisher_t * publisher, rmw_event_type_t event_type)
 {
   RET_NULL(publisher);
-  RET_WRONG_IMPLID_X(publisher, return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RET_WRONG_IMPLID(publisher);
   return init_rmw_event(
     rmw_event,
     publisher->implementation_identifier,
@@ -2793,7 +2793,7 @@ extern "C" rmw_ret_t rmw_subscription_event_init(
   rmw_event_t * rmw_event, const rmw_subscription_t * subscription, rmw_event_type_t event_type)
 {
   RET_NULL(subscription);
-  RET_WRONG_IMPLID_X(subscription, return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RET_WRONG_IMPLID(subscription);
   return init_rmw_event(
     rmw_event,
     subscription->implementation_identifier,
