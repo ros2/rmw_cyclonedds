@@ -1097,17 +1097,22 @@ rmw_context_impl_t::clean_up()
   common.graph_cache.clear_on_change_callback();
   if (common.graph_guard_condition) {
     destroy_guard_condition(common.graph_guard_condition);
+    common.graph_guard_condition = nullptr;
   }
   if (common.pub) {
     destroy_publisher(common.pub);
+    common.pub = nullptr;
   }
   if (common.sub) {
     destroy_subscription(common.sub);
+    common.sub = nullptr;
   }
   if (ppant > 0 && dds_delete(ppant) < 0) {
     RCUTILS_SAFE_FWRITE_TO_STDERR(
       "Failed to destroy domain in destructor\n");
   }
+  ppant = 0;
+
   check_destroy_domain(domain_id);
 }
 
