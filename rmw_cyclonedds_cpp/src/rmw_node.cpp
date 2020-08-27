@@ -2052,16 +2052,22 @@ extern "C" rmw_ret_t rmw_publisher_count_matched_subscriptions(
   const rmw_publisher_t * publisher,
   size_t * subscription_count)
 {
-  RET_NULL(publisher);
-  RET_WRONG_IMPLID(publisher);
+  RMW_CHECK_ARGUMENT_FOR_NULL(publisher, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    publisher,
+    publisher->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_ARGUMENT_FOR_NULL(subscription_count, RMW_RET_INVALID_ARGUMENT);
+
   auto pub = static_cast<CddsPublisher *>(publisher->data);
   dds_publication_matched_status_t status;
   if (dds_get_publication_matched_status(pub->enth, &status) < 0) {
     return RMW_RET_ERROR;
-  } else {
-    *subscription_count = status.current_count;
-    return RMW_RET_OK;
   }
+
+  *subscription_count = status.current_count;
+  return RMW_RET_OK;
 }
 
 rmw_ret_t rmw_publisher_assert_liveliness(const rmw_publisher_t * publisher)
@@ -2385,16 +2391,22 @@ extern "C" rmw_subscription_t * rmw_create_subscription(
 extern "C" rmw_ret_t rmw_subscription_count_matched_publishers(
   const rmw_subscription_t * subscription, size_t * publisher_count)
 {
-  RET_NULL(subscription);
-  RET_WRONG_IMPLID(subscription);
+  RMW_CHECK_ARGUMENT_FOR_NULL(subscription, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    subscription,
+    subscription->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_ARGUMENT_FOR_NULL(publisher_count, RMW_RET_INVALID_ARGUMENT);
+
   auto sub = static_cast<CddsSubscription *>(subscription->data);
   dds_subscription_matched_status_t status;
   if (dds_get_subscription_matched_status(sub->enth, &status) < 0) {
     return RMW_RET_ERROR;
-  } else {
-    *publisher_count = status.current_count;
-    return RMW_RET_OK;
   }
+
+  *publisher_count = status.current_count;
+  return RMW_RET_OK;
 }
 
 extern "C" rmw_ret_t rmw_subscription_get_actual_qos(
