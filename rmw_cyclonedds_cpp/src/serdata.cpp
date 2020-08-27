@@ -43,6 +43,10 @@
 #define ddsi_keyhash nn_keyhash
 #endif
 
+using TypeSupport_c =
+  rmw_cyclonedds_cpp::TypeSupport<rosidl_typesupport_introspection_c__MessageMembers>;
+using TypeSupport_cpp =
+  rmw_cyclonedds_cpp::TypeSupport<rosidl_typesupport_introspection_cpp::MessageMembers>;
 using MessageTypeSupport_c =
   rmw_cyclonedds_cpp::MessageTypeSupport<rosidl_typesupport_introspection_c__MessageMembers>;
 using MessageTypeSupport_cpp =
@@ -434,9 +438,9 @@ static void sertopic_rmw_free(struct ddsi_sertopic * tpcmn)
 #endif
   if (tp->type_support.type_support_) {
     if (using_introspection_c_typesupport(tp->type_support.typesupport_identifier_)) {
-      delete static_cast<MessageTypeSupport_c *>(tp->type_support.type_support_);
+      delete static_cast<TypeSupport_c *>(tp->type_support.type_support_);
     } else if (using_introspection_cpp_typesupport(tp->type_support.typesupport_identifier_)) {
-      delete static_cast<MessageTypeSupport_cpp *>(tp->type_support.type_support_);
+      delete static_cast<TypeSupport_cpp *>(tp->type_support.type_support_);
     }
     tp->type_support.type_support_ = NULL;
   }
