@@ -427,43 +427,6 @@ inline void deserialize_field<std::wstring>(
   }
 }
 
-inline size_t get_submessage_array_deserialize(
-  const rosidl_typesupport_introspection_cpp::MessageMember * member,
-  cycdeser & deser,
-  void * field,
-  void * & subros_message,
-  bool call_new,
-  size_t sub_members_size,
-  size_t max_align)
-{
-  (void)member;
-  uint32_t vsize = deser.deserialize_len(1);
-  auto vector = reinterpret_cast<std::vector<unsigned char> *>(field);
-  if (call_new) {
-    new(vector) std::vector<unsigned char>;
-  }
-  vector->resize(vsize * align_int_(max_align, sub_members_size));
-  subros_message = reinterpret_cast<void *>(vector->data());
-  return vsize;
-}
-
-inline size_t get_submessage_array_deserialize(
-  const rosidl_typesupport_introspection_c__MessageMember * member,
-  cycdeser & deser,
-  void * field,
-  void * & subros_message,
-  bool,
-  size_t sub_members_size,
-  size_t)
-{
-  (void)member;
-  uint32_t vsize = deser.deserialize_len(1);
-  auto tmparray = static_cast<rosidl_runtime_c__void__Sequence *>(field);
-  rosidl_runtime_c__void__Sequence__init(tmparray, vsize, sub_members_size);
-  subros_message = reinterpret_cast<void *>(tmparray->data);
-  return vsize;
-}
-
 template<typename MembersType>
 bool TypeSupport<MembersType>::deserializeROSmessage(
   cycdeser & deser, const MembersType * members, void * ros_message, bool call_new)
