@@ -119,7 +119,7 @@ public:
     cycprint & deser,
     std::function<void(cycprint &)> prefix = nullptr);
   std::string getName();
-  virtual ~TypeSupport() {}
+  virtual ~TypeSupport() = default;
 
 protected:
   TypeSupport();
