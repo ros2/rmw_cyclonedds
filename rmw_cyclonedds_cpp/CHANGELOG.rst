@@ -2,6 +2,16 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Fix context cleanup. (`#227 <https://github.com/ros2/rmw_cyclonedds/issues/227>`_)
+* Fix memory leak that type support not deleted. (`#225 <https://github.com/ros2/rmw_cyclonedds/issues/225>`_)
+* Ensure compliant matched pub/sub count API. (`#223 <https://github.com/ros2/rmw_cyclonedds/issues/223>`_)
+* Fix memory leak that string not deleted. (`#224 <https://github.com/ros2/rmw_cyclonedds/issues/224>`_)
+* Change RET_WRONG_IMPLID() to return RMW_RET_INCORRECT_IMPLEMENTATION (`#226 <https://github.com/ros2/rmw_cyclonedds/issues/226>`_)
+* Fix bad conditional in rmw_serialize(). (`#217 <https://github.com/ros2/rmw_cyclonedds/issues/217>`_)
+* Contributors: Chen Lihui, Michel Hidalgo
+
 0.14.0 (2020-08-06)
 -------------------
 * Ensure compliant subscription API. (`#214 <https://github.com/ros2/rmw_cyclonedds/issues/214>`_)
