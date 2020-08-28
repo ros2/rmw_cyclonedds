@@ -532,10 +532,9 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
               subros_message = field;
               array_size = member->array_size_;
             } else {
-              array_size = get_submessage_array_deserialize(
-                member, deser, field, subros_message,
-                call_new, sub_members_size, max_align);
-              recall_new = true;
+              array_size = deser.deserialize_len(1);
+              member->resize_function(field, array_size);
+              subros_message = member->get_function(field, 0);
             }
 
             for (size_t index = 0; index < array_size; ++index) {
