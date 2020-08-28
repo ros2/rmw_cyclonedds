@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.15.0 (2020-08-28)
+-------------------
 * Fix context cleanup. (`#227 <https://github.com/ros2/rmw_cyclonedds/issues/227>`_)
 * Fix memory leak that type support not deleted. (`#225 <https://github.com/ros2/rmw_cyclonedds/issues/225>`_)
 * Ensure compliant matched pub/sub count API. (`#223 <https://github.com/ros2/rmw_cyclonedds/issues/223>`_)
