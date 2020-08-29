@@ -128,123 +128,6 @@ align_int_(size_t __align, T __int) noexcept
 }
 
 template<typename T>
-static inline T *
-align_ptr_(size_t __align, T * __ptr) noexcept
-{
-  const auto __intptr = reinterpret_cast<uintptr_t>(__ptr);
-  const auto __aligned = align_int_(__align, __intptr);
-  return reinterpret_cast<T *>(__aligned);
-}
-
-template<typename MembersType>
-static size_t calculateMaxAlign(const MembersType * members)
-{
-  size_t max_align = 0;
-
-  for (uint32_t i = 0; i < members->member_count_; ++i) {
-    size_t alignment = 0;
-    const auto & member = members->members_[i];
-
-    if (member.is_array_ && (!member.array_size_ || member.is_upper_bound_)) {
-      alignment = alignof(std::vector<unsigned char>);
-    } else {
-      switch (member.type_id_) {
-        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_BOOL:
-          alignment = alignof(bool);
-          break;
-        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_BYTE:
-        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT8:
-          alignment = alignof(uint8_t);
-          break;
-        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_CHAR:
-        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT8:
-          alignment = alignof(char);
-          break;
-        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT32:
-          alignment = alignof(float);
-          break;
-        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT64:
-          alignment = alignof(double);
-          break;
-        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT16:
-          alignment = alignof(int16_t);
-          break;
-        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT16:
-          alignment = alignof(uint16_t);
-          break;
-        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT32:
-          alignment = alignof(int32_t);
-          break;
-        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT32:
-          alignment = alignof(uint32_t);
-          break;
-        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT64:
-          alignment = alignof(int64_t);
-          break;
-        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT64:
-          alignment = alignof(uint64_t);
-          break;
-        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING:
-          // Note: specialization needed because calculateMaxAlign is called before
-          // casting submembers as std::string, returned value is the same on i386
-          if (std::is_same<MembersType,
-            rosidl_typesupport_introspection_c__MessageMembers>::value)
-          {
-            alignment = alignof(rosidl_runtime_c__String);
-          } else {
-            alignment = alignof(std::string);
-          }
-          break;
-        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE:
-          {
-            auto sub_members = (const MembersType *)member.members_->data;
-            alignment = calculateMaxAlign(sub_members);
-          }
-          break;
-      }
-    }
-
-    if (alignment > max_align) {
-      max_align = alignment;
-    }
-  }
-
-  return max_align;
-}
-
-inline
-size_t get_array_size_and_assign_field(
-  const rosidl_typesupport_introspection_cpp::MessageMember * member,
-  void * field,
-  void * & subros_message,
-  size_t sub_members_size,
-  size_t max_align)
-{
-  auto vector = reinterpret_cast<std::vector<unsigned char> *>(field);
-  size_t vsize = vector->size() / align_int_(max_align, sub_members_size);
-  if (member->is_upper_bound_ && vsize > member->array_size_) {
-    throw std::runtime_error("vector overcomes the maximum length");
-  }
-  subros_message = reinterpret_cast<void *>(vector->data());
-  return vsize;
-}
-
-inline
-size_t get_array_size_and_assign_field(
-  const rosidl_typesupport_introspection_c__MessageMember * member,
-  void * field,
-  void * & subros_message,
-  size_t, size_t)
-{
-  auto tmpsequence = static_cast<rosidl_runtime_c__void__Sequence *>(field);
-  if (member->is_upper_bound_ && tmpsequence->size > member->array_size_) {
-    throw std::runtime_error("vector overcomes the maximum length");
-  }
-  subros_message = reinterpret_cast<void *>(tmpsequence->data);
-  return tmpsequence->size;
-}
-
-template<typename T>
 void deserialize_field(
   const rosidl_typesupport_introspection_cpp::MessageMember * member,
   void * field,
@@ -458,24 +341,25 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
           if (!member->is_array_) {
             deserializeROSmessage(deser, sub_members, field);
           } else {
-            void * subros_message = nullptr;
             size_t array_size = 0;
-            size_t sub_members_size = sub_members->size_of_;
-            size_t max_align = calculateMaxAlign(sub_members);
 
             if (member->array_size_ && !member->is_upper_bound_) {
-              subros_message = field;
               array_size = member->array_size_;
             } else {
               array_size = deser.deserialize_len(1);
+              if (!member->resize_function) {
+                RMW_SET_ERROR_MSG("unexpected error: resize function is null");
+                return false;
+              }
               member->resize_function(field, array_size);
-              subros_message = member->get_function(field, 0);
             }
 
+            if (array_size != 0 && !member->get_function) {
+              RMW_SET_ERROR_MSG("unexpected error: get_function function is null");
+              return false;
+            }
             for (size_t index = 0; index < array_size; ++index) {
-              deserializeROSmessage(deser, sub_members, subros_message);
-              subros_message = static_cast<char *>(subros_message) + sub_members_size;
-              subros_message = align_ptr_(max_align, subros_message);
+              deserializeROSmessage(deser, sub_members, member->get_function(field, index));
             }
           }
         }
