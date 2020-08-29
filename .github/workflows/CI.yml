@@ -26,6 +26,8 @@ jobs:
     - name: Build and test ROS
       id: ros_ci
       uses: ros-tooling/action-ros-ci@0.0.19
+      env:
+        CMAKE_CONFIG_TYPE: Debug
       with:
         package-name: >
           rmw_cyclonedds_cpp
