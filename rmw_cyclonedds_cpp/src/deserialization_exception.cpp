@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "rmw_cyclonedds_cpp/deserialization_exception.hpp"
+#include "deserialization_exception.hpp"
 
 using rmw_cyclonedds_cpp::DeserializationException;
 

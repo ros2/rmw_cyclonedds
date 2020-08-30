@@ -23,7 +23,7 @@
 #include <vector>
 
 #include "bytewise.hpp"
-#include "rmw_cyclonedds_cpp/exception.hpp"
+#include "exception.hpp"
 #include "rosidl_runtime_c/string_functions.h"
 #include "rosidl_runtime_c/u16string_functions.h"
 #include "rosidl_typesupport_introspection_c/identifier.h"

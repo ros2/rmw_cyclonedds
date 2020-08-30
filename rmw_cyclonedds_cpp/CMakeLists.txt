@@ -63,11 +63,6 @@ add_library(rmw_cyclonedds_cpp
   src/Serialization.cpp
   src/TypeSupport2.cpp)
 
-target_include_directories(rmw_cyclonedds_cpp PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-
 target_link_libraries(rmw_cyclonedds_cpp
   CycloneDDS::ddsc
 )
@@ -91,12 +86,6 @@ target_compile_definitions(${PROJECT_NAME}
     RMW_VERSION_PATCH=${rmw_VERSION_PATCH}
 )
 
-# Causes the visibility macros to use dllexport rather than dllimport,
-# which is appropriate when building the dll but not consuming it.
-target_compile_definitions(${PROJECT_NAME}
-  PRIVATE "RMW_CYCLONEDDS_CPP_BUILDING_LIBRARY")
-
-ament_export_include_directories(include)
 ament_export_libraries(rmw_cyclonedds_cpp)
 
 register_rmw_implementation(
@@ -109,11 +98,6 @@ if(BUILD_TESTING)
 endif()
 
 ament_package()
-
-install(
-  DIRECTORY include/
-  DESTINATION include
-)
 
 install(
   TARGETS rmw_cyclonedds_cpp

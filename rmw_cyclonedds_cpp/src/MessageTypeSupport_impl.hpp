@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef RMW_CYCLONEDDS_CPP__MESSAGETYPESUPPORT_IMPL_HPP_
-#define RMW_CYCLONEDDS_CPP__MESSAGETYPESUPPORT_IMPL_HPP_
+#ifndef MESSAGETYPESUPPORT_IMPL_HPP_
+#define MESSAGETYPESUPPORT_IMPL_HPP_
 
 #include <cassert>
 #include <memory>
@@ -21,7 +21,7 @@
 #include <sstream>
 #include <string>
 
-#include "rmw_cyclonedds_cpp/MessageTypeSupport.hpp"
+#include "MessageTypeSupport.hpp"
 #include "rosidl_typesupport_introspection_cpp/field_types.hpp"
 
 namespace rmw_cyclonedds_cpp
@@ -47,4 +47,4 @@ MessageTypeSupport<MembersType>::MessageTypeSupport(const MembersType * members)
 
 }  // namespace rmw_cyclonedds_cpp
 
-#endif  // RMW_CYCLONEDDS_CPP__MESSAGETYPESUPPORT_IMPL_HPP_
+#endif  // MESSAGETYPESUPPORT_IMPL_HPP_

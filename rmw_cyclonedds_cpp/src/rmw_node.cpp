@@ -59,9 +59,9 @@
 
 #include "TypeSupport2.hpp"
 
-#include "rmw_cyclonedds_cpp/rmw_version_test.hpp"
-#include "rmw_cyclonedds_cpp/MessageTypeSupport.hpp"
-#include "rmw_cyclonedds_cpp/ServiceTypeSupport.hpp"
+#include "rmw_version_test.hpp"
+#include "MessageTypeSupport.hpp"
+#include "ServiceTypeSupport.hpp"
 
 #include "rmw/get_topic_endpoint_info.h"
 #include "rmw/incompatible_qos_events_statuses.h"
@@ -77,7 +77,7 @@
 
 #include "dds/dds.h"
 #include "dds/ddsi/ddsi_sertopic.h"
-#include "rmw_cyclonedds_cpp/serdes.hpp"
+#include "serdes.hpp"
 #include "serdata.hpp"
 #include "demangle.hpp"
 
