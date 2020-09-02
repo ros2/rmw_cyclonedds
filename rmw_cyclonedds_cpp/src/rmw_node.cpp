@@ -2572,7 +2572,7 @@ static rmw_ret_t rmw_take_seq(
 
   if (count > (std::numeric_limits<uint32_t>::max)()) {
     RMW_SET_ERROR_MSG_WITH_FORMAT_STRING(
-      "Cannot take %ld samples at once, limit is %d",
+      "Cannot take %zu samples at once, limit is %d",
       count, (std::numeric_limits<uint32_t>::max)());
     return RMW_RET_ERROR;
   }
