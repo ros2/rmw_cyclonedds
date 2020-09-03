@@ -98,12 +98,9 @@ struct StringHelper<rosidl_typesupport_introspection_cpp::MessageMembers>
     return *(static_cast<std::string *>(data));
   }
 
-  static void assign(cycdeser & deser, void * field, bool call_new)
+  static void assign(cycdeser & deser, void * field)
   {
     std::string & str = *(std::string *)field;
-    if (call_new) {
-      new(&str) std::string;
-    }
     deser >> str;
   }
 };
