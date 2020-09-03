@@ -1,5 +1,13 @@
 name: ROS 2 CI
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+      - '**.rst'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - '**.rst'
 jobs:
   build:
     strategy:
