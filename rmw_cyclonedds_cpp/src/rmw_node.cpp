@@ -3819,6 +3819,8 @@ fail_qos:
 fail_subtopic:
   dds_delete(pubtopic);
 fail_pubtopic:
+  delete sub;
+  delete pub;
   return RMW_RET_ERROR;
 }
 
@@ -3827,6 +3829,8 @@ static void rmw_fini_cs(CddsCS * cs)
   dds_delete(cs->sub->rdcondh);
   dds_delete(cs->sub->enth);
   dds_delete(cs->pub->enth);
+  delete cs->sub;
+  delete cs->pub;
 }
 
 static rmw_ret_t destroy_client(const rmw_node_t * node, rmw_client_t * client)
@@ -3859,6 +3863,7 @@ static rmw_ret_t destroy_client(const rmw_node_t * node, rmw_client_t * client)
   }
 
   rmw_fini_cs(&info->client);
+  delete info;
   rmw_free(const_cast<char *>(client->service_name));
   rmw_client_free(client);
   return RMW_RET_OK;
@@ -3915,6 +3920,7 @@ fail_service_name:
   rmw_client_free(rmw_client);
 fail_client:
   rmw_fini_cs(&info->client);
+  delete info;
   return nullptr;
 }
 
@@ -3953,6 +3959,7 @@ static rmw_ret_t destroy_service(const rmw_node_t * node, rmw_service_t * servic
   }
 
   rmw_fini_cs(&info->service);
+  delete info;
   rmw_free(const_cast<char *>(service->service_name));
   rmw_service_free(service);
   return RMW_RET_OK;
@@ -4007,6 +4014,7 @@ fail_service_name:
   rmw_service_free(rmw_service);
 fail_service:
   rmw_fini_cs(&info->service);
+  delete info;
   return nullptr;
 }
 
