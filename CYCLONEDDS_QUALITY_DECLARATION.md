@@ -2,7 +2,7 @@ This document is a declaration of software quality for the [Eclipse Cyclone DDS]
 
 # Cyclone DDS Quality Declaration
 
-Cyclone DDS meets all the requirements of the **Quality Level 3** category and meets those of the **Quality Level 2** category insofar as they are relevant to the `rmw_cyclonedds` package. The latter can be argued based on the implication that the features needed for a ROS 2 tier-1 DDS-based middleware must necessarily be supported, and those features being covered by tests.
+Cyclone DDS meets all the requirements of **Quality Level 2** category insofar as they are relevant to the `rmw_cyclonedds` package and ROS 2's use of `rmw_cyclonedds` and `cyclonedds`. Cyclone DDS meets all of the requirements of Quality Level 3 category for uses outside of the scope of ROS 2. The former follows from the implication that the features needed for a ROS 2 tier-1 DDS-based middleware must necessarily be supported, and those features being covered by tests.
 
 The requirements for the various quality level categories are defined by [REP-2004](https://www.ros.org/reps/rep-2004.html). The rationale, notes and caveats for this claim are provided by the remainder of this document.
 
@@ -44,6 +44,12 @@ Cyclone DDS provides Public API stability for PATCH and MINOR releases. Cyclone 
 
 Cyclone DDS provides Evolving API stability for PATCH releases and strives to provide Evolving API stability for MINOR releases. Cyclone DDS does not guarantee Evolving API stability for MINOR and MAJOR releases.
 
+The RMW interface is what ROS 2 deals with, and for a variety of reasons it may be decided to rely on unstable interfaces (or even implementation details), to better support ROS 2's design decisions that do not fit so well with DDS. Given ROS 2's importance to Cyclone DDS the Public API is expected to eventually cover all of ROS 2's needs, but without a defined time-line for that to happen.
+
+Of course the Cyclone DDS projects takes these uses into account, but it may at times even require source changes to the RMW layer. As the Cyclone DDS project is actively involved in maintaining the RMW layer, such cases are handled by scheduling updates and performing additional compatibility checks against the ROS 2 test suite to ensure they do not cause any disruption to ROS 2.
+
+Those changes are all hidden in the interface between the RMW layer and Cyclone DDS itself and are of no concern to ROS 2 applications. It just means that, in the general case, one should always use a matched pair of `rmw_cyclonedds_cpp` and `cyclonedds`.
+
 ### ABI Stability Policy [1.v]
 
 Cyclone DDS provides ABI stability for PATCH releases and strives to provide ABI stability for MINOR releases, for both Public and Evolving APIs. Cyclone DDS does not guarantee ABI stability for MINOR or MAJOR releases.
@@ -72,7 +78,7 @@ This package uses DCO as its confirmation of contributor origin policy. More inf
 
 ### Peer Review Policy [2.iii]
 
-All pull requests will be peer-reviewed except when no-one is able to provide a review for a PR introduced by a Committer. Check [Eclipse Developer Process](https://www.eclipse.org/projects/dev_process/) for additional information, 
+All pull requests must pass peer-review except when no-one is able to provide a review for a PR introduced by a Committer. Check [Eclipse Developer Process](https://www.eclipse.org/projects/dev_process/) for additional information.
 
 ### Continuous Integration [2.iv]
 
@@ -128,14 +134,17 @@ In all, the test code appears to comprise approximately 25% of the codebase.
 Each feature in Cyclone DDS has corresponding tests which simulate typical usage, and they are located in separate directories next to the sources. 
 New features are required to have tests before being added.
 
-A substantial amount of the tests found throughout the source tree appear to verify functionality of various features of Cyclone DDS.
+A substantial amount of the tests found throughout the source tree verify functionality of various features of Cyclone DDS.
 However the lack of a complete feature list (see section [3.i]) makes it difficult to analyze the breadth of the tests.
 
 ### Public API Testing [4.ii]
 
 Each part of the public API has tests, and new additions or changes to the public API require tests before being added. 
 The tests aim to cover both typical usage and corner cases.
-There are some tests throughout the Cyclone DDS source tree which specifically target the public API, but there are no policies or mechanisms to discover and measure which tests target the public API or how much of the public API is covered by the existing tests.
+There are some tests throughout the Cyclone DDS source tree which specifically target the public API.
+In principle the entire interface does get tested, and in reality it is pretty close.
+
+Current lack of analysis of which parts of the code get hit by tests do make it hard to measure the extent of the tests.
 
 In continuous integration, address sanitizer is enabled for some of the test matrix. Address sanitizer errors result in CI failure.
 
@@ -151,7 +160,7 @@ While there are no automated, public tests or results, there is evidence in PRs 
 Performance-sensitive PRs are tested for regressions using ddsperf before changes are accepted.
 [ddsperf](https://github.com/eclipse-cyclonedds/cyclonedds/tree/master/src/tools/ddsperf) is the tool to use for assessing Cyclone DDS performance.
 
-ros2 [nightly CI performance tests](http://build.ros2.org/job/Fci__nightly-performance_ubuntu_focal_amd64/) exist but is not reliable infrastructure. We suggest Open Robotics move all performance testing to dedicated hardware.
+ros2 [nightly CI performance tests](http://build.ros2.org/job/Fci__nightly-performance_ubuntu_focal_amd64/) exist but is not reliable infrastructure. We suggest and would like to assist Open Robotics to move all performance testing to dedicated hardware.
 
 ### Linters and Static Analysis [4.v]
 
@@ -160,6 +169,10 @@ ros2 [nightly CI performance tests](http://build.ros2.org/job/Fci__nightly-perfo
 Cyclone DDS has automated daily [Synopsys Coverity static code analysis](https://www.synopsys.com/software-integrity/security-testing/static-analysis-sast.html) with public results that can be seen [here](https://scan.coverity.com/projects/eclipse-cyclonedds-cyclonedds). Cyclone DDS defect density is 0.05 per 1,000 lines of code as of Aug 11th 2020. Omitting the Java idlc which is **not** used by ROS 2 gives 0.03 per 1,000 lines of code. For comparison the average defect density of open source software projects of similar size is 0.5 per 1,000 lines of code.
 
 There are no linters enabled for the Cyclone DDS repository.
+
+Coding style is considered and enforced in the review of all Cyclone DDS pull requests.
+Contributors are regularly asked to rewrite or reformat their code contributions before pull requests are accepted. 
+This is a matter of public record in the Cyclone DDS pull request history.
 
 ## Dependencies [5]
 
