@@ -3829,8 +3829,14 @@ static void rmw_fini_cs(CddsCS * cs)
   dds_delete(cs->sub->rdcondh);
   dds_delete(cs->sub->enth);
   dds_delete(cs->pub->enth);
-  delete cs->sub;
-  delete cs->pub;
+  if (cs->sub) {
+    delete cs->sub;
+    cs->sub = NULL;
+  }
+  if (cs->pub) {
+    delete cs->pub;
+    cs->pub = NULL;
+  }
 }
 
 static rmw_ret_t destroy_client(const rmw_node_t * node, rmw_client_t * client)
@@ -3839,31 +3845,34 @@ static rmw_ret_t destroy_client(const rmw_node_t * node, rmw_client_t * client)
   RET_WRONG_IMPLID(node);
   RET_NULL(client);
   RET_WRONG_IMPLID(client);
-  auto info = static_cast<CddsClient *>(client->data);
   clean_waitset_caches();
 
-  {
-    // Update graph
-    auto common = &node->context->impl->common;
-    std::lock_guard<std::mutex> guard(common->node_update_mutex);
-    static_cast<void>(common->graph_cache.dissociate_writer(
-      info->client.pub->gid, common->gid,
-      node->name, node->namespace_));
-    rmw_dds_common::msg::ParticipantEntitiesInfo msg =
-      common->graph_cache.dissociate_reader(
-      info->client.sub->gid, common->gid, node->name,
-      node->namespace_);
-    if (RMW_RET_OK != rmw_publish(
-        common->pub,
-        static_cast<void *>(&msg),
-        nullptr))
+  if (client->data) {
+    auto info = static_cast<CddsClient *>(client->data);
     {
-      RMW_SET_ERROR_MSG("failed to publish ParticipantEntitiesInfo when destroying service");
+      // Update graph
+      auto common = &node->context->impl->common;
+      std::lock_guard<std::mutex> guard(common->node_update_mutex);
+      static_cast<void>(common->graph_cache.dissociate_writer(
+        info->client.pub->gid, common->gid,
+        node->name, node->namespace_));
+      rmw_dds_common::msg::ParticipantEntitiesInfo msg =
+        common->graph_cache.dissociate_reader(
+        info->client.sub->gid, common->gid, node->name,
+        node->namespace_);
+      if (RMW_RET_OK != rmw_publish(
+          common->pub,
+          static_cast<void *>(&msg),
+          nullptr))
+      {
+        RMW_SET_ERROR_MSG("failed to publish ParticipantEntitiesInfo when destroying service");
+      }
     }
-  }
 
-  rmw_fini_cs(&info->client);
-  delete info;
+    rmw_fini_cs(&info->client);
+    delete info;
+    client->data = NULL;
+  }
   rmw_free(const_cast<char *>(client->service_name));
   rmw_client_free(client);
   return RMW_RET_OK;
@@ -3935,31 +3944,35 @@ static rmw_ret_t destroy_service(const rmw_node_t * node, rmw_service_t * servic
   RET_WRONG_IMPLID(node);
   RET_NULL(service);
   RET_WRONG_IMPLID(service);
-  auto info = static_cast<CddsService *>(service->data);
   clean_waitset_caches();
 
-  {
-    // Update graph
-    auto common = &node->context->impl->common;
-    std::lock_guard<std::mutex> guard(common->node_update_mutex);
-    static_cast<void>(common->graph_cache.dissociate_writer(
-      info->service.pub->gid, common->gid,
-      node->name, node->namespace_));
-    rmw_dds_common::msg::ParticipantEntitiesInfo msg =
-      common->graph_cache.dissociate_reader(
-      info->service.sub->gid, common->gid, node->name,
-      node->namespace_);
-    if (RMW_RET_OK != rmw_publish(
-        common->pub,
-        static_cast<void *>(&msg),
-        nullptr))
-    {
-      RMW_SET_ERROR_MSG("failed to publish ParticipantEntitiesInfo when destroying service");
-    }
-  }
+  if (service->data) {
+    auto info = static_cast<CddsService *>(service->data);
 
-  rmw_fini_cs(&info->service);
-  delete info;
+    {
+      // Update graph
+      auto common = &node->context->impl->common;
+      std::lock_guard<std::mutex> guard(common->node_update_mutex);
+      static_cast<void>(common->graph_cache.dissociate_writer(
+        info->service.pub->gid, common->gid,
+        node->name, node->namespace_));
+      rmw_dds_common::msg::ParticipantEntitiesInfo msg =
+        common->graph_cache.dissociate_reader(
+        info->service.sub->gid, common->gid, node->name,
+        node->namespace_);
+      if (RMW_RET_OK != rmw_publish(
+          common->pub,
+          static_cast<void *>(&msg),
+          nullptr))
+      {
+        RMW_SET_ERROR_MSG("failed to publish ParticipantEntitiesInfo when destroying service");
+      }
+    }
+
+    rmw_fini_cs(&info->service);
+    delete info;
+    service->data = NULL;
+  }
   rmw_free(const_cast<char *>(service->service_name));
   rmw_service_free(service);
   return RMW_RET_OK;
