@@ -76,7 +76,7 @@ struct StringHelper<rosidl_typesupport_introspection_c__MessageMembers>
     return std::string(data.data);
   }
 
-  static void assign(cycdeser & deser, void * field, bool)
+  static void assign(cycdeser & deser, void * field)
   {
     std::string str;
     deser >> str;
@@ -96,12 +96,9 @@ struct StringHelper<rosidl_typesupport_introspection_cpp::MessageMembers>
     return *(static_cast<std::string *>(data));
   }
 
-  static void assign(cycdeser & deser, void * field, bool call_new)
+  static void assign(cycdeser & deser, void * field)
   {
     std::string & str = *(std::string *)field;
-    if (call_new) {
-      new(&str) std::string;
-    }
     deser >> str;
   }
 };
@@ -129,8 +126,7 @@ protected:
 
 private:
   bool deserializeROSmessage(
-    cycdeser & deser, const MembersType * members, void * ros_message,
-    bool call_new);
+    cycdeser & deser, const MembersType * members, void * ros_message);
   bool printROSmessage(
     cycprint & deser, const MembersType * members);
 };

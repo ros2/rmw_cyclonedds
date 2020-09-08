@@ -550,21 +550,12 @@ static void handle_ParticipantEntitiesInfo(dds_entity_t reader, void * arg)
 {
   static_cast<void>(reader);
   rmw_context_impl_t * impl = static_cast<rmw_context_impl_t *>(arg);
+  ParticipantEntitiesInfo msg;
   bool taken;
-  do {
-    // TODO(iuhilnehc-ynos): Fix memory leak that string not deleted. (#224)
-    // This is a workaround to make sure calling destructor of ParticipantEntitiesInfo
-    // after calling rmw_take each time, otherwise, there will be a memory leak while
-    // deserializing a long enough buffer into a string member of NodeEntitiesInfo
-    // in ParticipantEntitiesInfo.
-    ParticipantEntitiesInfo msg;
-    if (rmw_take(impl->common.sub, &msg, &taken, nullptr) == RMW_RET_OK && taken) {
-      // locally published data is filtered because of the subscription QoS
-      impl->common.graph_cache.update_participant_entities(msg);
-    } else {
-      break;
-    }
-  } while (1);
+  while (rmw_take(impl->common.sub, &msg, &taken, nullptr) == RMW_RET_OK && taken) {
+    // locally published data is filtered because of the subscription QoS
+    impl->common.graph_cache.update_participant_entities(msg);
+  }
 }
 
 static void handle_DCPSParticipant(dds_entity_t reader, void * arg)
