@@ -1,5 +1,9 @@
 name: ROS 2 CI
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore: ['**.md', '**.rst']
+  pull_request:
+    paths-ignore: ['**.md', '**.rst']
 jobs:
   build:
     strategy:
@@ -23,6 +27,8 @@ jobs:
       run: sed -e 's/azure.archive.ubuntu.com/us.archive.ubuntu.com/g' -e t -e d /etc/apt/sources.list | sudo tee /etc/apt/sources.list.d/nonazure.list
     - name: Acquire ROS dependencies
       uses: ros-tooling/setup-ros@master
+    - name: Set up git to see all pull requests
+      run: git config --global --add remote.origin.fetch '+refs/pull/*:refs/remotes/origin/pull/*'
     - name: Build and test ROS
       id: ros_ci
       uses: ros-tooling/action-ros-ci@0.0.19
@@ -33,4 +39,4 @@ jobs:
         target-ros2-distro: ${{matrix.rosdistro}}
         vcs-repo-file-url: >
           https://raw.githubusercontent.com/ros2/ros2/${{ matrix.repos_branch }}/ros2.repos
-          https://raw.githubusercontent.com/${{github.repository}}/${{github.sha}}/.github/resources/suppress_other_rmw.repos
+          https://raw.githubusercontent.com/${{github.repository}}/${{github.sha}}/.github/resources/local.repos
