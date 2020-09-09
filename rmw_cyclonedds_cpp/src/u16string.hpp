@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef RMW_CYCLONEDDS_CPP__U16STRING_HPP_
-#define RMW_CYCLONEDDS_CPP__U16STRING_HPP_
+#ifndef U16STRING_HPP_
+#define U16STRING_HPP_
 
 #include <string>
 #include "rosidl_runtime_c/u16string_functions.h"
@@ -33,4 +33,4 @@ bool wstring_to_u16string(const std::wstring & wstr, std::u16string & u16str);
 
 }  // namespace rmw_cyclonedds_cpp
 
-#endif  // RMW_CYCLONEDDS_CPP__U16STRING_HPP_
+#endif  // U16STRING_HPP_

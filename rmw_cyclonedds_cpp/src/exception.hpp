@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef RMW_CYCLONEDDS_CPP__EXCEPTION_HPP_
-#define RMW_CYCLONEDDS_CPP__EXCEPTION_HPP_
+#ifndef EXCEPTION_HPP_
+#define EXCEPTION_HPP_
 
 #include <stdexcept>
 #include <string>
@@ -51,4 +51,4 @@ protected:
 }
 }  // namespace rmw_cyclonedds_cpp
 
-#endif  // RMW_CYCLONEDDS_CPP__EXCEPTION_HPP_
+#endif  // EXCEPTION_HPP_

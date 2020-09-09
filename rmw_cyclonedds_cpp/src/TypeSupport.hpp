@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef RMW_CYCLONEDDS_CPP__TYPESUPPORT_HPP_
-#define RMW_CYCLONEDDS_CPP__TYPESUPPORT_HPP_
+#ifndef TYPESUPPORT_HPP_
+#define TYPESUPPORT_HPP_
 
 #include <cassert>
 #include <string>
@@ -30,13 +30,11 @@
 #include "rosidl_typesupport_introspection_cpp/identifier.hpp"
 #include "rosidl_typesupport_introspection_cpp/message_introspection.hpp"
 #include "rosidl_typesupport_introspection_cpp/service_introspection.hpp"
-#include "rosidl_typesupport_introspection_cpp/visibility_control.h"
 
 #include "rosidl_typesupport_introspection_c/field_types.h"
 #include "rosidl_typesupport_introspection_c/identifier.h"
 #include "rosidl_typesupport_introspection_c/message_introspection.h"
 #include "rosidl_typesupport_introspection_c/service_introspection.h"
-#include "rosidl_typesupport_introspection_c/visibility_control.h"
 
 #include "serdes.hpp"
 
@@ -137,4 +135,4 @@ private:
 
 #include "TypeSupport_impl.hpp"
 
-#endif  // RMW_CYCLONEDDS_CPP__TYPESUPPORT_HPP_
+#endif  // TYPESUPPORT_HPP_

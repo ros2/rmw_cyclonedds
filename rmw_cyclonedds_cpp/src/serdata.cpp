@@ -26,9 +26,9 @@
 #include "bytewise.hpp"
 #include "dds/ddsi/q_radmin.h"
 #include "rmw/error_handling.h"
-#include "rmw_cyclonedds_cpp/MessageTypeSupport.hpp"
-#include "rmw_cyclonedds_cpp/ServiceTypeSupport.hpp"
-#include "rmw_cyclonedds_cpp/serdes.hpp"
+#include "MessageTypeSupport.hpp"
+#include "ServiceTypeSupport.hpp"
+#include "serdes.hpp"
 
 /* Cyclone's nn_keyhash got renamed to ddsi_keyhash and shuffled around in the header
    files to avoid pulling in tons of things just for a definition of a keyhash.  This

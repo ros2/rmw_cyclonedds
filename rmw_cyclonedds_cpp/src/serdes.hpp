@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef RMW_CYCLONEDDS_CPP__SERDES_HPP_
-#define RMW_CYCLONEDDS_CPP__SERDES_HPP_
+#ifndef SERDES_HPP_
+#define SERDES_HPP_
 
 #include <string.h>
 #include <inttypes.h>
@@ -25,7 +25,7 @@
 #include <vector>
 #include <type_traits>
 
-#include "rmw_cyclonedds_cpp/deserialization_exception.hpp"
+#include "deserialization_exception.hpp"
 
 using rmw_cyclonedds_cpp::DeserializationException;
 
@@ -398,4 +398,4 @@ private:
   size_t bufsize;
 };
 
-#endif  // RMW_CYCLONEDDS_CPP__SERDES_HPP_
+#endif  // SERDES_HPP_

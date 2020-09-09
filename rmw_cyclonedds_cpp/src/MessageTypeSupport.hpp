@@ -12,42 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef RMW_CYCLONEDDS_CPP__SERVICETYPESUPPORT_HPP_
-#define RMW_CYCLONEDDS_CPP__SERVICETYPESUPPORT_HPP_
+#ifndef MESSAGETYPESUPPORT_HPP_
+#define MESSAGETYPESUPPORT_HPP_
 
 #include <cassert>
+#include <memory>
 
 #include "TypeSupport.hpp"
+#include "rosidl_typesupport_introspection_cpp/message_introspection.hpp"
 #include "rosidl_typesupport_introspection_cpp/field_types.hpp"
-
-struct CustomServiceInfo;
 
 namespace rmw_cyclonedds_cpp
 {
 
 template<typename MembersType>
-class ServiceTypeSupport : public TypeSupport<MembersType>
-{
-protected:
-  ServiceTypeSupport();
-};
-
-template<typename ServiceMembersType, typename MessageMembersType>
-class RequestTypeSupport : public ServiceTypeSupport<MessageMembersType>
+class MessageTypeSupport : public TypeSupport<MembersType>
 {
 public:
-  explicit RequestTypeSupport(const ServiceMembersType * members);
-};
-
-template<typename ServiceMembersType, typename MessageMembersType>
-class ResponseTypeSupport : public ServiceTypeSupport<MessageMembersType>
-{
-public:
-  explicit ResponseTypeSupport(const ServiceMembersType * members);
+  explicit MessageTypeSupport(const MembersType * members);
 };
 
 }  // namespace rmw_cyclonedds_cpp
 
-#include "ServiceTypeSupport_impl.hpp"
+#include "MessageTypeSupport_impl.hpp"
 
-#endif  // RMW_CYCLONEDDS_CPP__SERVICETYPESUPPORT_HPP_
+#endif  // MESSAGETYPESUPPORT_HPP_

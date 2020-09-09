@@ -14,7 +14,7 @@
 #include <exception>
 
 #include "dds/ddsrt/endian.h"
-#include "rmw_cyclonedds_cpp/serdes.hpp"
+#include "serdes.hpp"
 
 cycdeserbase::cycdeserbase(const char * data_, size_t size_)
 : data(data_),

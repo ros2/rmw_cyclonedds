@@ -13,16 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef RMW_CYCLONEDDS_CPP__TYPESUPPORT_IMPL_HPP_
-#define RMW_CYCLONEDDS_CPP__TYPESUPPORT_IMPL_HPP_
+#ifndef TYPESUPPORT_IMPL_HPP_
+#define TYPESUPPORT_IMPL_HPP_
 
 #include <cassert>
 #include <functional>
 #include <string>
 #include <vector>
 
-#include "rmw_cyclonedds_cpp/TypeSupport.hpp"
-#include "rmw_cyclonedds_cpp/macros.hpp"
+#include "TypeSupport.hpp"
+#include "macros.hpp"
 #include "rosidl_typesupport_introspection_cpp/field_types.hpp"
 #include "rosidl_typesupport_introspection_cpp/message_introspection.hpp"
 #include "rosidl_typesupport_introspection_cpp/service_introspection.hpp"
@@ -558,4 +558,4 @@ std::string TypeSupport<MembersType>::getName()
 
 }  // namespace rmw_cyclonedds_cpp
 
-#endif  // RMW_CYCLONEDDS_CPP__TYPESUPPORT_IMPL_HPP_
+#endif  // TYPESUPPORT_IMPL_HPP_
