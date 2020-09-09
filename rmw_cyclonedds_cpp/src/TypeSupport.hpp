@@ -16,15 +16,15 @@
 #ifndef TYPESUPPORT_HPP_
 #define TYPESUPPORT_HPP_
 
-#include <rosidl_runtime_c/string.h>
-#include <rosidl_runtime_c/string_functions.h>
-#include <rosidl_runtime_c/u16string_functions.h>
-
 #include <cassert>
 #include <string>
 #include <functional>
 
 #include "rcutils/logging_macros.h"
+
+#include "rosidl_runtime_c/string.h"
+#include "rosidl_runtime_c/string_functions.h"
+#include "rosidl_runtime_c/u16string_functions.h"
 
 #include "rosidl_typesupport_introspection_cpp/field_types.hpp"
 #include "rosidl_typesupport_introspection_cpp/identifier.hpp"

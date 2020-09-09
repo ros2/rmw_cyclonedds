@@ -13,8 +13,6 @@
 // limitations under the License.
 #include "serdata.hpp"
 
-#include <rmw/allocators.h>
-
 #include <cstring>
 #include <memory>
 #include <regex>
@@ -22,6 +20,7 @@
 #include <string>
 #include <utility>
 
+#include "rmw/allocators.h"
 #include "Serialization.hpp"
 #include "TypeSupport2.hpp"
 #include "bytewise.hpp"
