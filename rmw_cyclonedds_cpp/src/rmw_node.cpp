@@ -1505,9 +1505,9 @@ extern "C" rmw_ret_t rmw_publish(
   rmw_publisher_allocation_t * allocation)
 {
   static_cast<void>(allocation);    // unused
-  RET_NULL(publisher);
+  RMW_CHECK_ARGUMENT_FOR_NULL(publisher, RMW_RET_INVALID_ARGUMENT);
   RET_WRONG_IMPLID(publisher);
-  RET_NULL(ros_message);
+  RMW_CHECK_ARGUMENT_FOR_NULL(ros_message, RMW_RET_INVALID_ARGUMENT);
   auto pub = static_cast<CddsPublisher *>(publisher->data);
   assert(pub);
   if (dds_write(pub->enth, ros_message) >= 0) {
