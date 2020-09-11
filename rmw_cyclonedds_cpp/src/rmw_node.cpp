@@ -1505,9 +1505,15 @@ extern "C" rmw_ret_t rmw_publish(
   rmw_publisher_allocation_t * allocation)
 {
   static_cast<void>(allocation);    // unused
-  RET_NULL(publisher);
-  RET_WRONG_IMPLID(publisher);
-  RET_NULL(ros_message);
+  RMW_CHECK_FOR_NULL_WITH_MSG(
+    publisher, "publisher handle is null",
+    return RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    publisher, publisher->implementation_identifier, eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_FOR_NULL_WITH_MSG(
+    ros_message, "ros message handle is null",
+    return RMW_RET_INVALID_ARGUMENT);
   auto pub = static_cast<CddsPublisher *>(publisher->data);
   assert(pub);
   if (dds_write(pub->enth, ros_message) >= 0) {
