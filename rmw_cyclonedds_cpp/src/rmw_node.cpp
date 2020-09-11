@@ -1529,9 +1529,15 @@ extern "C" rmw_ret_t rmw_publish_serialized_message(
   const rmw_serialized_message_t * serialized_message, rmw_publisher_allocation_t * allocation)
 {
   static_cast<void>(allocation);    // unused
-  RET_NULL(publisher);
-  RET_WRONG_IMPLID(publisher);
-  RET_NULL(serialized_message);
+  RMW_CHECK_FOR_NULL_WITH_MSG(
+    publisher, "publisher handle is null",
+    return RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    publisher, publisher->implementation_identifier, eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_FOR_NULL_WITH_MSG(
+    serialized_message, "serialized message handle is null",
+    return RMW_RET_INVALID_ARGUMENT);
   auto pub = static_cast<CddsPublisher *>(publisher->data);
   struct ddsi_serdata * d = serdata_rmw_from_serialized_message(
     pub->sertopic, serialized_message->buffer, serialized_message->buffer_length);
