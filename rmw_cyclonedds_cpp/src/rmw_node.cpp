@@ -333,8 +333,8 @@ struct client_service_id_t
 
 struct CddsCS
 {
-  CddsPublisher * pub;
-  CddsSubscription * sub;
+  std::unique_ptr<CddsPublisher> pub;
+  std::unique_ptr<CddsSubscription> sub;
   client_service_id_t id;
 };
 
@@ -3716,8 +3716,8 @@ static rmw_ret_t rmw_init_cs(
   const rosidl_service_type_support_t * type_support = get_service_typesupport(type_supports);
   RET_NULL(type_support);
 
-  auto pub = new CddsPublisher();
-  auto sub = new CddsSubscription();
+  auto pub = std::make_unique<CddsPublisher>();
+  auto sub = std::make_unique<CddsSubscription>();
   std::string subtopic_name, pubtopic_name;
   void * pub_type_support, * sub_type_support;
 
@@ -3814,8 +3814,8 @@ static rmw_ret_t rmw_init_cs(
   dds_delete(subtopic);
   dds_delete(pubtopic);
 
-  cs->pub = pub;
-  cs->sub = sub;
+  cs->pub = std::move(pub);
+  cs->sub = std::move(sub);
   return RMW_RET_OK;
 
 fail_instance_handle:
@@ -3871,6 +3871,7 @@ static rmw_ret_t destroy_client(const rmw_node_t * node, rmw_client_t * client)
   }
 
   rmw_fini_cs(&info->client);
+  delete info;
   rmw_free(const_cast<char *>(client->service_name));
   rmw_client_free(client);
   return RMW_RET_OK;
@@ -3927,6 +3928,7 @@ fail_service_name:
   rmw_client_free(rmw_client);
 fail_client:
   rmw_fini_cs(&info->client);
+  delete info;
   return nullptr;
 }
 
@@ -3965,6 +3967,7 @@ static rmw_ret_t destroy_service(const rmw_node_t * node, rmw_service_t * servic
   }
 
   rmw_fini_cs(&info->service);
+  delete info;
   rmw_free(const_cast<char *>(service->service_name));
   rmw_service_free(service);
   return RMW_RET_OK;
@@ -4019,6 +4022,7 @@ fail_service_name:
   rmw_service_free(rmw_service);
 fail_service:
   rmw_fini_cs(&info->service);
+  delete info;
   return nullptr;
 }
 
