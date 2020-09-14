@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.16.0 (2020-09-14)
+-------------------
 * Fix that not to delete some objects after destroying functions (`#236 <https://github.com/ros2/rmw_cyclonedds/issues/236>`_)
 * Update rmw_publish_serialized_message() error returns (`#240 <https://github.com/ros2/rmw_cyclonedds/issues/240>`_)
 * Update rmw_publish() error returns (`#239 <https://github.com/ros2/rmw_cyclonedds/issues/239>`_)
