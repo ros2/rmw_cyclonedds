@@ -2,6 +2,16 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Fix that not to delete some objects after destroying functions (`#236 <https://github.com/ros2/rmw_cyclonedds/issues/236>`_)
+* Update rmw_publish_serialized_message() error returns (`#240 <https://github.com/ros2/rmw_cyclonedds/issues/240>`_)
+* Update rmw_publish() error returns (`#239 <https://github.com/ros2/rmw_cyclonedds/issues/239>`_)
+* Remove public declarations (`#230 <https://github.com/ros2/rmw_cyclonedds/issues/230>`_)
+* Use quotes for non-system includes (`#231 <https://github.com/ros2/rmw_cyclonedds/issues/231>`_)
+* Use correct functions to resize and get an item, avoiding memory leaks in typesupport code (`#228 <https://github.com/ros2/rmw_cyclonedds/issues/228>`_)
+* Contributors: Chen Lihui, Dan Rose, Lobotuerk
+
 0.15.0 (2020-08-28)
 -------------------
 * Fix context cleanup. (`#227 <https://github.com/ros2/rmw_cyclonedds/issues/227>`_)
