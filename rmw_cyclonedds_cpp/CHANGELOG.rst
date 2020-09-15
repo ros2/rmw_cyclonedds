@@ -2,8 +2,27 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-0.5.1 (2020-03-12)
+Forthcoming
+-----------
+* Provide a dummy readcdr function if needed
+* Fix serialization on non-32-bit, big-endian systems (`#159 <https://github.com/ros2/rmw_cyclonedds/issues/159>`_)
+* implement safer align\_ function (`#141 <https://github.com/ros2/rmw_cyclonedds/issues/141>`_)
+* Enable use of Cyclone DDS security features (`#123 <https://github.com/ros2/rmw_cyclonedds/issues/123>`_)
+* Clean up package xml dependencies (`#132 <https://github.com/ros2/rmw_cyclonedds/issues/132>`_)
+* API changes to sync with one Participant per Context change in rmw_fastrtps (`#106 <https://github.com/ros2/rmw_cyclonedds/issues/106>`_)
+* Improve security logic and memory management
+* Include incompatible_qos_events_statuses.h only if rmw >= 0.8.2
+* Fix memory leaks
+* Support for ON_REQUESTED_INCOMPATIBLE_QOS and ON_OFFERED_INCOMPATIBLE_QOS events (`#125 <https://github.com/ros2/rmw_cyclonedds/issues/125>`_)
+* Update conditional compile logic
+* uncrustify (`#124 <https://github.com/ros2/rmw_cyclonedds/issues/124>`_)
+* Enable use of Cyclone DDS security features
+* Prevent undefined behavior when serializing empty vector (`#122 <https://github.com/ros2/rmw_cyclonedds/issues/122>`_)
+* Add rmw\_*_event_init() functions (`#115 <https://github.com/ros2/rmw_cyclonedds/issues/115>`_)
+* Contributors: Dan Rose, Erik Boasson, Ivan Santiago Paunovic, Miaofei Mei, Sid Faber, dodsonmg, eboasson
 
+0.5.1 (2020-03-12)
+------------------
 * Use a list instead of a set for node names list
 * Update for changes on Cyclone DDS security branch
 * Fix leak in client/service topic error handling
