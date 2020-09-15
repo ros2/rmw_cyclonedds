@@ -2524,6 +2524,9 @@ static rmw_ret_t rmw_take_int(
   RMW_CHECK_FOR_NULL_WITH_MSG(
     subscription, "subscription handle is null",
     return RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_FOR_NULL_WITH_MSG(
+    message_info, "message info is null",
+    return RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
     subscription handle,
     subscription->implementation_identifier, eclipse_cyclonedds_identifier,
