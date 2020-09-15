@@ -2522,7 +2522,7 @@ static rmw_ret_t rmw_take_int(
     ros_message, "ros message handle is null",
     return RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_FOR_NULL_WITH_MSG(
-    subscription, "subscription info is null",
+    subscription, "subscription handle is null",
     return RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
     subscription handle,
