@@ -2569,20 +2569,37 @@ static rmw_ret_t rmw_take_seq(
   rmw_message_info_sequence_t * message_info_sequence,
   size_t * taken)
 {
-  RET_NULL(taken);
-  RET_NULL(message_sequence);
-  RET_NULL(message_info_sequence);
-  RET_NULL(subscription);
+  RMW_CHECK_ARGUMENT_FOR_NULL(
+    taken, RMW_RET_INVALID_ARGUMENT);
+
+  RMW_CHECK_ARGUMENT_FOR_NULL(
+    message_sequence, RMW_RET_INVALID_ARGUMENT);
+
+  RMW_CHECK_ARGUMENT_FOR_NULL(
+    message_info_sequence, RMW_RET_INVALID_ARGUMENT);
+
+  RMW_CHECK_ARGUMENT_FOR_NULL(
+    subscription, RMW_RET_INVALID_ARGUMENT);
   RET_WRONG_IMPLID(subscription);
+
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    subscription handle,
+    subscription->implementation_identifier, eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+
+  if (count == 0u) {
+    RMW_SET_ERROR_MSG("count cant be 0");
+    return RMW_RET_INVALID_ARGUMENT;
+  }
 
   if (count > message_sequence->capacity) {
     RMW_SET_ERROR_MSG("Insuffient capacity in message_sequence");
-    return RMW_RET_ERROR;
+    return RMW_RET_INVALID_ARGUMENT;
   }
 
   if (count > message_info_sequence->capacity) {
     RMW_SET_ERROR_MSG("Insuffient capacity in message_info_sequence");
-    return RMW_RET_ERROR;
+    return RMW_RET_INVALID_ARGUMENT;
   }
 
   if (count > (std::numeric_limits<uint32_t>::max)()) {
