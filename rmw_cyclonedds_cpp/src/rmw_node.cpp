@@ -2638,10 +2638,16 @@ static rmw_ret_t rmw_take_ser_int(
   rmw_serialized_message_t * serialized_message, bool * taken,
   rmw_message_info_t * message_info)
 {
-  RET_NULL(taken);
-  RET_NULL(serialized_message);
-  RET_NULL(subscription);
-  RET_WRONG_IMPLID(subscription);
+  RMW_CHECK_ARGUMENT_FOR_NULL(
+    taken, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(
+    serialized_message, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(
+    subscription, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    subscription handle,
+    subscription->implementation_identifier, eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION)
   CddsSubscription * sub = static_cast<CddsSubscription *>(subscription->data);
   RET_NULL(sub);
   dds_sample_info_t info;
