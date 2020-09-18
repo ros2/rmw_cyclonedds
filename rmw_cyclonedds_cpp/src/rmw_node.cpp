@@ -2724,6 +2724,10 @@ extern "C" rmw_ret_t rmw_take_serialized_message_with_info(
   rmw_subscription_allocation_t * allocation)
 {
   static_cast<void>(allocation);
+
+  RMW_CHECK_ARGUMENT_FOR_NULL(
+    message_info, RMW_RET_INVALID_ARGUMENT);
+
   return rmw_take_ser_int(subscription, serialized_message, taken, message_info);
 }
 
