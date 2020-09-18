@@ -2,6 +2,13 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Updated error returns on rmw_take_serialized() and rmw_take_with_message_info() (`#242 <https://github.com/ros2/rmw_cyclonedds/issues/242>`_)
+* Updated error returns on rmw_take() (`#241 <https://github.com/ros2/rmw_cyclonedds/issues/241>`_)
+* Add quality declaration for Cyclone DDS (`#218 <https://github.com/ros2/rmw_cyclonedds/issues/218>`_)
+* Contributors: Erik Boasson, Joe Speed, Jose Tomas Lorente, Scott K Logan 
+
 0.16.0 (2020-09-14)
 -------------------
 * Fix that not to delete some objects after destroying functions (`#236 <https://github.com/ros2/rmw_cyclonedds/issues/236>`_)
