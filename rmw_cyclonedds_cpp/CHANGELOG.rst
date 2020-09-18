@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.17.0 (2020-09-18)
+-------------------
 * Updated error returns on rmw_take_serialized() and rmw_take_with_message_info() (`#242 <https://github.com/ros2/rmw_cyclonedds/issues/242>`_)
 * Updated error returns on rmw_take() (`#241 <https://github.com/ros2/rmw_cyclonedds/issues/241>`_)
 * Add quality declaration for Cyclone DDS (`#218 <https://github.com/ros2/rmw_cyclonedds/issues/218>`_)
