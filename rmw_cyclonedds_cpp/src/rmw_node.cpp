@@ -2587,8 +2587,8 @@ static rmw_ret_t rmw_take_seq(
     subscription->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
 
-  if (count == 0u) {
-    RMW_SET_ERROR_MSG("count cant be 0");
+  if (0u == count) {
+    RMW_SET_ERROR_MSG("count cannot be 0");
     return RMW_RET_INVALID_ARGUMENT;
   }
 
