@@ -2639,11 +2639,11 @@ static rmw_ret_t rmw_take_ser_int(
   rmw_message_info_t * message_info)
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(
-    taken, RMW_RET_INVALID_ARGUMENT);
+    subscription, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_ARGUMENT_FOR_NULL(
     serialized_message, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_ARGUMENT_FOR_NULL(
-    subscription, RMW_RET_INVALID_ARGUMENT);
+    taken, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
     subscription handle,
     subscription->implementation_identifier, eclipse_cyclonedds_identifier,
