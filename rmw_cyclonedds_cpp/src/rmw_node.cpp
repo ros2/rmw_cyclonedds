@@ -2033,11 +2033,14 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
 
 extern "C" rmw_ret_t rmw_get_gid_for_publisher(const rmw_publisher_t * publisher, rmw_gid_t * gid)
 {
-  RET_NULL(publisher);
-  RET_WRONG_IMPLID(publisher);
-  RET_NULL(gid);
+  RMW_CHECK_ARGUMENT_FOR_NULL(publisher, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    publisher,
+    publisher->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_ARGUMENT_FOR_NULL(gid, RMW_RET_INVALID_ARGUMENT);
   auto pub = static_cast<const CddsPublisher *>(publisher->data);
-  RET_NULL(pub);
   gid->implementation_identifier = eclipse_cyclonedds_identifier;
   memset(gid->data, 0, sizeof(gid->data));
   assert(sizeof(pub->pubiid) <= sizeof(gid->data));
@@ -2049,11 +2052,19 @@ extern "C" rmw_ret_t rmw_compare_gids_equal(
   const rmw_gid_t * gid1, const rmw_gid_t * gid2,
   bool * result)
 {
-  RET_NULL(gid1);
-  RET_WRONG_IMPLID(gid1);
-  RET_NULL(gid2);
-  RET_WRONG_IMPLID(gid2);
-  RET_NULL(result);
+  RMW_CHECK_ARGUMENT_FOR_NULL(gid1, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    gid1,
+    gid1->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_ARGUMENT_FOR_NULL(gid2, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    gid2,
+    gid2->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_ARGUMENT_FOR_NULL(result, RMW_RET_INVALID_ARGUMENT);
   /* alignment is potentially lost because of the translation to an array of bytes, so use
      memcmp instead of a simple integer comparison */
   *result = memcmp(gid1->data, gid2->data, sizeof(gid1->data)) == 0;
