@@ -1907,14 +1907,14 @@ extern "C" rmw_ret_t rmw_init_publisher_allocation(
   static_cast<void>(message_bounds);
   static_cast<void>(allocation);
   RMW_SET_ERROR_MSG("rmw_init_publisher_allocation: unimplemented");
-  return RMW_RET_ERROR;
+  return RMW_RET_UNSUPPORTED;
 }
 
 extern "C" rmw_ret_t rmw_fini_publisher_allocation(rmw_publisher_allocation_t * allocation)
 {
   static_cast<void>(allocation);
   RMW_SET_ERROR_MSG("rmw_fini_publisher_allocation: unimplemented");
-  return RMW_RET_ERROR;
+  return RMW_RET_UNSUPPORTED;
 }
 
 static rmw_publisher_t * create_publisher(
@@ -2280,14 +2280,14 @@ extern "C" rmw_ret_t rmw_init_subscription_allocation(
   static_cast<void>(message_bounds);
   static_cast<void>(allocation);
   RMW_SET_ERROR_MSG("rmw_init_subscription_allocation: unimplemented");
-  return RMW_RET_ERROR;
+  return RMW_RET_UNSUPPORTED;
 }
 
 extern "C" rmw_ret_t rmw_fini_subscription_allocation(rmw_subscription_allocation_t * allocation)
 {
   static_cast<void>(allocation);
   RMW_SET_ERROR_MSG("rmw_fini_subscription_allocation: unimplemented");
-  return RMW_RET_ERROR;
+  return RMW_RET_UNSUPPORTED;
 }
 
 static rmw_subscription_t * create_subscription(
