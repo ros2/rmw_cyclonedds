@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.18.0 (2020-09-23)
+-------------------
 * Update gid API return codes. (`#244 <https://github.com/ros2/rmw_cyclonedds/issues/244>`_)
 * Update graph API return codes. (`#243 <https://github.com/ros2/rmw_cyclonedds/issues/243>`_)
 * Check for message_info on take where appropriate. (`#245 <https://github.com/ros2/rmw_cyclonedds/issues/245>`_)
