@@ -3757,10 +3757,32 @@ static rmw_ret_t rmw_init_cs(
   const char * service_name, const rmw_qos_profile_t * qos_policies,
   bool is_service)
 {
-  RET_NULL(node);
-  RET_WRONG_IMPLID(node);
-  RET_NULL_OR_EMPTYSTR(service_name);
-  RET_NULL(qos_policies);
+  RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    node,
+    node->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_ARGUMENT_FOR_NULL(type_supports, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(service_name, RMW_RET_INVALID_ARGUMENT);
+  if (0 == strlen(service_name)) {
+    RMW_SET_ERROR_MSG("service_name argument is an empty string");
+    return RMW_RET_INVALID_ARGUMENT;
+  }
+  RMW_CHECK_ARGUMENT_FOR_NULL(qos_policies, RMW_RET_INVALID_ARGUMENT);
+  if (!qos_policies->avoid_ros_namespace_conventions) {
+    int validation_result = RMW_TOPIC_VALID;
+    rmw_ret_t ret = rmw_validate_full_topic_name(service_name, &validation_result, nullptr);
+    if (RMW_RET_OK != ret) {
+      return ret;
+    }
+    if (RMW_TOPIC_VALID != validation_result) {
+      const char * reason = rmw_full_topic_name_validation_result_string(validation_result);
+      RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("service_name argument is invalid: %s", reason);
+      return RMW_RET_INVALID_ARGUMENT;
+    }
+  }
+
   const rosidl_service_type_support_t * type_support = get_service_typesupport(type_supports);
   RET_NULL(type_support);
 
@@ -3823,10 +3845,13 @@ static rmw_ret_t rmw_init_cs(
     RMW_SET_ERROR_MSG("failed to create topic");
     goto fail_subtopic;
   }
+  // before proceeding to outright ignore given QoS policies, sanity check them
   dds_qos_t * qos;
-  if ((qos = dds_create_qos()) == nullptr) {
+  if ((qos = create_readwrite_qos(qos_policies, false)) == nullptr) {
     goto fail_qos;
   }
+  dds_reset_qos(qos);
+
   dds_qset_reliability(qos, DDS_RELIABILITY_RELIABLE, DDS_SECS(1));
   dds_qset_history(qos, DDS_HISTORY_KEEP_ALL, DDS_LENGTH_UNLIMITED);
 
@@ -3891,10 +3916,18 @@ static void rmw_fini_cs(CddsCS * cs)
 
 static rmw_ret_t destroy_client(const rmw_node_t * node, rmw_client_t * client)
 {
-  RET_NULL(node);
-  RET_WRONG_IMPLID(node);
-  RET_NULL(client);
-  RET_WRONG_IMPLID(client);
+  RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    node,
+    node->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_ARGUMENT_FOR_NULL(client, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    client,
+    client->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   auto info = static_cast<CddsClient *>(client->data);
   clean_waitset_caches();
 
@@ -3987,10 +4020,18 @@ extern "C" rmw_ret_t rmw_destroy_client(rmw_node_t * node, rmw_client_t * client
 
 static rmw_ret_t destroy_service(const rmw_node_t * node, rmw_service_t * service)
 {
-  RET_NULL(node);
-  RET_WRONG_IMPLID(node);
-  RET_NULL(service);
-  RET_WRONG_IMPLID(service);
+  RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    node,
+    node->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_ARGUMENT_FOR_NULL(service, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    service,
+    service->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   auto info = static_cast<CddsService *>(service->data);
   clean_waitset_caches();
 
