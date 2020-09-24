@@ -3278,6 +3278,7 @@ extern "C" rmw_ret_t rmw_wait(
   rmw_wait_set_t * wait_set, const rmw_time_t * wait_timeout)
 {
   RET_NULL_X(wait_set, return RMW_RET_INVALID_ARGUMENT);
+  RET_WRONG_IMPLID(wait_set);
   CddsWaitset * ws = static_cast<CddsWaitset *>(wait_set->data);
   RET_NULL(ws);
 
