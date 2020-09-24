@@ -2,6 +2,12 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Fix array `get_function` semantics (`#248 <https://github.com/ros2/rmw_cyclonedds/issues/248>`_)
+* Update service/client construction/destruction API return codes. (`#247 <https://github.com/ros2/rmw_cyclonedds/issues/247>`_)
+* Contributors: Ivan Santiago Paunovic, Michel Hidalgo
+
 0.18.0 (2020-09-23)
 -------------------
 * Update gid API return codes. (`#244 <https://github.com/ros2/rmw_cyclonedds/issues/244>`_)
