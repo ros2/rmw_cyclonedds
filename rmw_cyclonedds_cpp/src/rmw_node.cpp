@@ -3066,7 +3066,7 @@ extern "C" rmw_ret_t rmw_trigger_guard_condition(
 
 extern "C" rmw_wait_set_t * rmw_create_wait_set(rmw_context_t * context, size_t max_conditions)
 {
-  (void)context;
+  RMW_CHECK_ARGUMENT_FOR_NULL(context, nullptr);
   (void)max_conditions;
   rmw_wait_set_t * wait_set = rmw_wait_set_allocate();
   CddsWaitset * ws = nullptr;
@@ -3277,7 +3277,7 @@ extern "C" rmw_ret_t rmw_wait(
   rmw_services_t * srvs, rmw_clients_t * cls, rmw_events_t * evs,
   rmw_wait_set_t * wait_set, const rmw_time_t * wait_timeout)
 {
-  RET_NULL(wait_set);
+  RET_NULL_X(wait_set, return RMW_RET_INVALID_ARGUMENT);
   CddsWaitset * ws = static_cast<CddsWaitset *>(wait_set->data);
   RET_NULL(ws);
 
