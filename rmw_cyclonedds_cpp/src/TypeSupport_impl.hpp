@@ -127,32 +127,6 @@ align_int_(size_t __align, T __int) noexcept
   return (__int - 1u + __align) & ~(__align - 1);
 }
 
-inline
-void * get_subros_message(
-  const rosidl_typesupport_introspection_cpp::MessageMember * member,
-  void * field,
-  size_t index,
-  size_t,
-  bool)
-{
-  return member->get_function(field, index);
-}
-
-inline
-void * get_subros_message(
-  const rosidl_typesupport_introspection_c__MessageMember * member,
-  void * field,
-  size_t index,
-  size_t array_size,
-  bool is_upper_bound)
-{
-  if (array_size && !is_upper_bound) {
-    return member->get_function(&field, index);
-  }
-
-  return member->get_function(field, index);
-}
-
 template<typename T>
 void deserialize_field(
   const rosidl_typesupport_introspection_cpp::MessageMember * member,
@@ -386,10 +360,7 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
             }
             for (size_t index = 0; index < array_size; ++index) {
               deserializeROSmessage(
-                deser, sub_members,
-                get_subros_message(
-                  member, field, index, member->array_size_,
-                  member->is_upper_bound_));
+                deser, sub_members, member->get_function(field, index));
             }
           }
         }
