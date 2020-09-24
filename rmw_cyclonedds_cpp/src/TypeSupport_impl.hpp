@@ -56,58 +56,6 @@ SPECIALIZE_GENERIC_C_SEQUENCE(uint32, uint32_t)
 SPECIALIZE_GENERIC_C_SEQUENCE(int64, int64_t)
 SPECIALIZE_GENERIC_C_SEQUENCE(uint64, uint64_t)
 
-typedef struct rosidl_runtime_c__void__Sequence
-{
-  void * data;
-  /// The number of valid items in data
-  size_t size;
-  /// The number of allocated items in data
-  size_t capacity;
-} rosidl_runtime_c__void__Sequence;
-
-inline
-bool
-rosidl_runtime_c__void__Sequence__init(
-  rosidl_runtime_c__void__Sequence * sequence, size_t size, size_t member_size)
-{
-  if (!sequence) {
-    return false;
-  }
-  void * data = nullptr;
-  if (size) {
-    data = static_cast<void *>(calloc(size, member_size));
-    if (!data) {
-      return false;
-    }
-  }
-  sequence->data = data;
-  sequence->size = size;
-  sequence->capacity = size;
-  return true;
-}
-
-inline
-void
-rosidl_runtime_c__void__Sequence__fini(rosidl_runtime_c__void__Sequence * sequence)
-{
-  if (!sequence) {
-    return;
-  }
-  if (sequence->data) {
-    // ensure that data and capacity values are consistent
-    assert(sequence->capacity > 0);
-    // finalize all sequence elements
-    free(sequence->data);
-    sequence->data = nullptr;
-    sequence->size = 0;
-    sequence->capacity = 0;
-  } else {
-    // ensure that data, size, and capacity values are consistent
-    assert(0 == sequence->size);
-    assert(0 == sequence->capacity);
-  }
-}
-
 template<typename MembersType>
 TypeSupport<MembersType>::TypeSupport()
 {
@@ -125,32 +73,6 @@ static inline T
 align_int_(size_t __align, T __int) noexcept
 {
   return (__int - 1u + __align) & ~(__align - 1);
-}
-
-inline
-void * get_subros_message(
-  const rosidl_typesupport_introspection_cpp::MessageMember * member,
-  void * field,
-  size_t index,
-  size_t,
-  bool)
-{
-  return member->get_function(field, index);
-}
-
-inline
-void * get_subros_message(
-  const rosidl_typesupport_introspection_c__MessageMember * member,
-  void * field,
-  size_t index,
-  size_t array_size,
-  bool is_upper_bound)
-{
-  if (array_size && !is_upper_bound) {
-    return member->get_function(&field, index);
-  }
-
-  return member->get_function(field, index);
 }
 
 template<typename T>
@@ -386,10 +308,7 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
             }
             for (size_t index = 0; index < array_size; ++index) {
               deserializeROSmessage(
-                deser, sub_members,
-                get_subros_message(
-                  member, field, index, member->array_size_,
-                  member->is_upper_bound_));
+                deser, sub_members, member->get_function(field, index));
             }
           }
         }
