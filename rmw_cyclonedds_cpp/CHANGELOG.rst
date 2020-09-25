@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.18.2 (2020-09-25)
+-------------------
 * Updated publisher/subscription allocation and wait set API return codes (`#246 <https://github.com/ros2/rmw_cyclonedds/issues/246>`_)
 * Contributors: Alejandro Hernández Cordero
 
