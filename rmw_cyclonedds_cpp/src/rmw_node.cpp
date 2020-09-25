@@ -3471,9 +3471,9 @@ static rmw_ret_t rmw_take_response_request(
   void * ros_data, bool * taken, dds_time_t * source_timestamp,
   dds_instance_handle_t srcfilter)
 {
-  RET_NULL(taken);
-  RET_NULL(ros_data);
-  RET_NULL(request_header);
+  RMW_CHECK_ARGUMENT_FOR_NULL(taken, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(ros_data, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(request_header, RMW_RET_INVALID_ARGUMENT);
   cdds_request_wrapper_t wrap;
   dds_sample_info_t info;
   wrap.data = ros_data;
@@ -3517,9 +3517,6 @@ extern "C" rmw_ret_t rmw_take_response(
     client,
     client->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
-  RMW_CHECK_ARGUMENT_FOR_NULL(request_header, RMW_RET_INVALID_ARGUMENT);
-  RMW_CHECK_ARGUMENT_FOR_NULL(ros_response, RMW_RET_INVALID_ARGUMENT);
-  RMW_CHECK_ARGUMENT_FOR_NULL(taken, RMW_RET_INVALID_ARGUMENT);
   auto info = static_cast<CddsClient *>(client->data);
   dds_time_t source_timestamp;
   rmw_ret_t ret = rmw_take_response_request(
@@ -3566,8 +3563,11 @@ extern "C" rmw_ret_t rmw_take_request(
   rmw_service_info_t * request_header, void * ros_request,
   bool * taken)
 {
-  RET_NULL(service);
-  RET_WRONG_IMPLID(service);
+  RMW_CHECK_ARGUMENT_FOR_NULL(service, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    service,
+    service->implementation_identifier, eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   auto info = static_cast<CddsService *>(service->data);
   return rmw_take_response_request(
     &info->service, request_header, ros_request, taken, nullptr,
