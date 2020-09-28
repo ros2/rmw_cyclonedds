@@ -3641,10 +3641,13 @@ extern "C" rmw_ret_t rmw_send_response(
   const rmw_service_t * service,
   rmw_request_id_t * request_header, void * ros_response)
 {
-  RET_NULL(service);
-  RET_WRONG_IMPLID(service);
-  RET_NULL(request_header);
-  RET_NULL(ros_response);
+  RMW_CHECK_ARGUMENT_FOR_NULL(service, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    service,
+    service->implementation_identifier, eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_ARGUMENT_FOR_NULL(request_header, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(ros_response, RMW_RET_INVALID_ARGUMENT);
   CddsService * info = static_cast<CddsService *>(service->data);
   cdds_request_header_t header;
   dds_instance_handle_t reqwrih;
