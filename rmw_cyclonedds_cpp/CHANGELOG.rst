@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.18.3 (2020-09-29)
+-------------------
 * Return RMW_RET_UNSUPPORTED in rmw_get_serialized_message_size (`#250 <https://github.com/ros2/rmw_cyclonedds/issues/250>`_)
 * Update service/client request/response API error returns (`#249 <https://github.com/ros2/rmw_cyclonedds/issues/249>`_)
 * Contributors: Alejandro Hernández Cordero, Jose Tomas Lorente
