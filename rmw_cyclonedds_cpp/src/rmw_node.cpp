@@ -1380,7 +1380,7 @@ extern "C" rmw_ret_t rmw_get_serialized_message_size(
   static_cast<void>(size);
 
   RMW_SET_ERROR_MSG("rmw_get_serialized_message_size: unimplemented");
-  return RMW_RET_ERROR;
+  return RMW_RET_UNSUPPORTED;
 }
 
 extern "C" rmw_ret_t rmw_serialize(
