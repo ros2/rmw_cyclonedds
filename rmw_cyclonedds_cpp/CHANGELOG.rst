@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.7.4 (2020-10-07)
+------------------
+* rmw_destroy_node must remove node from graph cache (`#252 <https://github.com/ros2/rmw_cyclonedds/issues/252>`_)
+* Contributors: Erik Boasson
+
 0.7.3 (2020-07-21)
 ------------------
 * Fix lost service responses (`#183 <https://github.com/ros2/rmw_cyclonedds/issues/183>`_, `#74 <https://github.com/ros2/rmw_cyclonedds/issues/74>`_) (`#187 <https://github.com/ros2/rmw_cyclonedds/issues/187>`_) (`#209 <https://github.com/ros2/rmw_cyclonedds/issues/209>`_)
