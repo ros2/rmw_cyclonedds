@@ -5,7 +5,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-          rosdistro: [master]
+          rosdistro: [foxy]
           os: [ubuntu-18.04, macOS-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
@@ -23,6 +23,7 @@ jobs:
     - name: Build and test ROS
       uses: ros-tooling/action-ros-ci@0.0.16
       with:
+        target-ros2-distro: foxy
         package-name: >
           rmw_cyclonedds_cpp
           rmw_implementation
