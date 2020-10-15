@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.7.5 (2020-10-15)
+------------------
 * Fixed cppcheck issue
 * Update service/client construction/destruction API return codes. (`#247 <https://github.com/ros2/rmw_cyclonedds/issues/247>`_)
 * Return RMW_RET_UNSUPPORTED in rmw_get_serialized_message_size (`#250 <https://github.com/ros2/rmw_cyclonedds/issues/250>`_)
