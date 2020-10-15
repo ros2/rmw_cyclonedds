@@ -2,6 +2,32 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Fixed cppcheck issue
+* Update service/client construction/destruction API return codes. (`#247 <https://github.com/ros2/rmw_cyclonedds/issues/247>`_)
+* Return RMW_RET_UNSUPPORTED in rmw_get_serialized_message_size (`#250 <https://github.com/ros2/rmw_cyclonedds/issues/250>`_)
+* Update service/client request/response API error returns (`#249 <https://github.com/ros2/rmw_cyclonedds/issues/249>`_)
+* Updated rmw\_* return codes (`#246 <https://github.com/ros2/rmw_cyclonedds/issues/246>`_)
+* Update gid API return codes. (`#244 <https://github.com/ros2/rmw_cyclonedds/issues/244>`_)
+* Update graph API return codes. (`#243 <https://github.com/ros2/rmw_cyclonedds/issues/243>`_)
+* Check for message_info on take where appropriate. (`#245 <https://github.com/ros2/rmw_cyclonedds/issues/245>`_)
+* Updated error returns on rmw_take_serialized and with_message_info (`#242 <https://github.com/ros2/rmw_cyclonedds/issues/242>`_)
+* Updated error returns on rmw_take (`#241 <https://github.com/ros2/rmw_cyclonedds/issues/241>`_)
+* Update rmw_publish_serialized_message() error returns (`#240 <https://github.com/ros2/rmw_cyclonedds/issues/240>`_)
+* Update rmw_publish() error returns (`#239 <https://github.com/ros2/rmw_cyclonedds/issues/239>`_)
+* Ensure compliant matched pub/sub count API. (`#223 <https://github.com/ros2/rmw_cyclonedds/issues/223>`_)
+* Change RET_WRONG_IMPLID() to return RMW_RET_INCORRECT_IMPLEMENTATION (`#226 <https://github.com/ros2/rmw_cyclonedds/issues/226>`_)
+* Fix bad conditional in rmw_serialize(). (`#217 <https://github.com/ros2/rmw_cyclonedds/issues/217>`_)
+* Ensure compliant subscription API. (`#214 <https://github.com/ros2/rmw_cyclonedds/issues/214>`_)
+* Ensure compliant publisher API (`#210 <https://github.com/ros2/rmw_cyclonedds/issues/210>`_)
+* Ensure compliant node construction/destruction API. (`#206 <https://github.com/ros2/rmw_cyclonedds/issues/206>`_)
+* Amend rmw_init() implementation: require enclave. (`#204 <https://github.com/ros2/rmw_cyclonedds/issues/204>`_)
+* Ensure compliant init/shutdown API implementations. (`#202 <https://github.com/ros2/rmw_cyclonedds/issues/202>`_)
+* Ensure compliant init options API implementations. (`#200 <https://github.com/ros2/rmw_cyclonedds/issues/200>`_)
+* Finalize context iff shutdown. (`#196 <https://github.com/ros2/rmw_cyclonedds/issues/196>`_)
+* Contributors: Alejandro Hernández Cordero, Jose Tomas Lorente, Michel Hidalgo
+
 0.7.4 (2020-10-07)
 ------------------
 * rmw_destroy_node must remove node from graph cache (`#252 <https://github.com/ros2/rmw_cyclonedds/issues/252>`_)
