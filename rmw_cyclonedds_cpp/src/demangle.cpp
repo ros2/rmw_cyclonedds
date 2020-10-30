@@ -106,14 +106,14 @@ _demangle_service_from_topic(
   if (suffix_position != std::string::npos) {
     if (service_name.length() - suffix_position - suffix.length() != 0) {
       RCUTILS_LOG_WARN_NAMED(
-        "rmw_fastrtps_shared_cpp",
+        "rmw_cyclonedds_cpp",
         "service topic has service prefix and a suffix, but not at the end"
         ", report this: '%s'", topic_name.c_str());
       return "";
     }
   } else {
     RCUTILS_LOG_WARN_NAMED(
-      "rmw_fastrtps_shared_cpp",
+      "rmw_cyclonedds_cpp",
       "service topic has prefix but no suffix"
       ", report this: '%s'", topic_name.c_str());
     return "";
@@ -165,7 +165,7 @@ _demangle_service_type_only(const std::string & dds_type_name)
     if (suffix_position != std::string::npos) {
       if (dds_type_name.length() - suffix_position - suffix.length() != 0) {
         RCUTILS_LOG_WARN_NAMED(
-          "rmw_fastrtps_shared_cpp",
+          "rmw_cyclonedds_cpp",
           "service type contains 'dds_::' and a suffix, but not at the end"
           ", report this: '%s'", dds_type_name.c_str());
         continue;
@@ -176,7 +176,7 @@ _demangle_service_type_only(const std::string & dds_type_name)
   }
   if (std::string::npos == suffix_position) {
     RCUTILS_LOG_WARN_NAMED(
-      "rmw_fastrtps_shared_cpp",
+      "rmw_cyclonedds_cpp",
       "service type contains 'dds_::' but does not have a suffix"
       ", report this: '%s'", dds_type_name.c_str());
     return "";
