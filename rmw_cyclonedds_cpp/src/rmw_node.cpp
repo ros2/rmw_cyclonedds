@@ -1153,7 +1153,6 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
   }
 
   const rmw_context_t zero_context = rmw_get_zero_initialized_context();
-  assert(0 == std::memcmp(context, &zero_context, sizeof(rmw_context_t)));
   auto restore_context = rcpputils::make_scope_exit(
     [context, &zero_context]() {*context = zero_context;});
 
