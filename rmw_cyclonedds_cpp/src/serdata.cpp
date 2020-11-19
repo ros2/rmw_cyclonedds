@@ -139,11 +139,11 @@ static void serdata_rmw_free(struct ddsi_serdata * dcmn)
 }
 
 static struct ddsi_serdata * serdata_rmw_from_ser(
-  const struct ddsi_sertopic * topic,
+  const struct ddsi_sertype * type,
   enum ddsi_serdata_kind kind,
   const struct nn_rdata * fragchain, size_t size)
 {
-  auto d = std::make_unique<serdata_rmw>(topic, kind);
+  auto d = std::make_unique<serdata_rmw>(type, kind);
   uint32_t off = 0;
   assert(fragchain->min == 0);
   assert(fragchain->maxp1 >= off);    /* CDR header must be in first fragment */
@@ -169,12 +169,12 @@ static struct ddsi_serdata * serdata_rmw_from_ser(
 
 #if DDSI_SERDATA_HAS_FROM_SER_IOV
 static struct ddsi_serdata * serdata_rmw_from_ser_iov(
-  const struct ddsi_sertopic * topic,
+  const struct ddsi_sertype * type,
   enum ddsi_serdata_kind kind,
   ddsrt_msg_iovlen_t niov, const ddsrt_iovec_t * iov,
   size_t size)
 {
-  auto d = std::make_unique<serdata_rmw>(topic, kind);
+  auto d = std::make_unique<serdata_rmw>(type, kind);
   d->resize(size);
 
   auto cursor = d->data();
@@ -187,36 +187,36 @@ static struct ddsi_serdata * serdata_rmw_from_ser_iov(
 #endif
 
 static struct ddsi_serdata * serdata_rmw_from_keyhash(
-  const struct ddsi_sertopic * topic,
+  const struct ddsi_sertype * type,
   const struct ddsi_keyhash * keyhash)
 {
   static_cast<void>(keyhash);    // unused
   /* there is no key field, so from_keyhash is trivial */
-  return new serdata_rmw(topic, SDK_KEY);
+  return new serdata_rmw(type, SDK_KEY);
 }
 
 static struct ddsi_serdata * serdata_rmw_from_sample(
-  const struct ddsi_sertopic * topiccmn,
+  const struct ddsi_sertype * typecmn,
   enum ddsi_serdata_kind kind,
   const void * sample)
 {
   try {
-    const struct sertopic_rmw * topic = static_cast<const struct sertopic_rmw *>(topiccmn);
-    auto d = std::make_unique<serdata_rmw>(topic, kind);
+    const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(typecmn);
+    auto d = std::make_unique<serdata_rmw>(type, kind);
     if (kind != SDK_DATA) {
       /* ROS 2 doesn't do keys, so SDK_KEY is trivial */
-    } else if (!topic->is_request_header) {
-      size_t sz = topic->cdr_writer->get_serialized_size(sample);
+    } else if (!type->is_request_header) {
+      size_t sz = type->cdr_writer->get_serialized_size(sample);
       d->resize(sz);
-      topic->cdr_writer->serialize(d->data(), sample);
+      type->cdr_writer->serialize(d->data(), sample);
     } else {
       /* inject the service invocation header data into the CDR stream --
        * I haven't checked how it is done in the official RMW implementations, so it is
        * probably incompatible. */
       auto wrap = *static_cast<const cdds_request_wrapper_t *>(sample);
-      size_t sz = topic->cdr_writer->get_serialized_size(wrap);
+      size_t sz = type->cdr_writer->get_serialized_size(wrap);
       d->resize(sz);
-      topic->cdr_writer->serialize(d->data(), wrap);
+      type->cdr_writer->serialize(d->data(), wrap);
     }
     return d.release();
   } catch (std::exception & e) {
@@ -226,21 +226,26 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
 }
 
 struct ddsi_serdata * serdata_rmw_from_serialized_message(
-  const struct ddsi_sertopic * topiccmn,
+  const struct ddsi_sertype * typecmn,
   const void * raw, size_t size)
 {
-  const struct sertopic_rmw * topic = static_cast<const struct sertopic_rmw *>(topiccmn);
-  auto d = new serdata_rmw(topic, SDK_DATA);
+  const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(typecmn);
+  auto d = new serdata_rmw(type, SDK_DATA);
   d->resize(size);
   memcpy(d->data(), raw, size);
   return d;
 }
 
-static struct ddsi_serdata * serdata_rmw_to_topicless(const struct ddsi_serdata * dcmn)
+static struct ddsi_serdata * serdata_rmw_to_untyped(const struct ddsi_serdata * dcmn)
 {
   auto d = static_cast<const serdata_rmw *>(dcmn);
+#if DDS_HAS_DDSI_SERTYPE
+  auto d1 = new serdata_rmw(d->type, SDK_KEY);
+  d1->type = nullptr;
+#else
   auto d1 = new serdata_rmw(d->topic, SDK_KEY);
   d1->topic = nullptr;
+#endif
   return d1;
 }
 
@@ -274,20 +279,24 @@ static bool serdata_rmw_to_sample(
     static_cast<void>(bufptr);    // unused
     static_cast<void>(buflim);    // unused
     auto d = static_cast<const serdata_rmw *>(dcmn);
-    const struct sertopic_rmw * topic = static_cast<const struct sertopic_rmw *>(d->topic);
+#if DDS_HAS_DDSI_SERTYPE
+    const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(d->type);
+#else
+    const struct sertopic_rmw * type = static_cast<const struct sertopic_rmw *>(d->topic);
+#endif
     assert(bufptr == NULL);
     assert(buflim == NULL);
     if (d->kind != SDK_DATA) {
       /* ROS 2 doesn't do keys in a meaningful way yet */
-    } else if (!topic->is_request_header) {
+    } else if (!type->is_request_header) {
       cycdeser sd(d->data(), d->size());
-      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
+      if (using_introspection_c_typesupport(type->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
+          static_cast<MessageTypeSupport_c *>(type->type_support.type_support_);
         return typed_typesupport->deserializeROSmessage(sd, sample);
-      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
+      } else if (using_introspection_cpp_typesupport(type->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
-          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
+          static_cast<MessageTypeSupport_cpp *>(type->type_support.type_support_);
         return typed_typesupport->deserializeROSmessage(sd, sample);
       }
     } else {
@@ -297,13 +306,13 @@ static bool serdata_rmw_to_sample(
       cdds_request_wrapper_t * const wrap = static_cast<cdds_request_wrapper_t *>(sample);
       auto prefix = [wrap](cycdeser & ser) {ser >> wrap->header.guid; ser >> wrap->header.seq;};
       cycdeser sd(d->data(), d->size());
-      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
+      if (using_introspection_c_typesupport(type->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
+          static_cast<MessageTypeSupport_c *>(type->type_support.type_support_);
         return typed_typesupport->deserializeROSmessage(sd, wrap->data, prefix);
-      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
+      } else if (using_introspection_cpp_typesupport(type->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
-          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
+          static_cast<MessageTypeSupport_cpp *>(type->type_support.type_support_);
         return typed_typesupport->deserializeROSmessage(sd, wrap->data, prefix);
       }
     }
@@ -318,12 +327,12 @@ static bool serdata_rmw_to_sample(
   return false;
 }
 
-static bool serdata_rmw_topicless_to_sample(
-  const struct ddsi_sertopic * topic,
+static bool serdata_rmw_untyped_to_sample(
+  const struct ddsi_sertype * type,
   const struct ddsi_serdata * dcmn, void * sample,
   void ** bufptr, void * buflim)
 {
-  static_cast<void>(topic);
+  static_cast<void>(type);
   static_cast<void>(dcmn);
   static_cast<void>(sample);
   static_cast<void>(bufptr);
@@ -342,23 +351,23 @@ static bool serdata_rmw_eqkey(const struct ddsi_serdata * a, const struct ddsi_s
 
 #if DDSI_SERDATA_HAS_PRINT
 static size_t serdata_rmw_print(
-  const struct ddsi_sertopic * tpcmn, const struct ddsi_serdata * dcmn, char * buf, size_t bufsize)
+  const struct ddsi_sertype * tpcmn, const struct ddsi_serdata * dcmn, char * buf, size_t bufsize)
 {
   try {
     auto d = static_cast<const serdata_rmw *>(dcmn);
-    const struct sertopic_rmw * topic = static_cast<const struct sertopic_rmw *>(tpcmn);
+    const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(tpcmn);
     if (d->kind != SDK_DATA) {
       /* ROS 2 doesn't do keys in a meaningful way yet */
       return static_cast<size_t>(snprintf(buf, bufsize, ":k:{}"));
-    } else if (!topic->is_request_header) {
+    } else if (!type->is_request_header) {
       cycprint sd(buf, bufsize, d->data(), d->size());
-      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
+      if (using_introspection_c_typesupport(type->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
+          static_cast<MessageTypeSupport_c *>(type->type_support.type_support_);
         return typed_typesupport->printROSmessage(sd);
-      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
+      } else if (using_introspection_cpp_typesupport(type->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
-          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
+          static_cast<MessageTypeSupport_cpp *>(type->type_support.type_support_);
         return typed_typesupport->printROSmessage(sd);
       }
     } else {
@@ -370,13 +379,13 @@ static size_t serdata_rmw_print(
           ser >> wrap.header.guid; ser.print_constant(","); ser >> wrap.header.seq;
         };
       cycprint sd(buf, bufsize, d->data(), d->size());
-      if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
+      if (using_introspection_c_typesupport(type->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
+          static_cast<MessageTypeSupport_c *>(type->type_support.type_support_);
         return typed_typesupport->printROSmessage(sd, prefix);
-      } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
+      } else if (using_introspection_cpp_typesupport(type->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
-          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
+          static_cast<MessageTypeSupport_cpp *>(type->type_support.type_support_);
         return typed_typesupport->printROSmessage(sd, prefix);
       }
     }
@@ -397,7 +406,7 @@ static void serdata_rmw_get_keyhash(
   const struct ddsi_serdata * d, struct ddsi_keyhash * buf,
   bool force_md5)
 {
-  /* ROS 2 doesn't do keys in a meaningful way yet, this is never called for topics without
+  /* ROS 2 doesn't do keys in a meaningful way yet, this is never called for types without
      key fields */
   static_cast<void>(d);
   static_cast<void>(force_md5);
@@ -418,8 +427,8 @@ static const struct ddsi_serdata_ops serdata_rmw_ops = {
   serdata_rmw_to_ser_ref,
   serdata_rmw_to_ser_unref,
   serdata_rmw_to_sample,
-  serdata_rmw_to_topicless,
-  serdata_rmw_topicless_to_sample,
+  serdata_rmw_to_untyped,
+  serdata_rmw_untyped_to_sample,
   serdata_rmw_free
 #if DDSI_SERDATA_HAS_PRINT
   , serdata_rmw_print
@@ -429,10 +438,12 @@ static const struct ddsi_serdata_ops serdata_rmw_ops = {
 #endif
 };
 
-static void sertopic_rmw_free(struct ddsi_sertopic * tpcmn)
+static void sertype_rmw_free(struct ddsi_sertype * tpcmn)
 {
-  struct sertopic_rmw * tp = static_cast<struct sertopic_rmw *>(tpcmn);
-#if DDSI_SERTOPIC_HAS_TOPICKIND_NO_KEY
+  struct sertype_rmw * tp = static_cast<struct sertype_rmw *>(tpcmn);
+#if DDS_HAS_DDSI_SERTYPE
+  ddsi_sertype_fini(tpcmn);
+#elif DDSI_SERTOPIC_HAS_TOPICKIND_NO_KEY
   ddsi_sertopic_fini(tpcmn);
 #endif
   if (tp->type_support.type_support_) {
@@ -447,7 +458,7 @@ static void sertopic_rmw_free(struct ddsi_sertopic * tpcmn)
   delete tp;
 }
 
-static void sertopic_rmw_zero_samples(const struct ddsi_sertopic * d, void * samples, size_t count)
+static void sertype_rmw_zero_samples(const struct ddsi_sertype * d, void * samples, size_t count)
 {
   static_cast<void>(d);
   static_cast<void>(samples);
@@ -455,8 +466,8 @@ static void sertopic_rmw_zero_samples(const struct ddsi_sertopic * d, void * sam
   /* Not using code paths that rely on the samples getting zero'd out */
 }
 
-static void sertopic_rmw_realloc_samples(
-  void ** ptrs, const struct ddsi_sertopic * d, void * old,
+static void sertype_rmw_realloc_samples(
+  void ** ptrs, const struct ddsi_sertype * d, void * old,
   size_t oldcount, size_t count)
 {
   static_cast<void>(ptrs);
@@ -469,8 +480,8 @@ static void sertopic_rmw_realloc_samples(
   abort();
 }
 
-static void sertopic_rmw_free_samples(
-  const struct ddsi_sertopic * d, void ** ptrs, size_t count,
+static void sertype_rmw_free_samples(
+  const struct ddsi_sertype * d, void ** ptrs, size_t count,
   dds_free_op_t op)
 {
   static_cast<void>(d);    // unused
@@ -483,13 +494,13 @@ static void sertopic_rmw_free_samples(
 }
 
 #if DDSI_SERTOPIC_HAS_EQUAL_AND_HASH
-bool sertopic_rmw_equal(
-  const struct ddsi_sertopic * acmn, const struct ddsi_sertopic * bcmn)
+bool sertype_rmw_equal(
+  const struct ddsi_sertype * acmn, const struct ddsi_sertype * bcmn)
 {
-  /* A bit of a guess: topics with the same name & type name are really the same if they have
+  /* A bit of a guess: types with the same name & type name are really the same if they have
      the same type support identifier as well */
-  const struct sertopic_rmw * a = static_cast<const struct sertopic_rmw *>(acmn);
-  const struct sertopic_rmw * b = static_cast<const struct sertopic_rmw *>(bcmn);
+  const struct sertype_rmw * a = static_cast<const struct sertype_rmw *>(acmn);
+  const struct sertype_rmw * b = static_cast<const struct sertype_rmw *>(bcmn);
   if (a->is_request_header != b->is_request_header) {
     return false;
   }
@@ -502,9 +513,9 @@ bool sertopic_rmw_equal(
   return true;
 }
 
-uint32_t sertopic_rmw_hash(const struct ddsi_sertopic * tpcmn)
+uint32_t sertype_rmw_hash(const struct ddsi_sertype * tpcmn)
 {
-  const struct sertopic_rmw * tp = static_cast<const struct sertopic_rmw *>(tpcmn);
+  const struct sertype_rmw * tp = static_cast<const struct sertype_rmw *>(tpcmn);
   uint32_t h2 = static_cast<uint32_t>(std::hash<bool>{} (tp->is_request_header));
   uint32_t h1 =
     static_cast<uint32_t>(std::hash<std::string>{} (std::string(
@@ -513,14 +524,26 @@ uint32_t sertopic_rmw_hash(const struct ddsi_sertopic * tpcmn)
 }
 #endif
 
-static const struct ddsi_sertopic_ops sertopic_rmw_ops = {
-  sertopic_rmw_free,
-  sertopic_rmw_zero_samples,
-  sertopic_rmw_realloc_samples,
-  sertopic_rmw_free_samples
+static const struct ddsi_sertype_ops sertype_rmw_ops = {
+#if DDS_HAS_DDSI_SERTYPE
+  ddsi_sertype_v0,
+  nullptr,
+#endif
+  sertype_rmw_free,
+  sertype_rmw_zero_samples,
+  sertype_rmw_realloc_samples,
+  sertype_rmw_free_samples
 #if DDSI_SERTOPIC_HAS_EQUAL_AND_HASH
-  , sertopic_rmw_equal,
-  sertopic_rmw_hash
+  , sertype_rmw_equal,
+  sertype_rmw_hash
+#endif
+#if DDS_HAS_DDSI_SERTYPE
+  /* not yet providing type discovery, assignability checking */
+  , nullptr,
+  nullptr,
+  nullptr,
+  nullptr,
+  nullptr
 #endif
 };
 
@@ -559,13 +582,19 @@ static std::string get_type_name(const char * type_support_identifier, void * ty
   }
 }
 
-struct sertopic_rmw * create_sertopic(
+struct sertype_rmw * create_sertype(
   const char * topicname, const char * type_support_identifier,
   void * type_support, bool is_request_header,
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type)
 {
-  struct sertopic_rmw * st = new struct sertopic_rmw;
-#if DDSI_SERTOPIC_HAS_TOPICKIND_NO_KEY
+  struct sertype_rmw * st = new struct sertype_rmw;
+#if DDS_HAS_DDSI_SERTYPE
+  static_cast<void>(topicname);
+  std::string type_name = get_type_name(type_support_identifier, type_support);
+  ddsi_sertype_init(
+    static_cast<struct ddsi_sertype *>(st),
+    type_name.c_str(), &sertype_rmw_ops, &serdata_rmw_ops, true);
+#elif DDSI_SERTOPIC_HAS_TOPICKIND_NO_KEY
   std::string type_name = get_type_name(type_support_identifier, type_support);
   ddsi_sertopic_init(
     static_cast<struct ddsi_sertopic *>(st), topicname,
@@ -609,8 +638,8 @@ void serdata_rmw::resize(size_t requested_size)
   std::memset(byte_offset(m_data.get(), requested_size), '\0', n_pad_bytes);
 }
 
-serdata_rmw::serdata_rmw(const ddsi_sertopic * topic, ddsi_serdata_kind kind)
+serdata_rmw::serdata_rmw(const ddsi_sertype * type, ddsi_serdata_kind kind)
 : ddsi_serdata{}
 {
-  ddsi_serdata_init(this, topic, kind);
+  ddsi_serdata_init(this, type, kind);
 }
