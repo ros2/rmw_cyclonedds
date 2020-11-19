@@ -76,7 +76,6 @@
 #include "namespace_prefix.hpp"
 
 #include "dds/dds.h"
-#include "dds/ddsi/ddsi_sertopic.h"
 #include "serdes.hpp"
 #include "serdata.hpp"
 #include "demangle.hpp"
@@ -88,6 +87,10 @@ using namespace std::literals::chrono_literals;
 #define RMW_SUPPORT_SECURITY 1
 #else
 #define RMW_SUPPORT_SECURITY 0
+#endif
+
+#if !DDS_HAS_DDSI_SERTYPE
+#define ddsi_sertype_unref(x) ddsi_sertopic_unref(x)
 #endif
 
 /* Set to > 0 for printing warnings to stderr for each messages that was taken more than this many
@@ -334,7 +337,7 @@ struct CddsPublisher : CddsEntity
 {
   dds_instance_handle_t pubiid;
   rmw_gid_t gid;
-  struct ddsi_sertopic * sertopic;
+  struct ddsi_sertype * sertype;
 };
 
 struct CddsSubscription : CddsEntity
@@ -1471,45 +1474,50 @@ extern "C" rmw_ret_t rmw_deserialize(
 ///////////                                                                   ///////////
 /////////////////////////////////////////////////////////////////////////////////////////
 
-/* Publications need the sertopic that DDSI uses for the topic when publishing a
+/* Publications need the sertype that DDSI uses for the topic when publishing a
    serialized message.  With the old ("arbitrary") interface of Cyclone, one doesn't know
-   the sertopic that is actually used because that may be the one that was provided in the
+   the sertype that is actually used because that may be the one that was provided in the
    call to dds_create_topic_arbitrary(), but it may also be one that was introduced by a
    preceding call to create the same topic.
 
    There is no way of discovering which case it is, and there is no way of getting access
-   to the correct sertopic.  The best one can do is to keep using one provided when
-   creating the topic -- and fortunately using the wrong sertopic has surprisingly few
+   to the correct sertype.  The best one can do is to keep using one provided when
+   creating the topic -- and fortunately using the wrong sertype has surprisingly few
    nasty side-effects, but it still wrong.
 
    Because the caller retains ownership, so this is easy, but it does require dropping the
    reference when cleaning up.
 
    The new ("generic") interface instead takes over the ownership of the reference iff it
-   succeeds and it returns a non-counted reference to the sertopic actually used.  The
+   succeeds and it returns a non-counted reference to the sertype actually used.  The
    lifetime of the reference is at least as long as the lifetime of the DDS topic exists;
    and the topic's lifetime is at least that of the readers/writers using it.  This
    reference can therefore safely be used. */
 
 static dds_entity_t create_topic(
-  dds_entity_t pp, struct ddsi_sertopic * sertopic,
-  struct ddsi_sertopic ** stact)
+  dds_entity_t pp, const char * name, struct ddsi_sertype * sertype,
+  struct ddsi_sertype ** stact)
 {
   dds_entity_t tp;
-  tp = dds_create_topic_generic(pp, &sertopic, nullptr, nullptr, nullptr);
+#if DDS_HAS_DDSI_SERTYPE
+  tp = dds_create_topic_sertype(pp, name, &sertype, nullptr, nullptr, nullptr);
+#else
+  static_cast<void>(name);
+  tp = dds_create_topic_generic(pp, &sertype, nullptr, nullptr, nullptr);
+#endif
   if (tp < 0) {
-    ddsi_sertopic_unref(sertopic);
+    ddsi_sertype_unref(sertype);
   } else {
     if (stact) {
-      *stact = sertopic;
+      *stact = sertype;
     }
   }
   return tp;
 }
 
-static dds_entity_t create_topic(dds_entity_t pp, struct ddsi_sertopic * sertopic)
+static dds_entity_t create_topic(dds_entity_t pp, const char * name, struct ddsi_sertype * sertype)
 {
-  dds_entity_t tp = create_topic(pp, sertopic, nullptr);
+  dds_entity_t tp = create_topic(pp, name, sertype, nullptr);
   return tp;
 }
 
@@ -1559,7 +1567,7 @@ extern "C" rmw_ret_t rmw_publish_serialized_message(
     return RMW_RET_INVALID_ARGUMENT);
   auto pub = static_cast<CddsPublisher *>(publisher->data);
   struct ddsi_serdata * d = serdata_rmw_from_serialized_message(
-    pub->sertopic, serialized_message->buffer, serialized_message->buffer_length);
+    pub->sertype, serialized_message->buffer, serialized_message->buffer_length);
   const bool ok = (dds_writecdr(pub->enth, d) >= 0);
   return ok ? RMW_RET_OK : RMW_RET_ERROR;
 }
@@ -1886,12 +1894,12 @@ static CddsPublisher * create_cdds_publisher(
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
 
-  auto sertopic = create_sertopic(
+  auto sertype = create_sertype(
     fqtopic_name.c_str(), type_support->typesupport_identifier,
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
     rmw_cyclonedds_cpp::make_message_value_type(type_supports));
-  struct ddsi_sertopic * stact;
-  topic = create_topic(dds_ppant, sertopic, &stact);
+  struct ddsi_sertype * stact;
+  topic = create_topic(dds_ppant, fqtopic_name.c_str(), sertype, &stact);
   if (topic < 0) {
     RMW_SET_ERROR_MSG("failed to create topic");
     goto fail_topic;
@@ -1908,7 +1916,7 @@ static CddsPublisher * create_cdds_publisher(
     goto fail_instance_handle;
   }
   get_entity_gid(pub->enth, pub->gid);
-  pub->sertopic = stact;
+  pub->sertype = stact;
   dds_delete_qos(qos);
   dds_delete(topic);
   return pub;
@@ -1921,7 +1929,7 @@ fail_writer:
   dds_delete_qos(qos);
 fail_qos:
   dds_delete(topic);
-  ddsi_sertopic_unref(stact);
+  ddsi_sertype_unref(stact);
 fail_topic:
   delete pub;
   return nullptr;
@@ -2262,11 +2270,11 @@ static CddsSubscription * create_cdds_subscription(
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
 
-  auto sertopic = create_sertopic(
+  auto sertype = create_sertype(
     fqtopic_name.c_str(), type_support->typesupport_identifier,
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
     rmw_cyclonedds_cpp::make_message_value_type(type_supports));
-  topic = create_topic(dds_ppant, sertopic);
+  topic = create_topic(dds_ppant, fqtopic_name.c_str(), sertype);
   if (topic < 0) {
     RMW_SET_ERROR_MSG("failed to create topic");
     goto fail_topic;
@@ -3876,22 +3884,22 @@ static rmw_ret_t rmw_init_cs(
   RCUTILS_LOG_DEBUG_NAMED("rmw_cyclonedds_cpp", "***********");
 
   dds_entity_t pubtopic, subtopic;
-  struct sertopic_rmw * pub_st, * sub_st;
+  struct sertype_rmw * pub_st, * sub_st;
 
-  pub_st = create_sertopic(
+  pub_st = create_sertype(
     pubtopic_name.c_str(), type_support->typesupport_identifier, pub_type_support, true,
     std::move(pub_msg_ts));
-  struct ddsi_sertopic * pub_stact;
-  pubtopic = create_topic(node->context->impl->ppant, pub_st, &pub_stact);
+  struct ddsi_sertype * pub_stact;
+  pubtopic = create_topic(node->context->impl->ppant, pubtopic_name.c_str(), pub_st, &pub_stact);
   if (pubtopic < 0) {
     RMW_SET_ERROR_MSG("failed to create topic");
     goto fail_pubtopic;
   }
 
-  sub_st = create_sertopic(
+  sub_st = create_sertype(
     subtopic_name.c_str(), type_support->typesupport_identifier, sub_type_support, true,
     std::move(sub_msg_ts));
-  subtopic = create_topic(node->context->impl->ppant, sub_st);
+  subtopic = create_topic(node->context->impl->ppant, subtopic_name.c_str(), sub_st);
   if (subtopic < 0) {
     RMW_SET_ERROR_MSG("failed to create topic");
     goto fail_subtopic;
@@ -3920,7 +3928,7 @@ static rmw_ret_t rmw_init_cs(
     goto fail_writer;
   }
   get_entity_gid(pub->enth, pub->gid);
-  pub->sertopic = pub_stact;
+  pub->sertype = pub_stact;
   if ((sub->enth = dds_create_reader(node->context->impl->dds_sub, subtopic, qos, nullptr)) < 0) {
     RMW_SET_ERROR_MSG("failed to create reader");
     goto fail_reader;

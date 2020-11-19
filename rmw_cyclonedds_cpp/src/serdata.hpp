@@ -19,8 +19,15 @@
 
 #include "TypeSupport2.hpp"
 #include "bytewise.hpp"
+#include "dds/dds.h"
 #include "dds/ddsi/ddsi_serdata.h"
-#include "dds/ddsi/ddsi_sertopic.h"
+
+#if !DDS_HAS_DDSI_SERTYPE
+#define ddsi_sertype ddsi_sertopic
+#define ddsi_sertype_ops ddsi_sertopic_ops
+#define sertype_rmw sertopic_rmw
+#define sertype_rmw_ops sertopic_rmw_ops
+#endif
 
 namespace rmw_cyclonedds_cpp
 {
@@ -33,7 +40,7 @@ struct CddsTypeSupport
   const char * typesupport_identifier_;
 };
 
-struct sertopic_rmw : ddsi_sertopic
+struct sertype_rmw : ddsi_sertype
 {
   CddsTypeSupport type_support;
   bool is_request_header;
@@ -54,7 +61,7 @@ protected:
   std::unique_ptr<byte[]> m_data {nullptr};
 
 public:
-  serdata_rmw(const ddsi_sertopic * topic, ddsi_serdata_kind kind);
+  serdata_rmw(const ddsi_sertype * type, ddsi_serdata_kind kind);
   void resize(size_t requested_size);
   size_t size() const {return m_size;}
   void * data() const {return m_data.get();}
@@ -82,13 +89,13 @@ void * create_response_type_support(
   const void * untyped_members,
   const char * typesupport_identifier);
 
-struct sertopic_rmw * create_sertopic(
+struct sertype_rmw * create_sertype(
   const char * topicname, const char * type_support_identifier,
   void * type_support, bool is_request_header,
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type_support);
 
 struct ddsi_serdata * serdata_rmw_from_serialized_message(
-  const struct ddsi_sertopic * topiccmn,
+  const struct ddsi_sertype * typecmn,
   const void * raw, size_t size);
 
 #endif  // SERDATA_HPP_
