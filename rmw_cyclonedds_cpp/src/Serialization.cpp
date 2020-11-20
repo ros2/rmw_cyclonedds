@@ -357,7 +357,9 @@ protected:
   {
     align %= max_align;
 
-    if (align % get_cdr_alignof_primitive(v.type_kind()) != 0) {
+    // Value of 0 implies it is not a primitive
+    const size_t cdr_alignof = get_cdr_alignof_primitive(v.type_kind());
+    if (cdr_alignof == 0 || align % cdr_alignof != 0) {
       return false;
     }
     return v.sizeof_type() == get_cdr_size_of_primitive(v.type_kind());
