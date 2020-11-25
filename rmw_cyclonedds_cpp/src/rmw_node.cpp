@@ -80,6 +80,7 @@
 #include "serdes.hpp"
 #include "serdata.hpp"
 #include "demangle.hpp"
+#include "unique_void.hpp"
 
 using namespace std::literals::chrono_literals;
 
@@ -3803,7 +3804,8 @@ static rmw_ret_t rmw_init_cs(
   auto pub = std::make_unique<CddsPublisher>();
   auto sub = std::make_unique<CddsSubscription>();
   std::string subtopic_name, pubtopic_name;
-  void * pub_type_support, * sub_type_support;
+  unique_void_ptr_t pub_type_support{make_null_unique_void()};
+  unique_void_ptr_t sub_type_support{make_null_unique_void()};
 
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> pub_msg_ts, sub_msg_ts;
 
@@ -3842,7 +3844,7 @@ static rmw_ret_t rmw_init_cs(
   struct sertopic_rmw * pub_st, * sub_st;
 
   pub_st = create_sertopic(
-    pubtopic_name.c_str(), type_support->typesupport_identifier, pub_type_support, true,
+    pubtopic_name.c_str(), type_support->typesupport_identifier, std::move(pub_type_support), true,
     std::move(pub_msg_ts));
   struct ddsi_sertopic * pub_stact;
   pubtopic = create_topic(node->context->impl->ppant, pub_st, &pub_stact);
@@ -3852,7 +3854,7 @@ static rmw_ret_t rmw_init_cs(
   }
 
   sub_st = create_sertopic(
-    subtopic_name.c_str(), type_support->typesupport_identifier, sub_type_support, true,
+    subtopic_name.c_str(), type_support->typesupport_identifier, std::move(sub_type_support), true,
     std::move(sub_msg_ts));
   subtopic = create_topic(node->context->impl->ppant, sub_st);
   if (subtopic < 0) {

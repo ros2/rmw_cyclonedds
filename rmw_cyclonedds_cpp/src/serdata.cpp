@@ -73,55 +73,55 @@ static bool using_introspection_cpp_typesupport(const char * typesupport_identif
   return typesupport_identifier == rosidl_typesupport_introspection_cpp::typesupport_identifier;
 }
 
-void * create_message_type_support(
+unique_void_ptr_t create_message_type_support(
   const void * untyped_members,
   const char * typesupport_identifier)
 {
   if (using_introspection_c_typesupport(typesupport_identifier)) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(untyped_members);
-    return new MessageTypeSupport_c(members);
+    return make_unique_void(new MessageTypeSupport_c(members));
   } else if (using_introspection_cpp_typesupport(typesupport_identifier)) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(untyped_members);
-    return new MessageTypeSupport_cpp(members);
+    return make_unique_void(new MessageTypeSupport_cpp(members));
   }
   RMW_SET_ERROR_MSG("Unknown typesupport identifier");
-  return nullptr;
+  return make_null_unique_void();
 }
 
-void * create_request_type_support(
+unique_void_ptr_t create_request_type_support(
   const void * untyped_members,
   const char * typesupport_identifier)
 {
   if (using_introspection_c_typesupport(typesupport_identifier)) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_c__ServiceMembers *>(untyped_members);
-    return new RequestTypeSupport_c(members);
+    return make_unique_void(new RequestTypeSupport_c(members));
   } else if (using_introspection_cpp_typesupport(typesupport_identifier)) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_cpp::ServiceMembers *>(untyped_members);
-    return new RequestTypeSupport_cpp(members);
+    return make_unique_void(new RequestTypeSupport_cpp(members));
   }
   RMW_SET_ERROR_MSG("Unknown typesupport identifier");
-  return nullptr;
+  return make_null_unique_void();
 }
 
-void * create_response_type_support(
+unique_void_ptr_t create_response_type_support(
   const void * untyped_members,
   const char * typesupport_identifier)
 {
   if (using_introspection_c_typesupport(typesupport_identifier)) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_c__ServiceMembers *>(untyped_members);
-    return new ResponseTypeSupport_c(members);
+    return make_unique_void(new ResponseTypeSupport_c(members));
   } else if (using_introspection_cpp_typesupport(typesupport_identifier)) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_cpp::ServiceMembers *>(untyped_members);
-    return new ResponseTypeSupport_cpp(members);
+    return make_unique_void(new ResponseTypeSupport_cpp(members));
   }
   RMW_SET_ERROR_MSG("Unknown typesupport identifier");
-  return nullptr;
+  return make_null_unique_void();
 }
 
 static uint32_t serdata_rmw_size(const struct ddsi_serdata * dcmn)
@@ -283,11 +283,11 @@ static bool serdata_rmw_to_sample(
       cycdeser sd(d->data(), d->size());
       if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
+          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_.get());
         return typed_typesupport->deserializeROSmessage(sd, sample);
       } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
-          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
+          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_.get());
         return typed_typesupport->deserializeROSmessage(sd, sample);
       }
     } else {
@@ -299,11 +299,11 @@ static bool serdata_rmw_to_sample(
       cycdeser sd(d->data(), d->size());
       if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
+          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_.get());
         return typed_typesupport->deserializeROSmessage(sd, wrap->data, prefix);
       } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
-          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
+          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_.get());
         return typed_typesupport->deserializeROSmessage(sd, wrap->data, prefix);
       }
     }
@@ -354,11 +354,11 @@ static size_t serdata_rmw_print(
       cycprint sd(buf, bufsize, d->data(), d->size());
       if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
+          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_.get());
         return typed_typesupport->printROSmessage(sd);
       } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
-          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
+          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_.get());
         return typed_typesupport->printROSmessage(sd);
       }
     } else {
@@ -372,11 +372,11 @@ static size_t serdata_rmw_print(
       cycprint sd(buf, bufsize, d->data(), d->size());
       if (using_introspection_c_typesupport(topic->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_);
+          static_cast<MessageTypeSupport_c *>(topic->type_support.type_support_.get());
         return typed_typesupport->printROSmessage(sd, prefix);
       } else if (using_introspection_cpp_typesupport(topic->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
-          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_);
+          static_cast<MessageTypeSupport_cpp *>(topic->type_support.type_support_.get());
         return typed_typesupport->printROSmessage(sd, prefix);
       }
     }
@@ -561,19 +561,19 @@ static std::string get_type_name(const char * type_support_identifier, void * ty
 
 struct sertopic_rmw * create_sertopic(
   const char * topicname, const char * type_support_identifier,
-  void * type_support, bool is_request_header,
+  unique_void_ptr_t type_support, bool is_request_header,
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type)
 {
   struct sertopic_rmw * st = new struct sertopic_rmw;
 #if DDSI_SERTOPIC_HAS_TOPICKIND_NO_KEY
-  std::string type_name = get_type_name(type_support_identifier, type_support);
+  std::string type_name = get_type_name(type_support_identifier, type_support.get());
   ddsi_sertopic_init(
     static_cast<struct ddsi_sertopic *>(st), topicname,
     type_name.c_str(), &sertopic_rmw_ops, &serdata_rmw_ops, true);
 #else
   memset(st, 0, sizeof(struct ddsi_sertopic));
   st->cpp_name = std::string(topicname);
-  st->cpp_type_name = get_type_name(type_support_identifier, type_support);
+  st->cpp_type_name = get_type_name(type_support_identifier, type_support.get());
   st->cpp_name_type_name = st->cpp_name + std::string(";") + std::string(st->cpp_type_name);
   st->ops = &sertopic_rmw_ops;
   st->serdata_ops = &serdata_rmw_ops;
@@ -585,7 +585,7 @@ struct sertopic_rmw * create_sertopic(
   ddsrt_atomic_st32(&st->refc, 1);
 #endif
   st->type_support.typesupport_identifier_ = type_support_identifier;
-  st->type_support.type_support_ = type_support;
+  st->type_support.type_support_ = std::move(type_support);
   st->is_request_header = is_request_header;
   st->cdr_writer = rmw_cyclonedds_cpp::make_cdr_writer(std::move(message_type));
   return st;

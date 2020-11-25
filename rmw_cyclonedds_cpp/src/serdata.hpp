@@ -21,6 +21,7 @@
 #include "bytewise.hpp"
 #include "dds/ddsi/ddsi_serdata.h"
 #include "dds/ddsi/ddsi_sertopic.h"
+#include "unique_void.hpp"
 
 namespace rmw_cyclonedds_cpp
 {
@@ -29,7 +30,7 @@ class BaseCDRWriter;
 
 struct CddsTypeSupport
 {
-  void * type_support_;
+  unique_void_ptr_t type_support_{make_null_unique_void()};
   const char * typesupport_identifier_;
 };
 
@@ -72,19 +73,19 @@ typedef struct cdds_request_wrapper
   void * data;
 } cdds_request_wrapper_t;
 
-void * create_message_type_support(
+unique_void_ptr_t create_message_type_support(
   const void * untyped_members,
   const char * typesupport_identifier);
-void * create_request_type_support(
+unique_void_ptr_t create_request_type_support(
   const void * untyped_members,
   const char * typesupport_identifier);
-void * create_response_type_support(
+unique_void_ptr_t create_response_type_support(
   const void * untyped_members,
   const char * typesupport_identifier);
 
 struct sertopic_rmw * create_sertopic(
   const char * topicname, const char * type_support_identifier,
-  void * type_support, bool is_request_header,
+  unique_void_ptr_t type_support, bool is_request_header,
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type_support);
 
 struct ddsi_serdata * serdata_rmw_from_serialized_message(
