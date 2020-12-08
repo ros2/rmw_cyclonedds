@@ -2,6 +2,12 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.7.6 (2020-12-08)
+------------------
+* Delete problematic assert in rmw_init() (`#265 <https://github.com/ros2/rmw_cyclonedds/issues/265>`_)
+* Fix context cleanup (`#227 <https://github.com/ros2/rmw_cyclonedds/issues/227>`_)
+* Contributors: Ivan Santiago Paunovic, Michel Hidalgo
+
 0.7.5 (2020-10-15)
 ------------------
 * Fixed cppcheck issue
