@@ -2724,8 +2724,8 @@ static rmw_ret_t rmw_take_ser_int(
   CddsSubscription * sub = static_cast<CddsSubscription *>(subscription->data);
   RET_NULL(sub);
   dds_sample_info_t info;
-  struct ddsi_serdata * dcmn;
-  while (dds_takecdr(sub->enth, &dcmn, 1, &info, DDS_ANY_STATE) == 1) {
+  struct ddsi_serdata * d;
+  while (dds_takecdr(sub->enth, &d, 1, &info, DDS_ANY_STATE) == 1) {
     if (info.valid_data) {
       if (message_info) {
         message_info->publisher_gid.implementation_identifier = eclipse_cyclonedds_identifier;
@@ -2735,20 +2735,19 @@ static rmw_ret_t rmw_take_ser_int(
           message_info->publisher_gid.data, &info.publication_handle,
           sizeof(info.publication_handle));
       }
-      auto d = static_cast<serdata_rmw *>(dcmn);
-      /* FIXME: what about the header - should be included or not? */
-      if (rmw_serialized_message_resize(serialized_message, d->size()) != RMW_RET_OK) {
-        ddsi_serdata_unref(dcmn);
+      size_t size = ddsi_serdata_size(d);
+      if (rmw_serialized_message_resize(serialized_message, size) != RMW_RET_OK) {
+        ddsi_serdata_unref(d);
         *taken = false;
         return RMW_RET_ERROR;
       }
-      memcpy(serialized_message->buffer, d->data(), d->size());
-      serialized_message->buffer_length = d->size();
-      ddsi_serdata_unref(dcmn);
+      ddsi_serdata_to_ser(d, 0, size, serialized_message->buffer);
+      serialized_message->buffer_length = size;
+      ddsi_serdata_unref(d);
       *taken = true;
       return RMW_RET_OK;
     }
-    ddsi_serdata_unref(dcmn);
+    ddsi_serdata_unref(d);
   }
   *taken = false;
   return RMW_RET_OK;
