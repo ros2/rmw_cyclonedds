@@ -30,18 +30,6 @@
 #include "ServiceTypeSupport.hpp"
 #include "serdes.hpp"
 
-/* Cyclone's nn_keyhash got renamed to ddsi_keyhash and shuffled around in the header
-   files to avoid pulling in tons of things just for a definition of a keyhash.  This
-   coincides with the introduction of DDS Security, which itself adds another function
-   that was missing.
-
-   If that additional function is not needed, it is known as nn_keyhash and only a forward
-   declaration is available; else it is known as ddsi_keyhash and a definition is
-   available */
-#if !DDSI_SERDATA_HAS_GET_KEYHASH
-#define ddsi_keyhash nn_keyhash
-#endif
-
 using TypeSupport_c =
   rmw_cyclonedds_cpp::TypeSupport<rosidl_typesupport_introspection_c__MessageMembers>;
 using TypeSupport_cpp =
@@ -167,7 +155,6 @@ static struct ddsi_serdata * serdata_rmw_from_ser(
   return d.release();
 }
 
-#if DDSI_SERDATA_HAS_FROM_SER_IOV
 static struct ddsi_serdata * serdata_rmw_from_ser_iov(
   const struct ddsi_sertype * type,
   enum ddsi_serdata_kind kind,
@@ -184,7 +171,6 @@ static struct ddsi_serdata * serdata_rmw_from_ser_iov(
   }
   return d.release();
 }
-#endif
 
 static struct ddsi_serdata * serdata_rmw_from_keyhash(
   const struct ddsi_sertype * type,
@@ -229,11 +215,13 @@ struct ddsi_serdata * serdata_rmw_from_serialized_message(
   const struct ddsi_sertype * typecmn,
   const void * raw, size_t size)
 {
-  const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(typecmn);
-  auto d = new serdata_rmw(type, SDK_DATA);
-  d->resize(size);
-  memcpy(d->data(), raw, size);
-  return d;
+  ddsrt_iovec_t iov;
+  iov.iov_len = static_cast<ddsrt_iov_len_t>(size);
+  if (iov.iov_len != size) {
+    return nullptr;
+  }
+  iov.iov_base = const_cast<void *>(raw);
+  return ddsi_serdata_from_ser_iov(typecmn, SDK_DATA, 1, &iov, size);
 }
 
 static struct ddsi_serdata * serdata_rmw_to_untyped(const struct ddsi_serdata * dcmn)
@@ -349,7 +337,6 @@ static bool serdata_rmw_eqkey(const struct ddsi_serdata * a, const struct ddsi_s
   return true;
 }
 
-#if DDSI_SERDATA_HAS_PRINT
 static size_t serdata_rmw_print(
   const struct ddsi_sertype * tpcmn, const struct ddsi_serdata * dcmn, char * buf, size_t bufsize)
 {
@@ -399,9 +386,7 @@ static size_t serdata_rmw_print(
 
   return false;
 }
-#endif
 
-#if DDSI_SERDATA_HAS_GET_KEYHASH
 static void serdata_rmw_get_keyhash(
   const struct ddsi_serdata * d, struct ddsi_keyhash * buf,
   bool force_md5)
@@ -412,15 +397,12 @@ static void serdata_rmw_get_keyhash(
   static_cast<void>(force_md5);
   memset(buf, 0, sizeof(*buf));
 }
-#endif
 
 static const struct ddsi_serdata_ops serdata_rmw_ops = {
   serdata_rmw_eqkey,
   serdata_rmw_size,
   serdata_rmw_from_ser,
-#if DDSI_SERDATA_HAS_FROM_SER_IOV
   serdata_rmw_from_ser_iov,
-#endif
   serdata_rmw_from_keyhash,
   serdata_rmw_from_sample,
   serdata_rmw_to_ser,
@@ -429,13 +411,9 @@ static const struct ddsi_serdata_ops serdata_rmw_ops = {
   serdata_rmw_to_sample,
   serdata_rmw_to_untyped,
   serdata_rmw_untyped_to_sample,
-  serdata_rmw_free
-#if DDSI_SERDATA_HAS_PRINT
-  , serdata_rmw_print
-#endif
-#if DDSI_SERDATA_HAS_GET_KEYHASH
-  , serdata_rmw_get_keyhash
-#endif
+  serdata_rmw_free,
+  serdata_rmw_print,
+  serdata_rmw_get_keyhash
 };
 
 static void sertype_rmw_free(struct ddsi_sertype * tpcmn)
@@ -443,7 +421,7 @@ static void sertype_rmw_free(struct ddsi_sertype * tpcmn)
   struct sertype_rmw * tp = static_cast<struct sertype_rmw *>(tpcmn);
 #if DDS_HAS_DDSI_SERTYPE
   ddsi_sertype_fini(tpcmn);
-#elif DDSI_SERTOPIC_HAS_TOPICKIND_NO_KEY
+#else
   ddsi_sertopic_fini(tpcmn);
 #endif
   if (tp->type_support.type_support_) {
@@ -493,7 +471,6 @@ static void sertype_rmw_free_samples(
   (void) op;
 }
 
-#if DDSI_SERTOPIC_HAS_EQUAL_AND_HASH
 bool sertype_rmw_equal(
   const struct ddsi_sertype * acmn, const struct ddsi_sertype * bcmn)
 {
@@ -522,7 +499,6 @@ uint32_t sertype_rmw_hash(const struct ddsi_sertype * tpcmn)
       tp->type_support.typesupport_identifier_)));
   return h1 ^ h2;
 }
-#endif
 
 static const struct ddsi_sertype_ops sertype_rmw_ops = {
 #if DDS_HAS_DDSI_SERTYPE
@@ -532,11 +508,9 @@ static const struct ddsi_sertype_ops sertype_rmw_ops = {
   sertype_rmw_free,
   sertype_rmw_zero_samples,
   sertype_rmw_realloc_samples,
-  sertype_rmw_free_samples
-#if DDSI_SERTOPIC_HAS_EQUAL_AND_HASH
-  , sertype_rmw_equal,
+  sertype_rmw_free_samples,
+  sertype_rmw_equal,
   sertype_rmw_hash
-#endif
 #if DDS_HAS_DDSI_SERTYPE
   /* not yet providing type discovery, assignability checking */
   , nullptr,
@@ -594,24 +568,11 @@ struct sertype_rmw * create_sertype(
   ddsi_sertype_init(
     static_cast<struct ddsi_sertype *>(st),
     type_name.c_str(), &sertype_rmw_ops, &serdata_rmw_ops, true);
-#elif DDSI_SERTOPIC_HAS_TOPICKIND_NO_KEY
+#else
   std::string type_name = get_type_name(type_support_identifier, type_support);
   ddsi_sertopic_init(
     static_cast<struct ddsi_sertopic *>(st), topicname,
     type_name.c_str(), &sertopic_rmw_ops, &serdata_rmw_ops, true);
-#else
-  memset(st, 0, sizeof(struct ddsi_sertopic));
-  st->cpp_name = std::string(topicname);
-  st->cpp_type_name = get_type_name(type_support_identifier, type_support);
-  st->cpp_name_type_name = st->cpp_name + std::string(";") + std::string(st->cpp_type_name);
-  st->ops = &sertopic_rmw_ops;
-  st->serdata_ops = &serdata_rmw_ops;
-  st->serdata_basehash = ddsi_sertopic_compute_serdata_basehash(st->serdata_ops);
-  st->name_type_name = const_cast<char *>(st->cpp_name_type_name.c_str());
-  st->name = const_cast<char *>(st->cpp_name.c_str());
-  st->type_name = const_cast<char *>(st->cpp_type_name.c_str());
-  st->iid = ddsi_iid_gen();
-  ddsrt_atomic_st32(&st->refc, 1);
 #endif
   st->type_support.typesupport_identifier_ = type_support_identifier;
   st->type_support.type_support_ = type_support;

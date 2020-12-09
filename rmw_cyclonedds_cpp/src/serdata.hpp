@@ -44,11 +44,6 @@ struct sertype_rmw : ddsi_sertype
 {
   CddsTypeSupport type_support;
   bool is_request_header;
-#if !DDSI_SERTOPIC_HAS_TOPICKIND_NO_KEY
-  std::string cpp_name;
-  std::string cpp_type_name;
-  std::string cpp_name_type_name;
-#endif
   std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRWriter> cdr_writer;
 };
 
