@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include "rcutils/error_handling.h"
 #include "rosidl_runtime_c/message_type_support_struct.h"
 #include "rosidl_runtime_c/service_type_support_struct.h"
 
@@ -71,25 +72,44 @@ public:
 
 std::unique_ptr<StructValueType> make_message_value_type(const rosidl_message_type_support_t * mts)
 {
-  if (auto ts_c = get_message_typesupport_handle(mts, TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::get_identifier())) {
+  if (auto ts_c =
+    get_message_typesupport_handle(
+      mts,
+      TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::get_identifier()))
+  {
     auto members = static_cast<const MetaMessage<TypeGenerator::ROSIDL_C> *>(ts_c->data);
     return std::make_unique<ROSIDLC_StructValueType>(members);
+  } else {
+    rcutils_error_string_t prev_error_string = rcutils_get_error_string();
+    rcutils_reset_error();
+
+    if (auto ts_cpp =
+      get_message_typesupport_handle(
+        mts,
+        TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::get_identifier()))
+    {
+      auto members = static_cast<const MetaMessage<TypeGenerator::ROSIDL_Cpp> *>(ts_cpp->data);
+      return std::make_unique<ROSIDLCPP_StructValueType>(members);
+    } else {
+      rcutils_error_string_t error_string = rcutils_get_error_string();
+      rcutils_reset_error();
+
+      throw std::runtime_error(
+              std::string("Type support not from this implementation.  Got:\n") +
+              "    " + prev_error_string.str + "\n" +
+              "    " + error_string.str + "\n" +
+              "while fetching it");
+    }
   }
-  if (auto ts_cpp =
-    get_message_typesupport_handle(mts, TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::get_identifier()))
-  {
-    auto members = static_cast<const MetaMessage<TypeGenerator::ROSIDL_Cpp> *>(ts_cpp->data);
-    return std::make_unique<ROSIDLCPP_StructValueType>(members);
-  }
-  throw std::runtime_error(
-          "could not identify message typesupport " + std::string(mts->typesupport_identifier));
 }
 
 std::pair<std::unique_ptr<StructValueType>, std::unique_ptr<StructValueType>>
 make_request_response_value_types(const rosidl_service_type_support_t * svc_ts)
 {
   if (auto tsc =
-    get_service_typesupport_handle(svc_ts, TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::get_identifier()))
+    get_service_typesupport_handle(
+      svc_ts,
+      TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::get_identifier()))
   {
     auto typed =
       static_cast<const TypeGeneratorInfo<TypeGenerator::ROSIDL_C>::MetaService *>(tsc->data);
@@ -97,21 +117,32 @@ make_request_response_value_types(const rosidl_service_type_support_t * svc_ts)
       std::make_unique<ROSIDLC_StructValueType>(typed->request_members_),
       std::make_unique<ROSIDLC_StructValueType>(typed->response_members_)
     };
-  }
+  } else {
+    rcutils_error_string_t prev_error_string = rcutils_get_error_string();
+    rcutils_reset_error();
 
-  if (auto tscpp =
-    get_service_typesupport_handle(svc_ts, TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::get_identifier()))
-  {
-    auto typed =
-      static_cast<const TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::MetaService *>(tscpp->data);
-    return {
-      std::make_unique<ROSIDLCPP_StructValueType>(typed->request_members_),
-      std::make_unique<ROSIDLCPP_StructValueType>(typed->response_members_)
-    };
-  }
+    if (auto tscpp =
+      get_service_typesupport_handle(
+        svc_ts,
+        TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::get_identifier()))
+    {
+      auto typed =
+        static_cast<const TypeGeneratorInfo<TypeGenerator::ROSIDL_Cpp>::MetaService *>(tscpp->data);
+      return {
+        std::make_unique<ROSIDLCPP_StructValueType>(typed->request_members_),
+        std::make_unique<ROSIDLCPP_StructValueType>(typed->response_members_)
+      };
+    } else {
+      rcutils_error_string_t error_string = rcutils_get_error_string();
+      rcutils_reset_error();
 
-  throw std::runtime_error(
-          "Unidentified service type support: " + std::string(svc_ts->typesupport_identifier));
+      throw std::runtime_error(
+              std::string("Service type support not from this implementation.  Got:\n") +
+              "    " + prev_error_string.str + "\n" +
+              "    " + error_string.str + "\n" +
+              "while fetching it");
+    }
+  }
 }
 
 ROSIDLC_StructValueType::ROSIDLC_StructValueType(
