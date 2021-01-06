@@ -186,7 +186,11 @@ struct Cdds
   {}
 };
 
-static Cdds gcdds;
+static Cdds& gcdds()
+{
+  static Cdds * x = new Cdds();
+  return *x;
+}
 
 struct CddsEntity
 {
@@ -735,10 +739,10 @@ static rmw_ret_t discovery_thread_stop(rmw_dds_common::Context & common_context)
 static bool check_create_domain(dds_domainid_t did, rmw_localhost_only_t localhost_only_option)
 {
   const bool localhost_only = (localhost_only_option == RMW_LOCALHOST_ONLY_ENABLED);
-  std::lock_guard<std::mutex> lock(gcdds.domains_lock);
+  std::lock_guard<std::mutex> lock(gcdds().domains_lock);
   /* return true: n_nodes incremented, localhost_only set correctly, domain exists
      "      false: n_nodes unchanged, domain left intact if it already existed */
-  CddsDomain & dom = gcdds.domains[did];
+  CddsDomain & dom = gcdds().domains[did];
   if (dom.refcount != 0) {
     /* Localhost setting must match */
     if (localhost_only == dom.localhost_only) {
@@ -776,7 +780,7 @@ static bool check_create_domain(dds_domainid_t did, rmw_localhost_only_t localho
         "rmw_cyclonedds_cpp",
         "rmw_create_node: failed to retrieve CYCLONEDDS_URI environment variable, error %s",
         get_env_error);
-      gcdds.domains.erase(did);
+      gcdds().domains.erase(did);
       return false;
     }
 
@@ -784,7 +788,7 @@ static bool check_create_domain(dds_domainid_t did, rmw_localhost_only_t localho
       RCUTILS_LOG_ERROR_NAMED(
         "rmw_cyclonedds_cpp",
         "rmw_create_node: failed to create domain, error %s", dds_strretcode(dom.domain_handle));
-      gcdds.domains.erase(did);
+      gcdds().domains.erase(did);
       return false;
     } else {
       return true;
@@ -797,12 +801,12 @@ void
 check_destroy_domain(dds_domainid_t domain_id)
 {
   if (domain_id != UINT32_MAX) {
-    std::lock_guard<std::mutex> lock(gcdds.domains_lock);
-    CddsDomain & dom = gcdds.domains[domain_id];
+    std::lock_guard<std::mutex> lock(gcdds().domains_lock);
+    CddsDomain & dom = gcdds().domains[domain_id];
     assert(dom.refcount > 0);
     if (--dom.refcount == 0) {
       static_cast<void>(dds_delete(dom.domain_handle));
-      gcdds.domains.erase(domain_id);
+      gcdds().domains.erase(domain_id);
     }
   }
 }
@@ -3100,21 +3104,21 @@ extern "C" rmw_wait_set_t * rmw_create_wait_set(rmw_context_t * context, size_t 
   }
 
   {
-    std::lock_guard<std::mutex> lock(gcdds.lock);
+    std::lock_guard<std::mutex> lock(gcdds().lock);
     // Lazily create dummy guard condition
-    if (gcdds.waitsets.size() == 0) {
-      if ((gcdds.gc_for_empty_waitset = dds_create_guardcondition(DDS_CYCLONEDDS_HANDLE)) < 0) {
+    if (gcdds().waitsets.size() == 0) {
+      if ((gcdds().gc_for_empty_waitset = dds_create_guardcondition(DDS_CYCLONEDDS_HANDLE)) < 0) {
         RMW_SET_ERROR_MSG("failed to create guardcondition for handling empty waitsets");
         goto fail_create_dummy;
       }
     }
     // Attach never-triggered guard condition.  As it will never be triggered, it will never be
     // included in the result of dds_waitset_wait
-    if (dds_waitset_attach(ws->waitseth, gcdds.gc_for_empty_waitset, INTPTR_MAX) < 0) {
+    if (dds_waitset_attach(ws->waitseth, gcdds().gc_for_empty_waitset, INTPTR_MAX) < 0) {
       RMW_SET_ERROR_MSG("failed to attach dummy guard condition for blocking on empty waitset");
       goto fail_attach_dummy;
     }
-    gcdds.waitsets.insert(ws);
+    gcdds().waitsets.insert(ws);
   }
 
   return wait_set;
@@ -3142,11 +3146,11 @@ extern "C" rmw_ret_t rmw_destroy_wait_set(rmw_wait_set_t * wait_set)
   RET_NULL(ws);
   dds_delete(ws->waitseth);
   {
-    std::lock_guard<std::mutex> lock(gcdds.lock);
-    gcdds.waitsets.erase(ws);
-    if (gcdds.waitsets.size() == 0) {
-      dds_delete(gcdds.gc_for_empty_waitset);
-      gcdds.gc_for_empty_waitset = 0;
+    std::lock_guard<std::mutex> lock(gcdds().lock);
+    gcdds().waitsets.erase(ws);
+    if (gcdds().waitsets.size() == 0) {
+      dds_delete(gcdds().gc_for_empty_waitset);
+      gcdds().gc_for_empty_waitset = 0;
     }
   }
   RMW_TRY_DESTRUCTOR(ws->~CddsWaitset(), ws, result = RMW_RET_ERROR);
@@ -3217,8 +3221,8 @@ static void clean_waitset_caches()
      have been cached in a waitset), and drops all cached entities from all waitsets (just to keep
      life simple). I'm assuming one is not allowed to delete an entity while it is still being
      used ... */
-  std::lock_guard<std::mutex> lock(gcdds.lock);
-  for (auto && ws : gcdds.waitsets) {
+  std::lock_guard<std::mutex> lock(gcdds().lock);
+  for (auto && ws : gcdds().waitsets) {
     std::lock_guard<std::mutex> wslock(ws->lock);
     if (!ws->inuse) {
       waitset_detach(ws);
