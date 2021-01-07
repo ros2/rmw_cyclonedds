@@ -186,7 +186,22 @@ struct Cdds
   {}
 };
 
-static Cdds& gcdds()
+/* Use construct-on-first-use for the global state rather than a plain global variable to
+   prevent its destructor from running prior to last use by some other component in the
+   system.  E.g., some rclcpp tests (at the time of this commit) drop a guard condition in
+   a global destructor, but (at least) on Windows the Cyclone RMW global dtors run before
+   the global dtors of that test, resulting in rmw_destroy_guard_condition() attempting to
+   use the already destroyed "Cdds::waitsets".
+
+   The memory leak this causes is minor (an empty map of domains and an empty set of
+   waitsets) and by definition only once.  The alternative of elimating it altogether or
+   tying its existence to init/shutdown is problematic because this state is used across
+   domains and contexts.
+
+   The only practical alternative I see is to extend Cyclone's run-time state (which is
+   managed correctly for these situations), but it is not Cyclone's responsibility to work
+   around C++ global destructor limitations. */
+static Cdds & gcdds()
 {
   static Cdds * x = new Cdds();
   return *x;
