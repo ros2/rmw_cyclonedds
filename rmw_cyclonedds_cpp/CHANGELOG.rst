@@ -2,6 +2,21 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Fix use-after-free in error handling bug
+* Drop compatibility with ancient cyclone versions
+* Update to use Cyclone's renamed ddsi_sertype
+* Use init-on-first-use for global state (`#275 <https://github.com/ros2/rmw_cyclonedds/issues/275>`_)
+* Make sure to reset the error when a typesupport can't be found.
+* Switch to using the generic functions for the typesupport handles.
+* Handle typesupport errors on fetch. (`#271 <https://github.com/ros2/rmw_cyclonedds/issues/271>`_)
+* Handle potential divide by 0 (`#267 <https://github.com/ros2/rmw_cyclonedds/issues/267>`_)
+* Fix incorrect log message(rmw_fastrtps_shared_cpp -> rmw_cylonedds_cpp) (`#260 <https://github.com/ros2/rmw_cyclonedds/issues/260>`_)
+* Update maintainers (`#254 <https://github.com/ros2/rmw_cyclonedds/issues/254>`_)
+* Change wrong use of %ld to print std::size_t to %zu
+* Contributors: Chris Lalancette, Erik Boasson, Ivan Santiago Paunovic, Michel Hidalgo, Stephen Brawner, Sven Brinkmann, eboasson, pluris
+
 0.18.3 (2020-09-29)
 -------------------
 * Return RMW_RET_UNSUPPORTED in rmw_get_serialized_message_size (`#250 <https://github.com/ros2/rmw_cyclonedds/issues/250>`_)
