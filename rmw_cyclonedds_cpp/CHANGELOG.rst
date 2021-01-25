@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.18.4 (2021-01-25)
+-------------------
 * Fix use-after-free in error handling bug
 * Drop compatibility with ancient cyclone versions
 * Update to use Cyclone's renamed ddsi_sertype
