@@ -2656,8 +2656,12 @@ static rmw_ret_t rmw_take_seq(
   RET_NULL(sub);
 
   std::vector<dds_sample_info_t> infos(count);
+  std::vector<void *> ptrs(count);
   auto maxsamples = static_cast<uint32_t>(count);
-  auto ret = dds_take(sub->enth, message_sequence->data, infos.data(), count, maxsamples);
+  for (size_t i = 0; i < count; i++) {
+    ptrs[i] = &message_sequence->data[i];
+  }
+  auto ret = dds_take(sub->enth, ptrs.data(), infos.data(), count, maxsamples);
 
   // Returning 0 should not be an error, as it just indicates that no messages were available.
   if (ret < 0) {
