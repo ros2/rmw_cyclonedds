@@ -2047,6 +2047,10 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
     }
   }
   RMW_CHECK_ARGUMENT_FOR_NULL(publisher_options, nullptr);
+  if (publisher_options->require_unique_network_flow == RMW_UNIQUE_NETWORK_FLOW_STRICTLY_REQUIRED) {
+    RMW_SET_ERROR_MSG("Strict requirement on unique network flows for publishers not supported");
+    return nullptr;
+  }
 
   rmw_publisher_t * pub = create_publisher(
     node->context->impl->ppant, node->context->impl->dds_pub,
@@ -2425,6 +2429,12 @@ extern "C" rmw_subscription_t * rmw_create_subscription(
     }
   }
   RMW_CHECK_ARGUMENT_FOR_NULL(subscription_options, nullptr);
+  if (subscription_options->require_unique_network_flow ==
+    RMW_UNIQUE_NETWORK_FLOW_STRICTLY_REQUIRED)
+  {
+    RMW_SET_ERROR_MSG("Strict requirement on unique network flows for subscriptions not supported");
+    return nullptr;
+  }
 
   rmw_subscription_t * sub = create_subscription(
     node->context->impl->ppant, node->context->impl->dds_sub,
