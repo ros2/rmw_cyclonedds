@@ -1699,14 +1699,14 @@ static dds_qos_t * create_readwrite_qos(
     default:
       rmw_cyclonedds_cpp::unreachable();
   }
-  if (qos_policies->lifespan > 0) {
+  if (qos_policies->lifespan != RMW_DURATION_INFINITE) {
     dds_qset_lifespan(qos, qos_policies->lifespan);
   }
-  if (qos_policies->deadline > 0) {
+  if (qos_policies->deadline != RMW_DURATION_INFINITE) {
     dds_qset_deadline(qos, qos_policies->deadline);
   }
 
-  if (qos_policies->liveliness_lease_duration == 0) {
+  if (qos_policies->liveliness_lease_duration == RMW_DURATION_INFINITE) {
     ldur = DDS_INFINITY;
   } else {
     ldur = qos_policies->liveliness_lease_duration;
@@ -1822,7 +1822,11 @@ static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qo
       RMW_SET_ERROR_MSG("get_readwrite_qos: deadline not set");
       return false;
     }
-    qos_policies->deadline = (rmw_duration_t) deadline;
+    if (deadline == DDS_INFINITY) {
+      qos_policies->deadline = RMW_DURATION_INFINITE;
+    } else {
+      qos_policies->deadline = (rmw_duration_t) deadline;
+    }
   }
 
   {
@@ -1830,7 +1834,11 @@ static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qo
     if (!dds_qget_lifespan(dds_qos, &lifespan)) {
       lifespan = DDS_INFINITY;
     }
-    qos_policies->lifespan = (rmw_duration_t) lifespan;
+    if (lifespan == DDS_INFINITY) {
+      qos_policies->lifespan = RMW_DURATION_INFINITE;
+    } else {
+      qos_policies->lifespan = (rmw_duration_t) lifespan;
+    }
   }
 
   {
@@ -1853,7 +1861,11 @@ static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qo
       default:
         rmw_cyclonedds_cpp::unreachable();
     }
-    qos_policies->liveliness_lease_duration = (rmw_duration_t) lease_duration;
+    if (lease_duration == DDS_INFINITY) {
+      qos_policies->liveliness_lease_duration = RMW_DURATION_INFINITE;
+    } else {
+      qos_policies->liveliness_lease_duration = (rmw_duration_t) lease_duration;
+    }
   }
 
   return true;
