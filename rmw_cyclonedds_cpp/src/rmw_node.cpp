@@ -1699,20 +1699,17 @@ static dds_qos_t * create_readwrite_qos(
     default:
       rmw_cyclonedds_cpp::unreachable();
   }
-  if (qos_policies->lifespan.sec > 0 || qos_policies->lifespan.nsec > 0) {
-    dds_qset_lifespan(qos, DDS_SECS(qos_policies->lifespan.sec) + qos_policies->lifespan.nsec);
+  if (qos_policies->lifespan > 0) {
+    dds_qset_lifespan(qos, qos_policies->lifespan);
   }
-  if (qos_policies->deadline.sec > 0 || qos_policies->deadline.nsec > 0) {
-    dds_qset_deadline(qos, DDS_SECS(qos_policies->deadline.sec) + qos_policies->deadline.nsec);
+  if (qos_policies->deadline > 0) {
+    dds_qset_deadline(qos, qos_policies->deadline);
   }
 
-  if (qos_policies->liveliness_lease_duration.sec == 0 &&
-    qos_policies->liveliness_lease_duration.nsec == 0)
-  {
+  if (qos_policies->liveliness_lease_duration == 0) {
     ldur = DDS_INFINITY;
   } else {
-    ldur = DDS_SECS(qos_policies->liveliness_lease_duration.sec) +
-      qos_policies->liveliness_lease_duration.nsec;
+    ldur = qos_policies->liveliness_lease_duration;
   }
   switch (qos_policies->liveliness) {
     case RMW_QOS_POLICY_LIVELINESS_SYSTEM_DEFAULT:
@@ -1825,8 +1822,7 @@ static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qo
       RMW_SET_ERROR_MSG("get_readwrite_qos: deadline not set");
       return false;
     }
-    qos_policies->deadline.sec = (uint64_t) deadline / 1000000000;
-    qos_policies->deadline.nsec = (uint64_t) deadline % 1000000000;
+    qos_policies->deadline = (rmw_duration_t) deadline;
   }
 
   {
@@ -1834,8 +1830,7 @@ static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qo
     if (!dds_qget_lifespan(dds_qos, &lifespan)) {
       lifespan = DDS_INFINITY;
     }
-    qos_policies->lifespan.sec = (uint64_t) lifespan / 1000000000;
-    qos_policies->lifespan.nsec = (uint64_t) lifespan % 1000000000;
+    qos_policies->lifespan = (rmw_duration_t) lifespan;
   }
 
   {
@@ -1858,8 +1853,7 @@ static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qo
       default:
         rmw_cyclonedds_cpp::unreachable();
     }
-    qos_policies->liveliness_lease_duration.sec = (uint64_t) lease_duration / 1000000000;
-    qos_policies->liveliness_lease_duration.nsec = (uint64_t) lease_duration % 1000000000;
+    qos_policies->liveliness_lease_duration = (rmw_duration_t) lease_duration;
   }
 
   return true;
@@ -3309,7 +3303,7 @@ static rmw_ret_t handle_active_events(rmw_events_t * events)
 extern "C" rmw_ret_t rmw_wait(
   rmw_subscriptions_t * subs, rmw_guard_conditions_t * gcs,
   rmw_services_t * srvs, rmw_clients_t * cls, rmw_events_t * evs,
-  rmw_wait_set_t * wait_set, const rmw_time_t * wait_timeout)
+  rmw_wait_set_t * wait_set, rmw_duration_t wait_timeout)
 {
   RET_NULL_X(wait_set, return RMW_RET_INVALID_ARGUMENT);
   RET_WRONG_IMPLID(wait_set);
@@ -3382,9 +3376,9 @@ extern "C" rmw_ret_t rmw_wait(
 
   ws->trigs.resize(ws->nelems + 1);
   const dds_time_t timeout =
-    (wait_timeout == NULL) ?
+    (wait_timeout < 0) ?
     DDS_NEVER :
-    (dds_time_t) wait_timeout->sec * 1000000000 + wait_timeout->nsec;
+    (dds_time_t) wait_timeout;
   ws->trigs.resize(ws->nelems + 1);
   const dds_return_t ntrig = dds_waitset_wait(
     ws->waitseth, ws->trigs.data(),
