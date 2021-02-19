@@ -1634,6 +1634,11 @@ static std::string make_fqtopic(
   return make_fqtopic(prefix, topic_name, suffix, qos_policies->avoid_ros_namespace_conventions);
 }
 
+static bool is_rmw_duration_default(rmw_duration_t duration)
+{
+  return duration == 0 || duration == RMW_DURATION_INFINITE;
+}
+
 static dds_qos_t * create_readwrite_qos(
   const rmw_qos_profile_t * qos_policies,
   bool ignore_local_publications)
@@ -1699,14 +1704,14 @@ static dds_qos_t * create_readwrite_qos(
     default:
       rmw_cyclonedds_cpp::unreachable();
   }
-  if (qos_policies->lifespan != RMW_DURATION_INFINITE) {
+  if (!is_rmw_duration_default(qos_policies->lifespan)) {
     dds_qset_lifespan(qos, qos_policies->lifespan);
   }
-  if (qos_policies->deadline != RMW_DURATION_INFINITE) {
+  if (!is_rmw_duration_default(qos_policies->deadline)) {
     dds_qset_deadline(qos, qos_policies->deadline);
   }
 
-  if (qos_policies->liveliness_lease_duration == RMW_DURATION_INFINITE) {
+  if (is_rmw_duration_default(qos_policies->liveliness_lease_duration)) {
     ldur = DDS_INFINITY;
   } else {
     ldur = qos_policies->liveliness_lease_duration;
