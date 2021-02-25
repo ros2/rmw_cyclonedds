@@ -53,7 +53,7 @@ ament_export_dependencies(rosidl_typesupport_introspection_c)
 ament_export_dependencies(rosidl_typesupport_introspection_cpp)
 
 add_library(rmw_cyclonedds_cpp
-  src/rmw_get_network_flow.cpp
+  src/rmw_get_network_flow_endpoints.cpp
   src/rmw_node.cpp
   src/serdata.cpp
   src/serdes.cpp
