@@ -6,7 +6,10 @@ This package lets [*ROS 2*](https://index.ros.org/doc/ros2) use [*Eclipse Cyclon
 Cyclone DDS is ready to use. It seeks to give the fastest, easiest, and most robust ROS 2 experience. Let the Cyclone blow you away!
 
 1. Install:
-
+   ```
+   apt install ros-foxy-rmw-cyclonedds-cpp
+   ```
+   or
    ```
    apt install ros-eloquent-rmw-cyclonedds-cpp
    ```
