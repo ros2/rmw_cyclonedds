@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.19.0 (2021-03-01)
+-------------------
+* Add RMW function to check QoS compatibility (`#286 <https://github.com/ros2/rmw_cyclonedds/issues/286>`_)
+* Contributors: Jacob Perron
+
 0.18.4 (2021-01-25)
 -------------------
 * Fix use-after-free in error handling bug
