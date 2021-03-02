@@ -1649,6 +1649,15 @@ static dds_duration_t rmw_duration_to_dds(rmw_time_t duration)
   }
 }
 
+static rmw_time_t dds_duration_to_rmw(dds_duration_t duration)
+{
+  if (duration == DDS_INFINITY) {
+    return RMW_DURATION_INFINITE;
+  } else {
+    return rmw_time_from_nsec(duration);
+  }
+}
+
 static dds_qos_t * create_readwrite_qos(
   const rmw_qos_profile_t * qos_policies,
   bool ignore_local_publications)
@@ -1838,11 +1847,7 @@ static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qo
       RMW_SET_ERROR_MSG("get_readwrite_qos: deadline not set");
       return false;
     }
-    if (deadline == DDS_INFINITY) {
-      qos_policies->deadline = RMW_DURATION_INFINITE;
-    } else {
-      qos_policies->deadline = rmw_time_from_nsec(deadline);
-    }
+    qos_policies->deadline = dds_duration_to_rmw(deadline);
   }
 
   {
@@ -1850,11 +1855,7 @@ static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qo
     if (!dds_qget_lifespan(dds_qos, &lifespan)) {
       lifespan = DDS_INFINITY;
     }
-    if (lifespan == DDS_INFINITY) {
-      qos_policies->lifespan = RMW_DURATION_INFINITE;
-    } else {
-      qos_policies->lifespan = rmw_time_from_nsec(lifespan);
-    }
+    qos_policies->lifespan = dds_duration_to_rmw(lifespan);
   }
 
   {
@@ -1877,11 +1878,7 @@ static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qo
       default:
         rmw_cyclonedds_cpp::unreachable();
     }
-    if (lease_duration == DDS_INFINITY) {
-      qos_policies->liveliness_lease_duration = RMW_DURATION_INFINITE;
-    } else {
-      qos_policies->liveliness_lease_duration = rmw_time_from_nsec(lease_duration);
-    }
+    qos_policies->liveliness_lease_duration = dds_duration_to_rmw(lease_duration);
   }
 
   return true;
