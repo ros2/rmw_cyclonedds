@@ -338,11 +338,16 @@ struct CddsNode
 struct user_callback_data_t
 {
   std::mutex mutex;
+
+  // Subscriptions
   rmw_listener_callback_t callback {nullptr};
   const void * user_data {nullptr};
   size_t unread_count {0};
-  const void * event_data {nullptr};
-  size_t events_unread_count {0};
+
+  // Events
+  rmw_listener_callback_t event_callback[DDS_STATUS_ID_MAX + 1] {nullptr};
+  const void * event_data[DDS_STATUS_ID_MAX + 1] {nullptr};
+  size_t event_unread_count[DDS_STATUS_ID_MAX + 1] {0};
 };
 
 struct CddsPublisher : CddsEntity
@@ -474,14 +479,14 @@ static void dds_listener_callback(dds_entity_t entity, void * arg)
 
   std::lock_guard<std::mutex> guard(data->mutex);
 
-  if (data->callback && data->user_data) {
+  if (data->callback) {
     data->callback(data->user_data);
   } else {
     data->unread_count++;
   }
 }
 
-#define MAKE_DDS_EVENT_CALLBACK_FN(event_type) \
+#define MAKE_DDS_EVENT_CALLBACK_FN(event_type, EVENT_TYPE) \
   static void on_ ## event_type ## _fn( \
     dds_entity_t entity, \
     const dds_ ## event_type ## _status_t status, \
@@ -491,24 +496,21 @@ static void dds_listener_callback(dds_entity_t entity, void * arg)
     (void)entity; \
     auto data = static_cast<user_callback_data_t *>(arg); \
     std::lock_guard<std::mutex> guard(data->mutex); \
-    if (data->callback && data->event_data) { \
-      data->callback(data->event_data); \
+    if (data->event_callback[DDS_ ## EVENT_TYPE ## _STATUS_ID]) { \
+      data->callback(data->event_data[DDS_ ## EVENT_TYPE ## _STATUS_ID]); \
     } else { \
-      data->events_unread_count++; \
+      data->event_unread_count[DDS_ ## EVENT_TYPE ## _STATUS_ID]++; \
     } \
   }
 
 // Define event callback functions
-MAKE_DDS_EVENT_CALLBACK_FN(requested_deadline_missed)
-MAKE_DDS_EVENT_CALLBACK_FN(liveliness_lost)
-MAKE_DDS_EVENT_CALLBACK_FN(offered_deadline_missed)
-MAKE_DDS_EVENT_CALLBACK_FN(requested_incompatible_qos)
-MAKE_DDS_EVENT_CALLBACK_FN(sample_lost)
-MAKE_DDS_EVENT_CALLBACK_FN(offered_incompatible_qos)
-// Events of type RMW_EVENT_LIVELINESS_CHANGED are wrongly
-// taken as RMW_EVENT_REQUESTED_QOS_INCOMPATIBLE events.
-// So, lets temporarily disable this event type:
-// MAKE_DDS_EVENT_CALLBACK_FN(liveliness_changed)
+MAKE_DDS_EVENT_CALLBACK_FN(requested_deadline_missed, REQUESTED_DEADLINE_MISSED)
+MAKE_DDS_EVENT_CALLBACK_FN(liveliness_lost, LIVELINESS_LOST)
+MAKE_DDS_EVENT_CALLBACK_FN(offered_deadline_missed, OFFERED_DEADLINE_MISSED)
+MAKE_DDS_EVENT_CALLBACK_FN(requested_incompatible_qos, REQUESTED_INCOMPATIBLE_QOS)
+MAKE_DDS_EVENT_CALLBACK_FN(sample_lost, SAMPLE_LOST)
+MAKE_DDS_EVENT_CALLBACK_FN(offered_incompatible_qos, OFFERED_INCOMPATIBLE_QOS)
+MAKE_DDS_EVENT_CALLBACK_FN(liveliness_changed, LIVELINESS_CHANGED)
 
 static void listener_set_event_callbacks(dds_listener_t * l)
 {
@@ -518,7 +520,7 @@ static void listener_set_event_callbacks(dds_listener_t * l)
   dds_lset_liveliness_lost(l, on_liveliness_lost_fn);
   dds_lset_offered_deadline_missed(l, on_offered_deadline_missed_fn);
   dds_lset_offered_incompatible_qos(l, on_offered_incompatible_qos_fn);
-  // dds_lset_liveliness_changed(l, on_liveliness_changed_fn);
+  dds_lset_liveliness_changed(l, on_liveliness_changed_fn);
 }
 
 extern "C" rmw_ret_t rmw_subscription_set_listener_callback(
@@ -629,6 +631,7 @@ extern "C" rmw_ret_t rmw_guard_condition_set_listener_callback(
 template<typename T>
 static void event_set_listener_callback(
   T event,
+  rmw_event_type_t event_type,
   rmw_listener_callback_t callback,
   const void * user_data,
   bool use_previous_events)
@@ -637,16 +640,45 @@ static void event_set_listener_callback(
 
   std::lock_guard<std::mutex> guard(data->mutex);
 
+  dds_status_id_t status_id = static_cast<dds_status_id_t>(-1);
+
+  switch (event_type) {
+    case RMW_EVENT_LIVELINESS_CHANGED:
+      status_id = DDS_LIVELINESS_CHANGED_STATUS_ID;
+      break;
+    case RMW_EVENT_REQUESTED_DEADLINE_MISSED:
+      status_id = DDS_REQUESTED_DEADLINE_MISSED_STATUS_ID;
+      break;
+    case RMW_EVENT_LIVELINESS_LOST:
+      status_id = DDS_LIVELINESS_LOST_STATUS_ID;
+      break;
+    case RMW_EVENT_OFFERED_DEADLINE_MISSED:
+      status_id = DDS_OFFERED_DEADLINE_MISSED_STATUS_ID;
+      break;
+    case RMW_EVENT_REQUESTED_QOS_INCOMPATIBLE:
+      status_id = DDS_REQUESTED_INCOMPATIBLE_QOS_STATUS_ID;
+      break;
+    case RMW_EVENT_OFFERED_QOS_INCOMPATIBLE:
+      status_id = DDS_OFFERED_INCOMPATIBLE_QOS_STATUS_ID;
+      break;
+    case RMW_EVENT_MESSAGE_LOST:
+      status_id = DDS_SAMPLE_LOST_STATUS_ID;
+      break;
+    case RMW_EVENT_INVALID:
+      return;
+  }
+  assert(status_id != static_cast<dds_status_id_t>(-1));
+
   // Set the user callback data
-  data->callback = callback;
-  data->event_data = user_data;
+  data->event_callback[status_id] = callback;
+  data->event_data[status_id] = user_data;
 
   if (callback && use_previous_events) {
     // Push events happened before having assigned a callback
-    for (size_t i = 0; i < data->events_unread_count; i++) {
+    for (size_t i = 0; i < data->event_unread_count[status_id]; i++) {
       callback(user_data);
     }
-    data->events_unread_count = 0;
+    data->event_unread_count[status_id] = 0;
   }
 }
 
@@ -661,7 +693,7 @@ extern "C" rmw_ret_t rmw_event_set_listener_callback(
       {
         auto sub_event = static_cast<CddsSubscription *>(rmw_event->data);
         event_set_listener_callback(
-          sub_event, callback, user_data, use_previous_events);
+          sub_event, rmw_event->event_type, callback, user_data, use_previous_events);
         break;
       }
 
@@ -669,7 +701,7 @@ extern "C" rmw_ret_t rmw_event_set_listener_callback(
       {
         auto pub_event = static_cast<CddsPublisher *>(rmw_event->data);
         event_set_listener_callback(
-          pub_event, callback, user_data, use_previous_events);
+          pub_event, rmw_event->event_type, callback, user_data, use_previous_events);
         break;
       }
   }
