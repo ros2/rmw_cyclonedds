@@ -338,13 +338,9 @@ struct CddsNode
 struct user_callback_data_t
 {
   std::mutex mutex;
-
-  // Subscriptions
   rmw_listener_callback_t callback {nullptr};
   const void * user_data {nullptr};
   size_t unread_count {0};
-
-  // Events
   rmw_listener_callback_t event_callback[DDS_STATUS_ID_MAX + 1] {nullptr};
   const void * event_data[DDS_STATUS_ID_MAX + 1] {nullptr};
   size_t event_unread_count[DDS_STATUS_ID_MAX + 1] {0};
