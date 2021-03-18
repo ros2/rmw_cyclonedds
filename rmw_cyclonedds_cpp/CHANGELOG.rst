@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.20.0 (2021-03-18)
+-------------------
+* Take and return new RMW_DURATION_INFINITE correctly (`#288 <https://github.com/ros2/rmw_cyclonedds/issues/288>`_)
+* Contributors: Emerson Knapp
+
 0.19.0 (2021-03-01)
 -------------------
 * Add RMW function to check QoS compatibility (`#286 <https://github.com/ros2/rmw_cyclonedds/issues/286>`_)
