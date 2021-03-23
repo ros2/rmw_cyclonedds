@@ -2196,6 +2196,7 @@ static CddsPublisher * create_cdds_publisher(
   }
   get_entity_gid(pub->enth, pub->gid);
   pub->sertype = stact;
+  dds_delete_listener(listener);
   dds_delete_qos(qos);
   dds_delete(topic);
   return pub;
@@ -2583,6 +2584,7 @@ static CddsSubscription * create_cdds_subscription(
     RMW_SET_ERROR_MSG("failed to create readcondition");
     goto fail_readcond;
   }
+  dds_delete_listener(listener);
   dds_delete_qos(qos);
   dds_delete(topic);
   return sub;
@@ -2791,11 +2793,6 @@ static rmw_ret_t destroy_subscription(rmw_subscription_t * subscription)
   rmw_ret_t ret = RMW_RET_OK;
   auto sub = static_cast<CddsSubscription *>(subscription->data);
   clean_waitset_caches();
-
-  dds_listener_t * listener = dds_create_listener(nullptr);
-  dds_get_listener(sub->enth, listener);
-  dds_delete_listener(listener);
-
   if (dds_delete(sub->rdcondh) < 0) {
     RMW_SET_ERROR_MSG("failed to delete readcondition");
     ret = RMW_RET_ERROR;
@@ -4269,6 +4266,7 @@ static rmw_ret_t rmw_init_cs(
     RMW_SET_ERROR_MSG("failed to get instance handle for writer");
     goto fail_instance_handle;
   }
+  dds_delete_listener(listener);
   dds_delete_qos(qos);
   dds_delete(subtopic);
   dds_delete(pubtopic);
@@ -4315,11 +4313,6 @@ static rmw_ret_t destroy_client(const rmw_node_t * node, rmw_client_t * client)
     eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   auto info = static_cast<CddsClient *>(client->data);
-
-  dds_listener_t * listener = dds_create_listener(nullptr);
-  dds_get_listener(info->client.sub->enth, listener);
-  dds_delete_listener(listener);
-
   clean_waitset_caches();
 
   {
@@ -4367,7 +4360,6 @@ extern "C" rmw_client_t * rmw_create_client(
     delete (info);
     return nullptr;
   }
-
   rmw_client_t * rmw_client = rmw_client_allocate();
   RET_NULL_X(rmw_client, goto fail_client);
   rmw_client->implementation_identifier = eclipse_cyclonedds_identifier;
@@ -4426,11 +4418,6 @@ static rmw_ret_t destroy_service(const rmw_node_t * node, rmw_service_t * servic
     eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   auto info = static_cast<CddsService *>(service->data);
-
-  dds_listener_t * listener = dds_create_listener(nullptr);
-  dds_get_listener(info->service.sub->enth, listener);
-  dds_delete_listener(listener);
-
   clean_waitset_caches();
 
   {
@@ -4475,7 +4462,6 @@ extern "C" rmw_service_t * rmw_create_service(
     delete (info);
     return nullptr;
   }
-
   rmw_service_t * rmw_service = rmw_service_allocate();
   RET_NULL_X(rmw_service, goto fail_service);
   rmw_service->implementation_identifier = eclipse_cyclonedds_identifier;
