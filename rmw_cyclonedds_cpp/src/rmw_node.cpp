@@ -627,7 +627,7 @@ extern "C" rmw_ret_t rmw_guard_condition_set_listener_callback(
 template<typename T>
 static void event_set_listener_callback(
   T event,
-  rmw_event_type_t event_type,
+  dds_status_id_t status_id,
   rmw_listener_callback_t callback,
   const void * user_data,
   bool use_previous_events)
@@ -635,35 +635,6 @@ static void event_set_listener_callback(
   user_callback_data_t * data = &(event->user_callback_data);
 
   std::lock_guard<std::mutex> guard(data->mutex);
-
-  dds_status_id_t status_id = static_cast<dds_status_id_t>(-1);
-
-  switch (event_type) {
-    case RMW_EVENT_LIVELINESS_CHANGED:
-      status_id = DDS_LIVELINESS_CHANGED_STATUS_ID;
-      break;
-    case RMW_EVENT_REQUESTED_DEADLINE_MISSED:
-      status_id = DDS_REQUESTED_DEADLINE_MISSED_STATUS_ID;
-      break;
-    case RMW_EVENT_LIVELINESS_LOST:
-      status_id = DDS_LIVELINESS_LOST_STATUS_ID;
-      break;
-    case RMW_EVENT_OFFERED_DEADLINE_MISSED:
-      status_id = DDS_OFFERED_DEADLINE_MISSED_STATUS_ID;
-      break;
-    case RMW_EVENT_REQUESTED_QOS_INCOMPATIBLE:
-      status_id = DDS_REQUESTED_INCOMPATIBLE_QOS_STATUS_ID;
-      break;
-    case RMW_EVENT_OFFERED_QOS_INCOMPATIBLE:
-      status_id = DDS_OFFERED_INCOMPATIBLE_QOS_STATUS_ID;
-      break;
-    case RMW_EVENT_MESSAGE_LOST:
-      status_id = DDS_SAMPLE_LOST_STATUS_ID;
-      break;
-    case RMW_EVENT_INVALID:
-      return;
-  }
-  assert(status_id != static_cast<dds_status_id_t>(-1));
 
   // Set the user callback data
   data->event_callback[status_id] = callback;
@@ -684,21 +655,73 @@ extern "C" rmw_ret_t rmw_event_set_listener_callback(
   const void * user_data,
   bool use_previous_events)
 {
-  switch (rmw_event->event_data_type) {
-    case RMW_SUBSCRIBER_EVENT:
+  switch (rmw_event->event_type) {
+    case RMW_EVENT_LIVELINESS_CHANGED:
       {
         auto sub_event = static_cast<CddsSubscription *>(rmw_event->data);
         event_set_listener_callback(
-          sub_event, rmw_event->event_type, callback, user_data, use_previous_events);
+          sub_event, DDS_LIVELINESS_CHANGED_STATUS_ID,
+          callback, user_data, use_previous_events);
         break;
       }
 
-    case RMW_PUBLISHER_EVENT:
+    case RMW_EVENT_REQUESTED_DEADLINE_MISSED:
+      {
+        auto sub_event = static_cast<CddsSubscription *>(rmw_event->data);
+        event_set_listener_callback(
+          sub_event, DDS_REQUESTED_DEADLINE_MISSED_STATUS_ID,
+          callback, user_data, use_previous_events);
+        break;
+      }
+
+    case RMW_EVENT_REQUESTED_QOS_INCOMPATIBLE:
+      {
+        auto sub_event = static_cast<CddsSubscription *>(rmw_event->data);
+        event_set_listener_callback(
+          sub_event, DDS_REQUESTED_INCOMPATIBLE_QOS_STATUS_ID,
+          callback, user_data, use_previous_events);
+        break;
+      }
+
+    case RMW_EVENT_MESSAGE_LOST:
+      {
+        auto sub_event = static_cast<CddsSubscription *>(rmw_event->data);
+        event_set_listener_callback(
+          sub_event, DDS_SAMPLE_LOST_STATUS_ID,
+          callback, user_data, use_previous_events);
+        break;
+      }
+
+    case RMW_EVENT_LIVELINESS_LOST:
       {
         auto pub_event = static_cast<CddsPublisher *>(rmw_event->data);
         event_set_listener_callback(
-          pub_event, rmw_event->event_type, callback, user_data, use_previous_events);
+          pub_event, DDS_LIVELINESS_LOST_STATUS_ID,
+          callback, user_data, use_previous_events);
         break;
+      }
+
+    case RMW_EVENT_OFFERED_DEADLINE_MISSED:
+      {
+        auto pub_event = static_cast<CddsPublisher *>(rmw_event->data);
+        event_set_listener_callback(
+          pub_event, DDS_OFFERED_DEADLINE_MISSED_STATUS_ID,
+          callback, user_data, use_previous_events);
+        break;
+      }
+
+    case RMW_EVENT_OFFERED_QOS_INCOMPATIBLE:
+      {
+        auto pub_event = static_cast<CddsPublisher *>(rmw_event->data);
+        event_set_listener_callback(
+          pub_event, DDS_OFFERED_INCOMPATIBLE_QOS_STATUS_ID,
+          callback, user_data, use_previous_events);
+        break;
+      }
+
+    case RMW_EVENT_INVALID:
+      {
+        return RMW_RET_INVALID_ARGUMENT;
       }
   }
   return RMW_RET_OK;
@@ -3175,7 +3198,7 @@ static uint32_t get_status_kind_from_rmw(const rmw_event_type_t event_t)
 
 static rmw_ret_t init_rmw_event(
   rmw_event_t * rmw_event, const char * topic_endpoint_impl_identifier, void * data,
-  rmw_event_type_t event_type, rmw_event_data_type_t event_data_type)
+  rmw_event_type_t event_type)
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(rmw_event, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_ARGUMENT_FOR_NULL(topic_endpoint_impl_identifier, RMW_RET_INVALID_ARGUMENT);
@@ -3187,7 +3210,6 @@ static rmw_ret_t init_rmw_event(
   rmw_event->implementation_identifier = topic_endpoint_impl_identifier;
   rmw_event->data = data;
   rmw_event->event_type = event_type;
-  rmw_event->event_data_type = event_data_type;
   return RMW_RET_OK;
 }
 
@@ -3200,8 +3222,7 @@ extern "C" rmw_ret_t rmw_publisher_event_init(
     rmw_event,
     publisher->implementation_identifier,
     publisher->data,
-    event_type,
-    RMW_PUBLISHER_EVENT);
+    event_type);
 }
 
 extern "C" rmw_ret_t rmw_subscription_event_init(
@@ -3213,8 +3234,7 @@ extern "C" rmw_ret_t rmw_subscription_event_init(
     rmw_event,
     subscription->implementation_identifier,
     subscription->data,
-    event_type,
-    RMW_SUBSCRIBER_EVENT);
+    event_type);
 }
 
 extern "C" rmw_ret_t rmw_take_event(
