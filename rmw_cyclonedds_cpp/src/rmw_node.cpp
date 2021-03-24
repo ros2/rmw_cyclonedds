@@ -600,8 +600,7 @@ extern "C" rmw_ret_t rmw_client_set_listener_callback(
 extern "C" rmw_ret_t rmw_guard_condition_set_listener_callback(
   rmw_guard_condition_t * rmw_guard_condition,
   rmw_listener_callback_t callback,
-  const void * user_data,
-  bool use_previous_events)
+  const void * user_data)
 {
   auto gc = static_cast<CddsGuardCondition *>(rmw_guard_condition->data);
 
@@ -613,7 +612,7 @@ extern "C" rmw_ret_t rmw_guard_condition_set_listener_callback(
   data->callback = callback;
   data->user_data = user_data;
 
-  if (callback && use_previous_events) {
+  if (callback) {
     // Push events happened before having assigned a callback
     for (size_t i = 0; i < data->unread_count; i++) {
       callback(user_data);
@@ -629,8 +628,7 @@ static void event_set_listener_callback(
   T event,
   dds_status_id_t status_id,
   rmw_listener_callback_t callback,
-  const void * user_data,
-  bool use_previous_events)
+  const void * user_data)
 {
   user_callback_data_t * data = &(event->user_callback_data);
 
@@ -640,7 +638,7 @@ static void event_set_listener_callback(
   data->event_callback[status_id] = callback;
   data->event_data[status_id] = user_data;
 
-  if (callback && use_previous_events) {
+  if (callback) {
     // Push events happened before having assigned a callback
     for (size_t i = 0; i < data->event_unread_count[status_id]; i++) {
       callback(user_data);
@@ -652,8 +650,7 @@ static void event_set_listener_callback(
 extern "C" rmw_ret_t rmw_event_set_listener_callback(
   rmw_event_t * rmw_event,
   rmw_listener_callback_t callback,
-  const void * user_data,
-  bool use_previous_events)
+  const void * user_data)
 {
   switch (rmw_event->event_type) {
     case RMW_EVENT_LIVELINESS_CHANGED:
@@ -661,7 +658,7 @@ extern "C" rmw_ret_t rmw_event_set_listener_callback(
         auto sub_event = static_cast<CddsSubscription *>(rmw_event->data);
         event_set_listener_callback(
           sub_event, DDS_LIVELINESS_CHANGED_STATUS_ID,
-          callback, user_data, use_previous_events);
+          callback, user_data);
         break;
       }
 
@@ -670,7 +667,7 @@ extern "C" rmw_ret_t rmw_event_set_listener_callback(
         auto sub_event = static_cast<CddsSubscription *>(rmw_event->data);
         event_set_listener_callback(
           sub_event, DDS_REQUESTED_DEADLINE_MISSED_STATUS_ID,
-          callback, user_data, use_previous_events);
+          callback, user_data);
         break;
       }
 
@@ -679,7 +676,7 @@ extern "C" rmw_ret_t rmw_event_set_listener_callback(
         auto sub_event = static_cast<CddsSubscription *>(rmw_event->data);
         event_set_listener_callback(
           sub_event, DDS_REQUESTED_INCOMPATIBLE_QOS_STATUS_ID,
-          callback, user_data, use_previous_events);
+          callback, user_data);
         break;
       }
 
@@ -688,7 +685,7 @@ extern "C" rmw_ret_t rmw_event_set_listener_callback(
         auto sub_event = static_cast<CddsSubscription *>(rmw_event->data);
         event_set_listener_callback(
           sub_event, DDS_SAMPLE_LOST_STATUS_ID,
-          callback, user_data, use_previous_events);
+          callback, user_data);
         break;
       }
 
@@ -697,7 +694,7 @@ extern "C" rmw_ret_t rmw_event_set_listener_callback(
         auto pub_event = static_cast<CddsPublisher *>(rmw_event->data);
         event_set_listener_callback(
           pub_event, DDS_LIVELINESS_LOST_STATUS_ID,
-          callback, user_data, use_previous_events);
+          callback, user_data);
         break;
       }
 
@@ -706,7 +703,7 @@ extern "C" rmw_ret_t rmw_event_set_listener_callback(
         auto pub_event = static_cast<CddsPublisher *>(rmw_event->data);
         event_set_listener_callback(
           pub_event, DDS_OFFERED_DEADLINE_MISSED_STATUS_ID,
-          callback, user_data, use_previous_events);
+          callback, user_data);
         break;
       }
 
@@ -715,7 +712,7 @@ extern "C" rmw_ret_t rmw_event_set_listener_callback(
         auto pub_event = static_cast<CddsPublisher *>(rmw_event->data);
         event_set_listener_callback(
           pub_event, DDS_OFFERED_INCOMPATIBLE_QOS_STATUS_ID,
-          callback, user_data, use_previous_events);
+          callback, user_data);
         break;
       }
 
