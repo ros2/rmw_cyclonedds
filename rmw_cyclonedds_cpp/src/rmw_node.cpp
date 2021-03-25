@@ -476,7 +476,7 @@ static void dds_listener_callback(dds_entity_t entity, void * arg)
   std::lock_guard<std::mutex> guard(data->mutex);
 
   if (data->callback) {
-    data->callback(data->user_data);
+    data->callback(data->user_data, 1);
   } else {
     data->unread_count++;
   }
@@ -493,7 +493,7 @@ static void dds_listener_callback(dds_entity_t entity, void * arg)
     auto data = static_cast<user_callback_data_t *>(arg); \
     std::lock_guard<std::mutex> guard(data->mutex); \
     if (data->event_callback[DDS_ ## EVENT_TYPE ## _STATUS_ID]) { \
-      data->callback(data->event_data[DDS_ ## EVENT_TYPE ## _STATUS_ID]); \
+      data->callback(data->event_data[DDS_ ## EVENT_TYPE ## _STATUS_ID], 1); \
     } else { \
       data->event_unread_count[DDS_ ## EVENT_TYPE ## _STATUS_ID]++; \
     } \
@@ -534,11 +534,9 @@ extern "C" rmw_ret_t rmw_subscription_set_listener_callback(
   data->callback = callback;
   data->user_data = user_data;
 
-  if (callback) {
+  if (callback && data->unread_count) {
     // Push events happened before having assigned a callback
-    for (size_t i = 0; i < data->unread_count; i++) {
-      callback(user_data);
-    }
+    callback(user_data, data->unread_count);
     data->unread_count = 0;
   }
 
@@ -560,11 +558,9 @@ extern "C" rmw_ret_t rmw_service_set_listener_callback(
   data->callback = callback;
   data->user_data = user_data;
 
-  if (callback) {
+  if (callback && data->unread_count) {
     // Push events happened before having assigned a callback
-    for (size_t i = 0; i < data->unread_count; i++) {
-      callback(user_data);
-    }
+    callback(user_data, data->unread_count);
     data->unread_count = 0;
   }
 
@@ -586,11 +582,9 @@ extern "C" rmw_ret_t rmw_client_set_listener_callback(
   data->callback = callback;
   data->user_data = user_data;
 
-  if (callback) {
+  if (callback && data->unread_count) {
     // Push events happened before having assigned a callback
-    for (size_t i = 0; i < data->unread_count; i++) {
-      callback(user_data);
-    }
+    callback(user_data, data->unread_count);
     data->unread_count = 0;
   }
 
@@ -612,11 +606,9 @@ extern "C" rmw_ret_t rmw_guard_condition_set_listener_callback(
   data->callback = callback;
   data->user_data = user_data;
 
-  if (callback) {
+  if (callback && data->unread_count) {
     // Push events happened before having assigned a callback
-    for (size_t i = 0; i < data->unread_count; i++) {
-      callback(user_data);
-    }
+    callback(user_data, data->unread_count);
     data->unread_count = 0;
   }
 
@@ -638,11 +630,9 @@ static void event_set_listener_callback(
   data->event_callback[status_id] = callback;
   data->event_data[status_id] = user_data;
 
-  if (callback) {
+  if (callback && data->event_unread_count[status_id]) {
     // Push events happened before having assigned a callback
-    for (size_t i = 0; i < data->event_unread_count[status_id]; i++) {
-      callback(user_data);
-    }
+    callback(user_data, data->event_unread_count[status_id]);
     data->event_unread_count[status_id] = 0;
   }
 }
@@ -3426,7 +3416,7 @@ extern "C" rmw_ret_t rmw_trigger_guard_condition(
     std::lock_guard<std::mutex> guard(data->mutex);
 
     if (data->callback) {
-      data->callback(data->user_data);
+      data->callback(data->user_data, 1);
     } else {
       data->unread_count++;
     }
