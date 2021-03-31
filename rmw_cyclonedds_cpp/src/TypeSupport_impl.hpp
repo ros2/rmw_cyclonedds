@@ -475,6 +475,34 @@ std::string TypeSupport<MembersType>::getName()
   return name;
 }
 
+template<typename MembersType>
+bool TypeSupport<MembersType>::is_type_self_contained(const MembersType * members)
+{
+  bool ret = true;
+  for (uint32_t idx = 0; idx < members->member_count_; ++idx) {
+    const auto member = members->members_[idx];
+    // if the message is not self contained,
+    // if string or wstring or sequence
+    if ((member.type_id_ == ::rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING) ||
+      (member.type_id_ == ::rosidl_typesupport_introspection_cpp::ROS_TYPE_WSTRING) ||
+      (member.array_size_ && !member.is_upper_bound_))
+    {
+      ret = false;  // type is not self contained
+    } else if (member.type_id_ == ::rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE) {
+      // handle nested messages
+      auto sub_members = (const MembersType *)member.members_->data;
+      is_type_self_contained(sub_members);
+    }
+  }
+
+  return ret;
+}
+
+template<typename MembersType>
+bool TypeSupport<MembersType>::is_type_self_contained()
+{
+  return TypeSupport::is_type_self_contained(members_);
+}
 }  // namespace rmw_cyclonedds_cpp
 
 #endif  // TYPESUPPORT_IMPL_HPP_
