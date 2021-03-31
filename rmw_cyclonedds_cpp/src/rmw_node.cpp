@@ -396,7 +396,6 @@ struct CddsService
 struct CddsGuardCondition
 {
   dds_entity_t gcondh;
-  user_callback_data_t user_callback_data;
 };
 
 struct CddsEvent : CddsEntity
@@ -577,30 +576,6 @@ extern "C" rmw_ret_t rmw_client_set_listener_callback(
   user_callback_data_t * data = &(cli->user_callback_data);
 
   std::lock_guard<std::mutex> guard(data->mutex);
-
-  // Set the user callback data
-  data->callback = callback;
-  data->user_data = user_data;
-
-  if (callback && data->unread_count) {
-    // Push events happened before having assigned a callback
-    callback(user_data, data->unread_count);
-    data->unread_count = 0;
-  }
-
-  return RMW_RET_OK;
-}
-
-extern "C" rmw_ret_t rmw_guard_condition_set_listener_callback(
-  rmw_guard_condition_t * rmw_guard_condition,
-  rmw_listener_callback_t callback,
-  const void * user_data)
-{
-  auto gc = static_cast<CddsGuardCondition *>(rmw_guard_condition->data);
-
-  user_callback_data_t * data = &(gc->user_callback_data);
-
-  std::lock_guard<std::mutex> lock(data->mutex);
 
   // Set the user callback data
   data->callback = callback;
@@ -3406,25 +3381,8 @@ extern "C" rmw_ret_t rmw_trigger_guard_condition(
   RET_NULL(guard_condition_handle);
   RET_WRONG_IMPLID(guard_condition_handle);
   auto * gcond_impl = static_cast<CddsGuardCondition *>(guard_condition_handle->data);
-  dds_return_t ret;
-
-  ret = dds_set_guardcondition(gcond_impl->gcondh, true);
-
-  if (ret == DDS_RETCODE_OK) {
-    user_callback_data_t * data = &(gcond_impl->user_callback_data);
-
-    std::lock_guard<std::mutex> guard(data->mutex);
-
-    if (data->callback) {
-      data->callback(data->user_data, 1);
-    } else {
-      data->unread_count++;
-    }
-
-    return RMW_RET_OK;
-  }
-
-  return ret;
+  dds_set_guardcondition(gcond_impl->gcondh, true);
+  return RMW_RET_OK;
 }
 
 extern "C" rmw_wait_set_t * rmw_create_wait_set(rmw_context_t * context, size_t max_conditions)
