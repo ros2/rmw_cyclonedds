@@ -211,6 +211,16 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
   }
 }
 
+static struct ddsi_serdata * serdata_rmw_from_iox(
+  const struct ddsi_sertype * typecmn,
+  enum  ddsi_serdata_kind kind, iox_sub_t * sub, void * iox_buffer)
+{
+  static_cast<void>(sub);  // unused
+  const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(typecmn);
+  auto d = std::make_unique<serdata_rmw>(type, kind, iox_buffer);
+  return d.release();
+}
+
 struct ddsi_serdata * serdata_rmw_from_serialized_message(
   const struct ddsi_sertype * typecmn,
   const void * raw, size_t size)
@@ -414,6 +424,10 @@ static const struct ddsi_serdata_ops serdata_rmw_ops = {
   serdata_rmw_free,
   serdata_rmw_print,
   serdata_rmw_get_keyhash
+#ifdef DDS_HAS_SHM
+  , ddsi_serdata_iox_size,
+  serdata_rmw_from_iox
+#endif // DDS_HAS_SHM
 };
 
 static void sertype_rmw_free(struct ddsi_sertype * tpcmn)
