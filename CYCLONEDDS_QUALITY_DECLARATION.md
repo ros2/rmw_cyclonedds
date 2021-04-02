@@ -188,7 +188,7 @@ We suggest and would like to assist Open Robotics to move all performance testin
 
 ### Linters and Static Analysis [4.v]
 
-`rmw_cyclonedds` uses and passes all the ROS2 standard linters and static analysis tools for a C++ package as described in the [ROS 2 Developer Guide](https://index.ros.org/doc/ros2/Contributing/Developer-Guide/#linters-and-static-analysis).
+`rmw_cyclonedds` uses and passes all the ROS2 standard linters and static analysis tools for a C++ package as described in the [ROS 2 Developer Guide](https://docs.ros.org/en/rolling/Contributing/Developer-Guide.html#linters-and-static-analysis).
 Passing implies there are no linter/static errors when testing against CI of supported platforms.
 
 Cyclone DDS has automated daily [Synopsys Coverity static code analysis](https://www.synopsys.com/software-integrity/security-testing/static-analysis-sast.html) with public results that can be seen [here](https://scan.coverity.com/projects/eclipse-cyclonedds-cyclonedds).
