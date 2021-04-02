@@ -626,3 +626,10 @@ serdata_rmw::serdata_rmw(const ddsi_sertype * type, ddsi_serdata_kind kind)
 {
   ddsi_serdata_init(this, type, kind);
 }
+
+serdata_rmw::serdata_rmw(const ddsi_sertype * type, ddsi_serdata_kind kind, void * sample)
+: ddsi_serdata{}
+{
+  ddsi_serdata_init(this, type, kind);
+  iox_chunk_ptr = sample;
+}

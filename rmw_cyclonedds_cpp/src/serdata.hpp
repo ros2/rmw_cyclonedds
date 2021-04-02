@@ -55,12 +55,15 @@ protected:
   /* first two bytes of data is CDR encoding
      second two bytes are encoding options */
   std::unique_ptr<byte[]> m_data {nullptr};
+  void * iox_chunk_ptr {nullptr};
 
 public:
   serdata_rmw(const ddsi_sertype * type, ddsi_serdata_kind kind);
+  serdata_rmw(const ddsi_sertype * type, ddsi_serdata_kind kind, void * sample);
   void resize(size_t requested_size);
   size_t size() const {return m_size;}
   void * data() const {return m_data.get();}
+  void * get_iox_chunk_ptr() const {return iox_chunk_ptr;}
 };
 
 typedef struct cdds_request_header
