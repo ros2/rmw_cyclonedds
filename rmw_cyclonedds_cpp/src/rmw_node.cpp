@@ -2181,6 +2181,80 @@ rmw_ret_t rmw_publisher_get_actual_qos(const rmw_publisher_t * publisher, rmw_qo
   return RMW_RET_ERROR;
 }
 
+static size_t get_message_size(
+  const rosidl_message_type_support_t * type_supports)
+{
+  // handling C++ typesupport
+  const rosidl_message_type_support_t * ts = get_message_typesupport_handle(
+    type_supports, rosidl_typesupport_introspection_cpp::typesupport_identifier);
+  if (ts != nullptr) {
+    auto members =
+      static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(ts->data);
+    return members->size_of_;
+  } else {
+    // handle C Typesupport
+    const rosidl_message_type_support_t * ts_c = get_message_typesupport_handle(
+      type_supports, rosidl_typesupport_introspection_c__identifier);
+    if (ts_c != nullptr) {
+      auto members =
+        static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(ts_c->data);
+      return members->size_of_;
+    } else {
+      throw std::runtime_error("get_message_size, unsupported typesupport");
+    }
+  }
+}
+
+static void init_message(
+  const rosidl_message_type_support_t * type_supports,
+  void * message)
+{
+  // handling C++ typesupport
+  const rosidl_message_type_support_t * ts = get_message_typesupport_handle(
+    type_supports, rosidl_typesupport_introspection_cpp::typesupport_identifier);
+  if (ts != nullptr) {
+    auto members =
+      static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(ts->data);
+    members->init_function(message, rosidl_runtime_cpp::MessageInitialization::ALL);
+  } else {
+    // handle C Typesupport
+    const rosidl_message_type_support_t * ts_c = get_message_typesupport_handle(
+      type_supports, rosidl_typesupport_introspection_c__identifier);
+    if (ts_c != nullptr) {
+      auto members =
+        static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(ts_c->data);
+      members->init_function(message, ROSIDL_RUNTIME_C_MSG_INIT_ALL);
+    } else {
+      throw std::runtime_error("get_message_size, unsupported typesupport");
+    }
+  }
+}
+
+static void fini_message(
+  const rosidl_message_type_support_t * type_supports,
+  void * message)
+{
+  // handling C++ typesupport
+  const rosidl_message_type_support_t * ts = get_message_typesupport_handle(
+    type_supports, rosidl_typesupport_introspection_cpp::typesupport_identifier);
+  if (ts != nullptr) {
+    auto members =
+      static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(ts->data);
+    members->fini_function(message);
+  } else {
+    // handle C Typesupport
+    const rosidl_message_type_support_t * ts_c = get_message_typesupport_handle(
+      type_supports, rosidl_typesupport_introspection_c__identifier);
+    if (ts_c != nullptr) {
+      auto members =
+        static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(ts_c->data);
+      members->fini_function(message);
+    } else {
+      throw std::runtime_error("get_message_size, unsupported typesupport");
+    }
+  }
+}
+
 extern "C" rmw_ret_t rmw_borrow_loaned_message(
   const rmw_publisher_t * publisher,
   const rosidl_message_type_support_t * type_support,
