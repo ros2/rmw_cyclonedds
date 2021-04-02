@@ -573,15 +573,21 @@ static std::string get_type_name(const char * type_support_identifier, void * ty
 struct sertype_rmw * create_sertype(
   const char * topicname, const char * type_support_identifier,
   void * type_support, bool is_request_header,
-  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type)
+  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type,
+  const bool is_fixed_type)
 {
   struct sertype_rmw * st = new struct sertype_rmw;
 #if DDS_HAS_DDSI_SERTYPE
   static_cast<void>(topicname);
   std::string type_name = get_type_name(type_support_identifier, type_support);
-  ddsi_sertype_init(
+  uint32_t flags = DDSI_SERTYPE_FLAG_TOPICKIND_NO_KEY;
+  // TODO (Sumanth) fix this, doesn't allow to set multiple flags
+  //  if (is_fixed_type) {
+  //    flags |= DDSI_SERTYPE_FLAG_FIXED_SIZE;
+  //  }
+  ddsi_sertype_init_flags(
     static_cast<struct ddsi_sertype *>(st),
-    type_name.c_str(), &sertype_rmw_ops, &serdata_rmw_ops, true);
+    type_name.c_str(), &sertype_rmw_ops, &serdata_rmw_ops, flags);
 #else
   std::string type_name = get_type_name(type_support_identifier, type_support);
   ddsi_sertopic_init(
@@ -592,6 +598,8 @@ struct sertype_rmw * create_sertype(
   st->type_support.type_support_ = type_support;
   st->is_request_header = is_request_header;
   st->cdr_writer = rmw_cyclonedds_cpp::make_cdr_writer(std::move(message_type));
+  st->is_fixed = is_fixed_type ? true : false;
+
   return st;
 }
 
