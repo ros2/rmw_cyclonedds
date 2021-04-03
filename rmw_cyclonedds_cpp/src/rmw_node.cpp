@@ -339,6 +339,9 @@ struct CddsPublisher : CddsEntity
   dds_instance_handle_t pubiid;
   rmw_gid_t gid;
   struct ddsi_sertype * sertype;
+  rosidl_message_type_support_t type_supports;
+  dds_data_allocator_t data_allocator;
+  bool is_fixed_size;
 };
 
 struct CddsSubscription : CddsEntity
@@ -1578,12 +1581,36 @@ extern "C" rmw_ret_t rmw_publish_loaned_message(
   void * ros_message,
   rmw_publisher_allocation_t * allocation)
 {
-  (void) publisher;
-  (void) ros_message;
-  (void) allocation;
+  static_cast<void>(allocation);
+  RMW_CHECK_FOR_NULL_WITH_MSG(
+    publisher, "publisher handle is null",
+    return RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    publisher, publisher->implementation_identifier, eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_FOR_NULL_WITH_MSG(
+    ros_message, "ROS message handle is null",
+    return RMW_RET_INVALID_ARGUMENT);
 
-  RMW_SET_ERROR_MSG("rmw_publish_loaned_message not implemented for rmw_cyclonedds_cpp");
-  return RMW_RET_UNSUPPORTED;
+  auto cdds_publisher = static_cast<CddsPublisher *>(publisher->data);
+  if (!cdds_publisher) {
+    RMW_SET_ERROR_MSG("publisher data is null");
+    return RMW_RET_ERROR;
+  }
+
+  // if the message is self contained
+  if (cdds_publisher->is_fixed_size) {
+    if (dds_write(cdds_publisher->enth, ros_message) >= 0) {
+      return RMW_RET_OK;
+    } else {
+      RMW_SET_ERROR_MSG("Failed to publish data");
+      return RMW_RET_ERROR;
+    }
+  } else {
+    RMW_SET_ERROR_MSG("Publishing a loaned message of non fixed type is not allowed");
+    return RMW_RET_ERROR;
+  }
+  return RMW_RET_OK;
 }
 
 static const rosidl_message_type_support_t * get_typesupport(
@@ -1897,11 +1924,34 @@ static bool get_readwrite_qos(dds_entity_t handle, rmw_qos_profile_t * rmw_qos_p
   return ret;
 }
 
+static bool is_type_self_contained(const rosidl_message_type_support_t * type_support)
+{
+  if (rosidl_typesupport_introspection_c__identifier ==
+    type_support->typesupport_identifier)
+  {
+    auto members = static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(
+      type_support->data);
+    MessageTypeSupport_c mts(members);
+    return mts.is_type_self_contained();
+  } else if (rosidl_typesupport_introspection_cpp::typesupport_identifier ==
+    type_support->typesupport_identifier)
+  {
+    auto members = static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(
+      type_support->data);
+    MessageTypeSupport_cpp mts(members);
+    return mts.is_type_self_contained();
+  } else {
+    // un-supported typesupport
+    return false;
+  }
+}
+
 static CddsPublisher * create_cdds_publisher(
   dds_entity_t dds_ppant, dds_entity_t dds_pub,
   const rosidl_message_type_support_t * type_supports,
   const char * topic_name,
-  const rmw_qos_profile_t * qos_policies)
+  const rmw_qos_profile_t * qos_policies,
+  const bool is_fixed_type)
 {
   RET_NULL_OR_EMPTYSTR_X(topic_name, return nullptr);
   RET_NULL_X(qos_policies, return nullptr);
@@ -1916,7 +1966,7 @@ static CddsPublisher * create_cdds_publisher(
   auto sertype = create_sertype(
     fqtopic_name.c_str(), type_support->typesupport_identifier,
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
-    rmw_cyclonedds_cpp::make_message_value_type(type_supports));
+    rmw_cyclonedds_cpp::make_message_value_type(type_supports), is_fixed_type);
   struct ddsi_sertype * stact;
   topic = create_topic(dds_ppant, fqtopic_name.c_str(), sertype, &stact);
   if (topic < 0) {
@@ -1936,6 +1986,8 @@ static CddsPublisher * create_cdds_publisher(
   }
   get_entity_gid(pub->enth, pub->gid);
   pub->sertype = stact;
+  pub->type_supports = *type_supports;
+  pub->is_fixed_size = is_fixed_type;
   dds_delete_qos(qos);
   dds_delete(topic);
   return pub;
@@ -1979,10 +2031,11 @@ static rmw_publisher_t * create_publisher(
 )
 {
   CddsPublisher * pub;
+  bool is_fixed_type = is_type_self_contained(get_typesupport(type_supports));
   if ((pub =
     create_cdds_publisher(
       dds_ppant, dds_pub, type_supports, topic_name,
-      qos_policies)) == nullptr)
+      qos_policies, is_fixed_type)) == nullptr)
   {
     return nullptr;
   }
@@ -2008,7 +2061,7 @@ static rmw_publisher_t * create_publisher(
   RET_ALLOC_X(rmw_publisher->topic_name, return nullptr);
   memcpy(const_cast<char *>(rmw_publisher->topic_name), topic_name, strlen(topic_name) + 1);
   rmw_publisher->options = *publisher_options;
-  rmw_publisher->can_loan_messages = false;
+  rmw_publisher->can_loan_messages = is_fixed_type; // TODO(Sumanth), also check if SHM is enabled
 
   cleanup_rmw_publisher.cancel();
   cleanup_cdds_publisher.cancel();
@@ -2260,22 +2313,78 @@ extern "C" rmw_ret_t rmw_borrow_loaned_message(
   const rosidl_message_type_support_t * type_support,
   void ** ros_message)
 {
-  (void) publisher;
-  (void) type_support;
-  (void) ros_message;
-  RMW_SET_ERROR_MSG("rmw_borrow_loaned_message not implemented for rmw_cyclonedds_cpp");
-  return RMW_RET_UNSUPPORTED;
+  RCUTILS_CHECK_ARGUMENT_FOR_NULL(publisher, RMW_RET_INVALID_ARGUMENT);
+  RCUTILS_CHECK_ARGUMENT_FOR_NULL(type_support, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    publisher,
+    publisher->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  auto cdds_publisher = static_cast<CddsPublisher *>(publisher->data);
+  if (!cdds_publisher) {
+    RMW_SET_ERROR_MSG("publisher data is null");
+    return RMW_RET_ERROR;
+  }
+
+  // if the type is fixed size
+  if (cdds_publisher->is_fixed_size) {
+    // initialize the data allocator
+    dds_data_allocator_init(cdds_publisher->enth, &cdds_publisher->data_allocator);
+    // allocate memory for message + header
+    auto sample_size = get_message_size(type_support);
+    auto chunk_size = GET_ICEORYX_CHUNK_SIZE(sample_size);
+    auto chunk_ptr = dds_data_allocator_alloc(
+      &cdds_publisher->data_allocator, chunk_size);
+    RMW_CHECK_FOR_NULL_WITH_MSG(
+      chunk_ptr,
+      "Failed to get loan",
+      return RMW_RET_ERROR);
+    // initialize the memory for message
+    auto ice_hdr = (iceoryx_header_t *) chunk_ptr;
+    ice_hdr->data_size = sample_size;
+    auto ptr = SHIFT_PAST_ICEORYX_HEADER(ice_hdr);
+    init_message(type_support, ptr);
+    *ros_message = ptr;
+    return RMW_RET_OK;
+  } else {
+    RMW_SET_ERROR_MSG("Borrowing loan for a non fixed type is not allowed");
+    return RMW_RET_ERROR;
+  }
 }
 
 extern "C" rmw_ret_t rmw_return_loaned_message_from_publisher(
   const rmw_publisher_t * publisher,
   void * loaned_message)
 {
-  (void) publisher;
-  (void) loaned_message;
-  RMW_SET_ERROR_MSG(
-    "rmw_return_loaned_message_from_publisher not implemented for rmw_cyclonedds_cpp");
-  return RMW_RET_UNSUPPORTED;
+  RCUTILS_CHECK_ARGUMENT_FOR_NULL(publisher, RMW_RET_INVALID_ARGUMENT);
+  RCUTILS_CHECK_ARGUMENT_FOR_NULL(loaned_message, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    publisher,
+    publisher->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+
+  auto cdds_publisher = static_cast<CddsPublisher *>(publisher->data);
+  if (!cdds_publisher) {
+    RMW_SET_ERROR_MSG("publisher data is null");
+    return RMW_RET_ERROR;
+  }
+
+  // if the type is fixed size
+  if (cdds_publisher->is_fixed_size) {
+    // fini message
+    fini_message(&cdds_publisher->type_supports, loaned_message);
+    // free the message memory
+    dds_data_allocator_free(
+      &cdds_publisher->data_allocator,
+      SHIFT_BACK_ICEORYX_HEADER(loaned_message));
+    // fini data collector
+    dds_data_allocator_fini(&cdds_publisher->data_allocator);
+    return RMW_RET_OK;
+  } else {
+    RMW_SET_ERROR_MSG("returning loan for a non fixed type is not allowed");
+    return RMW_RET_ERROR;
+  }
 }
 
 static rmw_ret_t destroy_publisher(rmw_publisher_t * publisher)
