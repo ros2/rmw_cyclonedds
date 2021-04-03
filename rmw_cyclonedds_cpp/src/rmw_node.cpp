@@ -348,6 +348,7 @@ struct CddsSubscription : CddsEntity
 {
   rmw_gid_t gid;
   dds_entity_t rdcondh;
+  bool is_fixed_size;
 };
 
 struct client_service_id_t
@@ -2466,7 +2467,7 @@ extern "C" rmw_ret_t rmw_destroy_publisher(rmw_node_t * node, rmw_publisher_t * 
 static CddsSubscription * create_cdds_subscription(
   dds_entity_t dds_ppant, dds_entity_t dds_sub,
   const rosidl_message_type_support_t * type_supports, const char * topic_name,
-  const rmw_qos_profile_t * qos_policies, bool ignore_local_publications)
+  const rmw_qos_profile_t * qos_policies, bool ignore_local_publications, const bool is_fixed_type)
 {
   RET_NULL_OR_EMPTYSTR_X(topic_name, return nullptr);
   RET_NULL_X(qos_policies, return nullptr);
@@ -2481,7 +2482,7 @@ static CddsSubscription * create_cdds_subscription(
   auto sertype = create_sertype(
     fqtopic_name.c_str(), type_support->typesupport_identifier,
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
-    rmw_cyclonedds_cpp::make_message_value_type(type_supports));
+    rmw_cyclonedds_cpp::make_message_value_type(type_supports), is_fixed_type);
   topic = create_topic(dds_ppant, fqtopic_name.c_str(), sertype);
   if (topic < 0) {
     RMW_SET_ERROR_MSG("failed to create topic");
@@ -2541,11 +2542,12 @@ static rmw_subscription_t * create_subscription(
   const rmw_subscription_options_t * subscription_options)
 {
   CddsSubscription * sub;
+  bool is_fixed_type = is_type_self_contained(get_typesupport(type_supports));
   rmw_subscription_t * rmw_subscription;
   if (
     (sub = create_cdds_subscription(
       dds_ppant, dds_sub, type_supports, topic_name, qos_policies,
-      subscription_options->ignore_local_publications)) == nullptr)
+      subscription_options->ignore_local_publications, is_fixed_type)) == nullptr)
   {
     return nullptr;
   }
@@ -2577,7 +2579,7 @@ static rmw_subscription_t * create_subscription(
   RET_ALLOC_X(rmw_subscription->topic_name, return nullptr);
   memcpy(const_cast<char *>(rmw_subscription->topic_name), topic_name, strlen(topic_name) + 1);
   rmw_subscription->options = *subscription_options;
-  rmw_subscription->can_loan_messages = false;
+  rmw_subscription->can_loan_messages = is_fixed_type;
 
   cleanup_subscription.cancel();
   cleanup_rmw_subscription.cancel();
@@ -2968,6 +2970,55 @@ static rmw_ret_t rmw_take_ser_int(
   return RMW_RET_OK;
 }
 
+static rmw_ret_t rmw_take_loan_int(
+  const rmw_subscription_t * subscription,
+  void ** loaned_message,
+  bool * taken,
+  rmw_message_info_t * message_info)
+{
+  RMW_CHECK_ARGUMENT_FOR_NULL(
+    subscription, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(
+    loaned_message, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(
+    taken, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    subscription handle,
+    subscription->implementation_identifier, eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  auto cdds_subscription = static_cast<CddsSubscription *>(subscription->data);
+  if (!cdds_subscription) {
+    RMW_SET_ERROR_MSG("Subscription data is null");
+    return RMW_RET_ERROR;
+  }
+
+  dds_sample_info_t info;
+  struct ddsi_serdata * d;
+  while (dds_takecdr(cdds_subscription->enth, &d, 1, &info, DDS_ANY_STATE) == 1) {
+    if (info.valid_data) {
+      if (message_info) {
+        if (message_info) {
+          message_info->publisher_gid.implementation_identifier = eclipse_cyclonedds_identifier;
+          memset(message_info->publisher_gid.data, 0, sizeof(message_info->publisher_gid.data));
+          assert(sizeof(info.publication_handle) <= sizeof(message_info->publisher_gid.data));
+          memcpy(
+            message_info->publisher_gid.data, &info.publication_handle,
+            sizeof(info.publication_handle));
+        }
+      }
+    }
+    void *chunk;
+    ddsi_serdata_to_sample(d, nullptr, &chunk, nullptr);
+    auto ice_hdr = (iceoryx_header_t *) chunk;
+    auto ptr = SHIFT_PAST_ICEORYX_HEADER(ice_hdr);
+    *loaned_message = ptr;
+    *taken = true;
+    return RMW_RET_OK;
+  }
+  *taken = false;
+  return RMW_RET_OK;
+}
+
 extern "C" rmw_ret_t rmw_take(
   const rmw_subscription_t * subscription, void * ros_message,
   bool * taken, rmw_subscription_allocation_t * allocation)
@@ -3025,12 +3076,8 @@ extern "C" rmw_ret_t rmw_take_loaned_message(
   bool * taken,
   rmw_subscription_allocation_t * allocation)
 {
-  (void) subscription;
-  (void) loaned_message;
-  (void) taken;
-  (void) allocation;
-  RMW_SET_ERROR_MSG("rmw_take_loaned_message not implemented for rmw_cyclonedds_cpp");
-  return RMW_RET_UNSUPPORTED;
+  static_cast<void>(allocation);
+  return rmw_take_loan_int(subscription, loaned_message, taken, nullptr);
 }
 
 extern "C" rmw_ret_t rmw_take_loaned_message_with_info(
@@ -3040,24 +3087,41 @@ extern "C" rmw_ret_t rmw_take_loaned_message_with_info(
   rmw_message_info_t * message_info,
   rmw_subscription_allocation_t * allocation)
 {
-  (void) subscription;
-  (void) loaned_message;
-  (void) taken;
-  (void) message_info;
-  (void) allocation;
-  RMW_SET_ERROR_MSG("rmw_take_loaned_message_with_info not implemented for rmw_cyclonedds_cpp");
-  return RMW_RET_UNSUPPORTED;
+  static_cast<void>(allocation);
+  RMW_CHECK_ARGUMENT_FOR_NULL(
+    message_info, RMW_RET_INVALID_ARGUMENT);
+  static_cast<void>(allocation);
+  return rmw_take_loan_int(subscription, loaned_message, taken, message_info);
 }
 
 extern "C" rmw_ret_t rmw_return_loaned_message_from_subscription(
   const rmw_subscription_t * subscription,
   void * loaned_message)
 {
-  (void) subscription;
-  (void) loaned_message;
-  RMW_SET_ERROR_MSG(
-    "rmw_return_loaned_message_from_subscription not implemented for rmw_cyclonedds_cpp");
-  return RMW_RET_UNSUPPORTED;
+  RMW_CHECK_ARGUMENT_FOR_NULL(
+    subscription, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(
+    loaned_message, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    subscription handle,
+    subscription->implementation_identifier, eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  auto cdds_subscription = static_cast<CddsSubscription *>(subscription->data);
+  if (!cdds_subscription) {
+    RMW_SET_ERROR_MSG("Subscription data is null");
+    return RMW_RET_ERROR;
+  }
+
+  // if the type is fixed size
+  if (cdds_subscription->is_fixed_size) {
+    dds_data_allocator_t data_allocator;
+    dds_data_allocator_init(cdds_subscription->enth, &data_allocator);
+    dds_data_allocator_free(&data_allocator, SHIFT_BACK_ICEORYX_HEADER(loaned_message));
+    dds_data_allocator_fini(&data_allocator);
+  } else {
+    RMW_SET_ERROR_MSG("returning loan for a non fixed type is not allowed");
+  }
+  return RMW_RET_OK;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
