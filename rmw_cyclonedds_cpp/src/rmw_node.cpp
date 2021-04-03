@@ -2048,8 +2048,10 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
   }
   RMW_CHECK_ARGUMENT_FOR_NULL(publisher_options, nullptr);
   if (publisher_options->require_unique_network_flow_endpoints ==
-      RMW_UNIQUE_NETWORK_FLOW_ENDPOINTS_STRICTLY_REQUIRED) {
-    RMW_SET_ERROR_MSG("Strict requirement on unique network flow endpoints for publishers not supported");
+    RMW_UNIQUE_NETWORK_FLOW_ENDPOINTS_STRICTLY_REQUIRED)
+  {
+    RMW_SET_ERROR_MSG(
+      "Strict requirement on unique network flow endpoints for publishers not supported");
     return nullptr;
   }
 
@@ -2433,7 +2435,8 @@ extern "C" rmw_subscription_t * rmw_create_subscription(
   if (subscription_options->require_unique_network_flow_endpoints ==
     RMW_UNIQUE_NETWORK_FLOW_ENDPOINTS_STRICTLY_REQUIRED)
   {
-    RMW_SET_ERROR_MSG("Strict requirement on unique network flow endpoints for subscriptions not supported");
+    RMW_SET_ERROR_MSG(
+      "Strict requirement on unique network flow endpoints for subscriptions not supported");
     return nullptr;
   }
 
