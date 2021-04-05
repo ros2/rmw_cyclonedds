@@ -1601,7 +1601,9 @@ extern "C" rmw_ret_t rmw_publish_loaned_message(
 
   // if the message is self contained
   if (cdds_publisher->is_fixed_size) {
-    if (dds_write(cdds_publisher->enth, ros_message) >= 0) {
+    auto d = std::make_unique<serdata_rmw>(cdds_publisher->sertype, ddsi_serdata_kind::SDK_DATA);
+    d->iox_chunk = SHIFT_BACK_ICEORYX_HEADER(ros_message);
+    if (dds_writecdr(cdds_publisher->enth, d.release()) >= 0) {
       return RMW_RET_OK;
     } else {
       RMW_SET_ERROR_MSG("Failed to publish data");
@@ -3007,13 +3009,15 @@ static rmw_ret_t rmw_take_loan_int(
         }
       }
     }
-    void *chunk;
-    ddsi_serdata_to_sample(d, nullptr, &chunk, nullptr);
-    auto ice_hdr = (iceoryx_header_t *) chunk;
-    auto ptr = SHIFT_PAST_ICEORYX_HEADER(ice_hdr);
-    *loaned_message = ptr;
-    *taken = true;
-    return RMW_RET_OK;
+    if (d->iox_chunk != nullptr) {
+      *loaned_message = SHIFT_PAST_ICEORYX_HEADER(d->iox_chunk);
+      *taken = true;
+      return RMW_RET_OK;
+    } else {
+      RMW_SET_ERROR_MSG("No loan to take from Cyclone");
+      *taken = false;
+      return RMW_RET_ERROR;
+    }
   }
   *taken = false;
   return RMW_RET_OK;
