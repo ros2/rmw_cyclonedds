@@ -583,10 +583,9 @@ struct sertype_rmw * create_sertype(
   static_cast<void>(topicname);
   std::string type_name = get_type_name(type_support_identifier, type_support);
   uint32_t flags = DDSI_SERTYPE_FLAG_TOPICKIND_NO_KEY;
-  // TODO (Sumanth) fix this, doesn't allow to set multiple flags
-  //  if (is_fixed_type) {
-  //    flags |= DDSI_SERTYPE_FLAG_FIXED_SIZE;
-  //  }
+  if (is_fixed_type) {
+    flags |= DDSI_SERTYPE_FLAG_FIXED_SIZE;
+  }
   ddsi_sertype_init_flags(
     static_cast<struct ddsi_sertype *>(st),
     type_name.c_str(), &sertype_rmw_ops, &serdata_rmw_ops, flags);

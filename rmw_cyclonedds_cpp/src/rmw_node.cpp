@@ -77,6 +77,7 @@
 #include "namespace_prefix.hpp"
 
 #include "dds/dds.h"
+#include "dds/ddsc/dds_data_allocator.h"
 #include "serdes.hpp"
 #include "serdata.hpp"
 #include "demangle.hpp"
