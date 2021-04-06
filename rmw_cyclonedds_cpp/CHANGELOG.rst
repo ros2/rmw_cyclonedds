@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.21.0 (2021-04-06)
+-------------------
 * Indicate missing support for unique network flows (`#282 <https://github.com/ros2/rmw_cyclonedds/issues/282>`_)
 * Contributors: Ananya Muddukrishna
 
