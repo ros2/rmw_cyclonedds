@@ -214,7 +214,7 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
 
 static struct ddsi_serdata * serdata_rmw_from_iox(
   const struct ddsi_sertype * typecmn,
-  enum  ddsi_serdata_kind kind, iox_sub_t * sub, void * iox_buffer)
+  enum  ddsi_serdata_kind kind, void * sub, void * iox_buffer)
 {
   static_cast<void>(sub);  // unused
   const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(typecmn);
