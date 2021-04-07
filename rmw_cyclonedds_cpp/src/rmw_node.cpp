@@ -2065,7 +2065,7 @@ static rmw_publisher_t * create_publisher(
   RET_ALLOC_X(rmw_publisher->topic_name, return nullptr);
   memcpy(const_cast<char *>(rmw_publisher->topic_name), topic_name, strlen(topic_name) + 1);
   rmw_publisher->options = *publisher_options;
-  rmw_publisher->can_loan_messages = is_fixed_type; // TODO(Sumanth), also check if SHM is enabled
+  rmw_publisher->can_loan_messages = is_fixed_type && is_loan_available(pub->enth);
 
   cleanup_rmw_publisher.cancel();
   cleanup_cdds_publisher.cancel();
@@ -2582,8 +2582,7 @@ static rmw_subscription_t * create_subscription(
   RET_ALLOC_X(rmw_subscription->topic_name, return nullptr);
   memcpy(const_cast<char *>(rmw_subscription->topic_name), topic_name, strlen(topic_name) + 1);
   rmw_subscription->options = *subscription_options;
-  rmw_subscription->can_loan_messages = is_fixed_type;
-
+  rmw_subscription->can_loan_messages = is_fixed_type && is_loan_available(sub->enth);
   cleanup_subscription.cancel();
   cleanup_rmw_subscription.cancel();
   return rmw_subscription;
