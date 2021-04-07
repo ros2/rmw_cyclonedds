@@ -205,13 +205,13 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
       type->cdr_writer->serialize(d->data(), wrap);
     }
     return d.release();
-
   } catch (std::exception & e) {
     RMW_SET_ERROR_MSG(e.what());
     return nullptr;
   }
 }
 
+#ifdef DDS_HAS_SHM
 static struct ddsi_serdata * serdata_rmw_from_iox(
   const struct ddsi_sertype * typecmn,
   enum  ddsi_serdata_kind kind, void * sub, void * iox_buffer)
@@ -222,6 +222,7 @@ static struct ddsi_serdata * serdata_rmw_from_iox(
   d->iox_chunk = iox_buffer;
   return d.release();
 }
+#endif  // DDS_HAS_SHM
 
 struct ddsi_serdata * serdata_rmw_from_serialized_message(
   const struct ddsi_sertype * typecmn,
@@ -429,7 +430,7 @@ static const struct ddsi_serdata_ops serdata_rmw_ops = {
 #ifdef DDS_HAS_SHM
   , ddsi_serdata_iox_size,
   serdata_rmw_from_iox
-#endif // DDS_HAS_SHM
+#endif  // DDS_HAS_SHM
 };
 
 static void sertype_rmw_free(struct ddsi_sertype * tpcmn)
@@ -582,6 +583,8 @@ struct sertype_rmw * create_sertype(
 #if DDS_HAS_DDSI_SERTYPE
   static_cast<void>(topicname);
   std::string type_name = get_type_name(type_support_identifier, type_support);
+  // TODO(Sumanth) fix this once Cyclone supports this API in master
+#ifdef DDS_HAS_SHM
   uint32_t flags = DDSI_SERTYPE_FLAG_TOPICKIND_NO_KEY;
   if (is_fixed_type) {
     flags |= DDSI_SERTYPE_FLAG_FIXED_SIZE;
@@ -589,6 +592,11 @@ struct sertype_rmw * create_sertype(
   ddsi_sertype_init_flags(
     static_cast<struct ddsi_sertype *>(st),
     type_name.c_str(), &sertype_rmw_ops, &serdata_rmw_ops, flags);
+#else
+  ddsi_sertype_init(
+    static_cast<struct ddsi_sertype *>(st),
+    type_name.c_str(), &sertype_rmw_ops, &serdata_rmw_ops, true);
+#endif  // DDS_HAS_SHM
 #else
   std::string type_name = get_type_name(type_support_identifier, type_support);
   ddsi_sertopic_init(

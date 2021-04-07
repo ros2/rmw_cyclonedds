@@ -30,10 +30,16 @@
 #define sertype_rmw_ops sertopic_rmw_ops
 #endif
 
+#ifdef DDS_HAS_SHM
 #define GET_ICEORYX_CHUNK_SIZE(sample_size) \
-(uint32_t) (sizeof(iceoryx_header_t) + 8 - (sizeof(iceoryx_header_t) % 8) + (sample_size))
-#define SHIFT_PAST_ICEORYX_HEADER(chunk) (void *)(((char *)chunk) + sizeof(iceoryx_header_t) + 8 - (sizeof(iceoryx_header_t) % 8))
-#define SHIFT_BACK_ICEORYX_HEADER(chunk) (void *)(((char *)chunk) - sizeof(iceoryx_header_t) - 8 + (sizeof(iceoryx_header_t) % 8))
+  (uint32_t) (sizeof(iceoryx_header_t) + 8 - (sizeof(iceoryx_header_t) % 8) + (sample_size))
+#define SHIFT_PAST_ICEORYX_HEADER(chunk) \
+  (static_cast<void *>((reinterpret_cast<char *>(chunk)) + \
+  sizeof(iceoryx_header_t) + 8 - (sizeof(iceoryx_header_t) % 8)))
+#define SHIFT_BACK_ICEORYX_HEADER(chunk) \
+  (static_cast<void *>((reinterpret_cast<char *>(chunk)) - \
+  sizeof(iceoryx_header_t) - 8 + (sizeof(iceoryx_header_t) % 8)))
+#endif  // DDS_HAS_SHM
 
 namespace rmw_cyclonedds_cpp
 {

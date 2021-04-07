@@ -133,6 +133,17 @@ private:
   bool is_type_self_contained(const MembersType * members);
 };
 
+size_t get_message_size(
+  const rosidl_message_type_support_t * type_supports);
+
+void init_message(
+  const rosidl_message_type_support_t * type_supports,
+  void * message);
+
+void fini_message(
+  const rosidl_message_type_support_t * type_supports,
+  void * message);
+
 }  // namespace rmw_cyclonedds_cpp
 
 #include "TypeSupport_impl.hpp"
