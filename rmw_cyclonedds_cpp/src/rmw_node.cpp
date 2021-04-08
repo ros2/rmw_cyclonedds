@@ -346,17 +346,15 @@ struct CddsPublisher : CddsEntity
   rosidl_message_type_support_t type_supports;
 #ifdef DDS_HAS_SHM
   dds_data_allocator_t data_allocator;
-  bool is_fixed_size;
 #endif  // DDS_HAS_SHM
+  bool is_loaning_available;
 };
 
 struct CddsSubscription : CddsEntity
 {
   rmw_gid_t gid;
   dds_entity_t rdcondh;
-#ifdef DDS_HAS_SHM
-  bool is_fixed_size;
-#endif  // DDS_HAS_SHM
+  bool is_loaning_available;
 };
 
 struct client_service_id_t
@@ -1593,6 +1591,10 @@ static rmw_ret_t publish_loaned_int(
   RMW_CHECK_FOR_NULL_WITH_MSG(
     publisher, "publisher handle is null",
     return RMW_RET_INVALID_ARGUMENT);
+  if (!publisher->can_loan_messages) {
+    RMW_SET_ERROR_MSG("Loaning is not supported");
+    return RMW_RET_UNSUPPORTED;
+  }
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
     publisher, publisher->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
@@ -1606,8 +1608,8 @@ static rmw_ret_t publish_loaned_int(
     return RMW_RET_ERROR;
   }
 
-  // if the message is self contained
-  if (cdds_publisher->is_fixed_size) {
+  // if the publisher allow loaning
+  if (cdds_publisher->is_loaning_available) {
     auto d = std::make_unique<serdata_rmw>(cdds_publisher->sertype, ddsi_serdata_kind::SDK_DATA);
     d->iox_chunk = SHIFT_BACK_ICEORYX_HEADER(ros_message);
     if (dds_writecdr(cdds_publisher->enth, d.release()) >= 0) {
@@ -1951,25 +1953,29 @@ static bool get_readwrite_qos(dds_entity_t handle, rmw_qos_profile_t * rmw_qos_p
   return ret;
 }
 
-static bool is_type_self_contained(const rosidl_message_type_support_t * type_support)
+static bool is_type_self_contained(const rosidl_message_type_support_t * type_supports)
 {
-  if (rosidl_typesupport_introspection_c__identifier ==
-    type_support->typesupport_identifier)
-  {
-    auto members = static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(
-      type_support->data);
-    MessageTypeSupport_c mts(members);
-    return mts.is_type_self_contained();
-  } else if (rosidl_typesupport_introspection_cpp::typesupport_identifier ==  // NOLINT
-    type_support->typesupport_identifier)
-  {
+  auto ts = get_message_typesupport_handle(
+    type_supports,
+    rosidl_typesupport_introspection_cpp::typesupport_identifier);
+  if (ts != nullptr) {   // CPP typesupport
     auto members = static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(
-      type_support->data);
+      ts->data);
     MessageTypeSupport_cpp mts(members);
     return mts.is_type_self_contained();
   } else {
-    // un-supported typesupport
-    return false;
+    ts = get_message_typesupport_handle(
+      type_supports,
+      rosidl_typesupport_introspection_c__identifier);
+    if (ts != nullptr) {  // C typesupport
+      auto members = static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(
+        ts->data);
+      MessageTypeSupport_c mts(members);
+      return mts.is_type_self_contained();
+    } else {
+      RMW_SET_ERROR_MSG("Non supported type-supported");
+      return false;
+    }
   }
 }
 
@@ -1977,8 +1983,7 @@ static CddsPublisher * create_cdds_publisher(
   dds_entity_t dds_ppant, dds_entity_t dds_pub,
   const rosidl_message_type_support_t * type_supports,
   const char * topic_name,
-  const rmw_qos_profile_t * qos_policies,
-  const bool is_fixed_type)
+  const rmw_qos_profile_t * qos_policies)
 {
   RET_NULL_OR_EMPTYSTR_X(topic_name, return nullptr);
   RET_NULL_X(qos_policies, return nullptr);
@@ -1989,7 +1994,7 @@ static CddsPublisher * create_cdds_publisher(
   dds_qos_t * qos;
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
-
+  bool is_fixed_type = is_type_self_contained(type_supports);
   auto sertype = create_sertype(
     fqtopic_name.c_str(), type_support->typesupport_identifier,
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
@@ -2014,9 +2019,12 @@ static CddsPublisher * create_cdds_publisher(
   get_entity_gid(pub->enth, pub->gid);
   pub->sertype = stact;
   pub->type_supports = *type_supports;
+  pub->is_loaning_available =
 #ifdef DDS_HAS_SHM
-  pub->is_fixed_size = is_fixed_type;
-#endif
+    is_fixed_type && is_loan_available(pub->enth);
+#else
+    false;
+#endif  // DDS_HAS_SHM
   dds_delete_qos(qos);
   dds_delete(topic);
   return pub;
@@ -2060,11 +2068,9 @@ static rmw_publisher_t * create_publisher(
 )
 {
   CddsPublisher * pub;
-  bool is_fixed_type = is_type_self_contained(get_typesupport(type_supports));
   if ((pub =
     create_cdds_publisher(
-      dds_ppant, dds_pub, type_supports, topic_name,
-      qos_policies, is_fixed_type)) == nullptr)
+      dds_ppant, dds_pub, type_supports, topic_name, qos_policies)) == nullptr)
   {
     return nullptr;
   }
@@ -2093,7 +2099,7 @@ static rmw_publisher_t * create_publisher(
 
   rmw_publisher->can_loan_messages =
 #if DDS_HAS_SHM
-    is_fixed_type && is_loan_available(pub->enth);
+    pub->is_loaning_available;
 #else
     false;
 #endif  // DDS_HAS_SHM
@@ -2276,6 +2282,10 @@ static rmw_ret_t borrow_loaned_message_int(
   void ** ros_message)
 {
   RCUTILS_CHECK_ARGUMENT_FOR_NULL(publisher, RMW_RET_INVALID_ARGUMENT);
+  if (!publisher->can_loan_messages) {
+    RMW_SET_ERROR_MSG("Loaning is not supported");
+    return RMW_RET_UNSUPPORTED;
+  }
   RCUTILS_CHECK_ARGUMENT_FOR_NULL(type_support, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
     publisher,
@@ -2288,8 +2298,8 @@ static rmw_ret_t borrow_loaned_message_int(
     return RMW_RET_ERROR;
   }
 
-  // if the type is fixed size
-  if (cdds_publisher->is_fixed_size) {
+  // if the publisher can loan
+  if (cdds_publisher->is_loaning_available) {
     // initialize the data allocator
     dds_data_allocator_init(cdds_publisher->enth, &cdds_publisher->data_allocator);
     // allocate memory for message + header
@@ -2337,6 +2347,10 @@ static rmw_ret_t return_loaned_message_from_publisher_int(
   void * loaned_message)
 {
   RCUTILS_CHECK_ARGUMENT_FOR_NULL(publisher, RMW_RET_INVALID_ARGUMENT);
+  if (!publisher->can_loan_messages) {
+    RMW_SET_ERROR_MSG("Loaning is not supported");
+    return RMW_RET_UNSUPPORTED;
+  }
   RCUTILS_CHECK_ARGUMENT_FOR_NULL(loaned_message, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
     publisher,
@@ -2350,8 +2364,8 @@ static rmw_ret_t return_loaned_message_from_publisher_int(
     return RMW_RET_ERROR;
   }
 
-  // if the type is fixed size
-  if (cdds_publisher->is_fixed_size) {
+  // if the publisher can loan
+  if (cdds_publisher->is_loaning_available) {
     // fini message
     rmw_cyclonedds_cpp::fini_message(&cdds_publisher->type_supports, loaned_message);
     // free the message memory
@@ -2462,7 +2476,7 @@ extern "C" rmw_ret_t rmw_destroy_publisher(rmw_node_t * node, rmw_publisher_t * 
 static CddsSubscription * create_cdds_subscription(
   dds_entity_t dds_ppant, dds_entity_t dds_sub,
   const rosidl_message_type_support_t * type_supports, const char * topic_name,
-  const rmw_qos_profile_t * qos_policies, bool ignore_local_publications, const bool is_fixed_type)
+  const rmw_qos_profile_t * qos_policies, bool ignore_local_publications)
 {
   RET_NULL_OR_EMPTYSTR_X(topic_name, return nullptr);
   RET_NULL_X(qos_policies, return nullptr);
@@ -2473,7 +2487,7 @@ static CddsSubscription * create_cdds_subscription(
   dds_qos_t * qos;
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
-
+  bool is_fixed_type = is_type_self_contained(type_supports);
   auto sertype = create_sertype(
     fqtopic_name.c_str(), type_support->typesupport_identifier,
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
@@ -2495,6 +2509,12 @@ static CddsSubscription * create_cdds_subscription(
     RMW_SET_ERROR_MSG("failed to create readcondition");
     goto fail_readcond;
   }
+  sub->is_loaning_available =
+#ifdef DDS_HAS_SHM
+    is_fixed_type && is_loan_available(sub->enth);
+#else
+    false;
+#endif  // DDS_HAS_SHM
   dds_delete_qos(qos);
   dds_delete(topic);
   return sub;
@@ -2537,12 +2557,11 @@ static rmw_subscription_t * create_subscription(
   const rmw_subscription_options_t * subscription_options)
 {
   CddsSubscription * sub;
-  bool is_fixed_type = is_type_self_contained(get_typesupport(type_supports));
   rmw_subscription_t * rmw_subscription;
   if (
     (sub = create_cdds_subscription(
       dds_ppant, dds_sub, type_supports, topic_name, qos_policies,
-      subscription_options->ignore_local_publications, is_fixed_type)) == nullptr)
+      subscription_options->ignore_local_publications)) == nullptr)
   {
     return nullptr;
   }
@@ -2577,7 +2596,7 @@ static rmw_subscription_t * create_subscription(
 
   rmw_subscription->can_loan_messages =
 #ifdef DDS_HAS_SHM
-    is_fixed_type && is_loan_available(sub->enth);
+    sub->is_loaning_available;
 #else
     false;
 #endif  // DDS_HAS_SHM
@@ -2979,6 +2998,10 @@ static rmw_ret_t rmw_take_loan_int(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(
     subscription, RMW_RET_INVALID_ARGUMENT);
+  if (!subscription->can_loan_messages) {
+    RMW_SET_ERROR_MSG("Loaning is not supported");
+    return RMW_RET_UNSUPPORTED;
+  }
   RMW_CHECK_ARGUMENT_FOR_NULL(
     loaned_message, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_ARGUMENT_FOR_NULL(
@@ -3122,6 +3145,10 @@ static rmw_ret_t return_loaned_message_from_subscription_int(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(
     subscription, RMW_RET_INVALID_ARGUMENT);
+  if (!subscription->can_loan_messages) {
+    RMW_SET_ERROR_MSG("Loaning is not supported");
+    return RMW_RET_UNSUPPORTED;
+  }
   RMW_CHECK_ARGUMENT_FOR_NULL(
     loaned_message, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
@@ -3134,8 +3161,8 @@ static rmw_ret_t return_loaned_message_from_subscription_int(
     return RMW_RET_ERROR;
   }
 
-  // if the type is fixed size
-  if (cdds_subscription->is_fixed_size) {
+  // if the subscription allow loaning
+  if (cdds_subscription->is_loaning_available) {
     dds_data_allocator_t data_allocator;
     dds_data_allocator_init(cdds_subscription->enth, &data_allocator);
     dds_data_allocator_free(&data_allocator, SHIFT_BACK_ICEORYX_HEADER(loaned_message));
