@@ -21,6 +21,7 @@
 #include "bytewise.hpp"
 #include "dds/dds.h"
 #include "dds/ddsi/ddsi_serdata.h"
+#include "dds/ddsi/q_xmsg.h"
 
 #if !DDS_HAS_DDSI_SERTYPE
 #define ddsi_sertype ddsi_sertopic
@@ -28,6 +29,17 @@
 #define sertype_rmw sertopic_rmw
 #define sertype_rmw_ops sertopic_rmw_ops
 #endif
+
+#ifdef DDS_HAS_SHM
+#define GET_ICEORYX_CHUNK_SIZE(sample_size) \
+  (uint32_t) (sizeof(iceoryx_header_t) + 8 - (sizeof(iceoryx_header_t) % 8) + (sample_size))
+#define SHIFT_PAST_ICEORYX_HEADER(chunk) \
+  (static_cast<void *>((reinterpret_cast<char *>(chunk)) + \
+  sizeof(iceoryx_header_t) + 8 - (sizeof(iceoryx_header_t) % 8)))
+#define SHIFT_BACK_ICEORYX_HEADER(chunk) \
+  (static_cast<void *>((reinterpret_cast<char *>(chunk)) - \
+  sizeof(iceoryx_header_t) - 8 + (sizeof(iceoryx_header_t) % 8)))
+#endif  // DDS_HAS_SHM
 
 namespace rmw_cyclonedds_cpp
 {
@@ -45,6 +57,7 @@ struct sertype_rmw : ddsi_sertype
   CddsTypeSupport type_support;
   bool is_request_header;
   std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRWriter> cdr_writer;
+  bool is_fixed;
 };
 
 class serdata_rmw : public ddsi_serdata
@@ -87,7 +100,8 @@ void * create_response_type_support(
 struct sertype_rmw * create_sertype(
   const char * topicname, const char * type_support_identifier,
   void * type_support, bool is_request_header,
-  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type_support);
+  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type_support,
+  const bool is_fixed_type = false);
 
 struct ddsi_serdata * serdata_rmw_from_serialized_message(
   const struct ddsi_sertype * typecmn,

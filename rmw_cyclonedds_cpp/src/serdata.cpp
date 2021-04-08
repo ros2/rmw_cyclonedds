@@ -211,6 +211,19 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
   }
 }
 
+#ifdef DDS_HAS_SHM
+static struct ddsi_serdata * serdata_rmw_from_iox(
+  const struct ddsi_sertype * typecmn,
+  enum  ddsi_serdata_kind kind, void * sub, void * iox_buffer)
+{
+  static_cast<void>(sub);  // unused
+  const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(typecmn);
+  auto d = std::make_unique<serdata_rmw>(type, kind);
+  d->iox_chunk = iox_buffer;
+  return d.release();
+}
+#endif  // DDS_HAS_SHM
+
 struct ddsi_serdata * serdata_rmw_from_serialized_message(
   const struct ddsi_sertype * typecmn,
   const void * raw, size_t size)
@@ -414,6 +427,10 @@ static const struct ddsi_serdata_ops serdata_rmw_ops = {
   serdata_rmw_free,
   serdata_rmw_print,
   serdata_rmw_get_keyhash
+#ifdef DDS_HAS_SHM
+  , ddsi_serdata_iox_size,
+  serdata_rmw_from_iox
+#endif  // DDS_HAS_SHM
 };
 
 static void sertype_rmw_free(struct ddsi_sertype * tpcmn)
@@ -559,15 +576,27 @@ static std::string get_type_name(const char * type_support_identifier, void * ty
 struct sertype_rmw * create_sertype(
   const char * topicname, const char * type_support_identifier,
   void * type_support, bool is_request_header,
-  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type)
+  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type,
+  const bool is_fixed_type)
 {
   struct sertype_rmw * st = new struct sertype_rmw;
 #if DDS_HAS_DDSI_SERTYPE
   static_cast<void>(topicname);
   std::string type_name = get_type_name(type_support_identifier, type_support);
+  // TODO(Sumanth) fix this once Cyclone supports this API in master
+#ifdef DDS_HAS_SHM
+  uint32_t flags = DDSI_SERTYPE_FLAG_TOPICKIND_NO_KEY;
+  if (is_fixed_type) {
+    flags |= DDSI_SERTYPE_FLAG_FIXED_SIZE;
+  }
+  ddsi_sertype_init_flags(
+    static_cast<struct ddsi_sertype *>(st),
+    type_name.c_str(), &sertype_rmw_ops, &serdata_rmw_ops, flags);
+#else
   ddsi_sertype_init(
     static_cast<struct ddsi_sertype *>(st),
     type_name.c_str(), &sertype_rmw_ops, &serdata_rmw_ops, true);
+#endif  // DDS_HAS_SHM
 #else
   std::string type_name = get_type_name(type_support_identifier, type_support);
   ddsi_sertopic_init(
@@ -578,6 +607,8 @@ struct sertype_rmw * create_sertype(
   st->type_support.type_support_ = type_support;
   st->is_request_header = is_request_header;
   st->cdr_writer = rmw_cyclonedds_cpp::make_cdr_writer(std::move(message_type));
+  st->is_fixed = is_fixed_type ? true : false;
+
   return st;
 }
 
