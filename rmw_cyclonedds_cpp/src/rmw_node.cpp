@@ -1994,7 +1994,7 @@ static CddsPublisher * create_cdds_publisher(
   dds_qos_t * qos;
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
-  bool is_fixed_type = is_type_self_contained(type_supports);
+  bool is_fixed_type = is_type_self_contained(type_support);
   auto sertype = create_sertype(
     fqtopic_name.c_str(), type_support->typesupport_identifier,
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
@@ -2487,7 +2487,7 @@ static CddsSubscription * create_cdds_subscription(
   dds_qos_t * qos;
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
-  bool is_fixed_type = is_type_self_contained(type_supports);
+  bool is_fixed_type = is_type_self_contained(type_support);
   auto sertype = create_sertype(
     fqtopic_name.c_str(), type_support->typesupport_identifier,
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
