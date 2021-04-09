@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.22.0 (2021-04-07)
+-------------------
+* Add loaned sample zero-copy API support (`#297 <https://github.com/ros2/rmw_cyclonedds/issues/297>`_)
+* Contributors: Sumanth Nirmal
+
 0.21.0 (2021-04-06)
 -------------------
 * Indicate missing support for unique network flows (`#282 <https://github.com/ros2/rmw_cyclonedds/issues/282>`_)
