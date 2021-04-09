@@ -1611,7 +1611,7 @@ static rmw_ret_t publish_loaned_int(
   // if the publisher allow loaning
   if (cdds_publisher->is_loaning_available) {
     auto d = std::make_unique<serdata_rmw>(cdds_publisher->sertype, ddsi_serdata_kind::SDK_DATA);
-    d->iox_chunk = SHIFT_BACK_ICEORYX_HEADER(ros_message);
+    d->iox_chunk = SHIFT_BACK_TO_ICEORYX_HEADER(ros_message);
     if (dds_writecdr(cdds_publisher->enth, d.release()) >= 0) {
       return RMW_RET_OK;
     } else {
@@ -2304,7 +2304,7 @@ static rmw_ret_t borrow_loaned_message_int(
     dds_data_allocator_init(cdds_publisher->enth, &cdds_publisher->data_allocator);
     // allocate memory for message + header
     auto sample_size = rmw_cyclonedds_cpp::get_message_size(type_support);
-    auto chunk_size = GET_ICEORYX_CHUNK_SIZE(sample_size);
+    auto chunk_size = DETERMINE_ICEORYX_CHUNK_SIZE(sample_size);
     auto chunk_ptr = dds_data_allocator_alloc(
       &cdds_publisher->data_allocator, chunk_size);
     RMW_CHECK_FOR_NULL_WITH_MSG(
@@ -2371,7 +2371,7 @@ static rmw_ret_t return_loaned_message_from_publisher_int(
     // free the message memory
     dds_data_allocator_free(
       &cdds_publisher->data_allocator,
-      SHIFT_BACK_ICEORYX_HEADER(loaned_message));
+      SHIFT_BACK_TO_ICEORYX_HEADER(loaned_message));
     // fini data collector
     dds_data_allocator_fini(&cdds_publisher->data_allocator);
     return RMW_RET_OK;
@@ -3165,7 +3165,7 @@ static rmw_ret_t return_loaned_message_from_subscription_int(
   if (cdds_subscription->is_loaning_available) {
     dds_data_allocator_t data_allocator;
     dds_data_allocator_init(cdds_subscription->enth, &data_allocator);
-    dds_data_allocator_free(&data_allocator, SHIFT_BACK_ICEORYX_HEADER(loaned_message));
+    dds_data_allocator_free(&data_allocator, SHIFT_BACK_TO_ICEORYX_HEADER(loaned_message));
     dds_data_allocator_fini(&data_allocator);
   } else {
     RMW_SET_ERROR_MSG("returning loan for a non fixed type is not allowed");

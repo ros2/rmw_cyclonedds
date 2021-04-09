@@ -21,7 +21,9 @@
 #include "bytewise.hpp"
 #include "dds/dds.h"
 #include "dds/ddsi/ddsi_serdata.h"
+#ifdef DDS_HAS_SHM
 #include "dds/ddsi/q_xmsg.h"
+#endif  // DDS_HAS_SHM
 
 #if !DDS_HAS_DDSI_SERTYPE
 #define ddsi_sertype ddsi_sertopic
@@ -29,17 +31,6 @@
 #define sertype_rmw sertopic_rmw
 #define sertype_rmw_ops sertopic_rmw_ops
 #endif
-
-#ifdef DDS_HAS_SHM
-#define GET_ICEORYX_CHUNK_SIZE(sample_size) \
-  (uint32_t) (sizeof(iceoryx_header_t) + 8 - (sizeof(iceoryx_header_t) % 8) + (sample_size))
-#define SHIFT_PAST_ICEORYX_HEADER(chunk) \
-  (static_cast<void *>((reinterpret_cast<char *>(chunk)) + \
-  sizeof(iceoryx_header_t) + 8 - (sizeof(iceoryx_header_t) % 8)))
-#define SHIFT_BACK_ICEORYX_HEADER(chunk) \
-  (static_cast<void *>((reinterpret_cast<char *>(chunk)) - \
-  sizeof(iceoryx_header_t) - 8 + (sizeof(iceoryx_header_t) % 8)))
-#endif  // DDS_HAS_SHM
 
 namespace rmw_cyclonedds_cpp
 {
