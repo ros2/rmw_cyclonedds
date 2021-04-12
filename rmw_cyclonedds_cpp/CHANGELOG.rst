@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.22.1 (2021-04-12)
+-------------------
 * Use the macros from Cyclone DDS to work with sample payload when using SHM (`#300 <https://github.com/ros2/rmw_cyclonedds/issues/300>`_)
 * Contributors: Sumanth Nirmal
 
