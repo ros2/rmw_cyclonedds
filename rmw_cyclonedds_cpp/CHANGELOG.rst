@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Use the macros from Cyclone DDS to work with sample payload when using SHM (`#300 <https://github.com/ros2/rmw_cyclonedds/issues/300>`_)
+* Contributors: Sumanth Nirmal
+
 0.22.0 (2021-04-07)
 -------------------
 * Add loaned sample zero-copy API support (`#297 <https://github.com/ros2/rmw_cyclonedds/issues/297>`_)
