@@ -347,6 +347,7 @@ struct CddsPublisher : CddsEntity
 #ifdef DDS_HAS_SHM
   dds_data_allocator_t data_allocator;
 #endif  // DDS_HAS_SHM
+  uint32_t sample_size;
   bool is_loaning_available;
 };
 
@@ -2004,10 +2005,11 @@ static CddsPublisher * create_cdds_publisher(
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
   bool is_fixed_type = is_type_self_contained(type_support);
+  uint32_t sample_size = rmw_cyclonedds_cpp::get_message_size(type_support);
   auto sertype = create_sertype(
     fqtopic_name.c_str(), type_support->typesupport_identifier,
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
-    rmw_cyclonedds_cpp::make_message_value_type(type_supports), is_fixed_type);
+    rmw_cyclonedds_cpp::make_message_value_type(type_supports), sample_size, is_fixed_type);
   struct ddsi_sertype * stact;
   topic = create_topic(dds_ppant, fqtopic_name.c_str(), sertype, &stact);
   if (topic < 0) {
@@ -2034,6 +2036,7 @@ static CddsPublisher * create_cdds_publisher(
 #else
     false;
 #endif  // DDS_HAS_SHM
+  pub->sample_size = sample_size;
   dds_delete_qos(qos);
   dds_delete(topic);
   return pub;
@@ -2312,7 +2315,7 @@ static rmw_ret_t borrow_loaned_message_int(
     // initialize the data allocator
     dds_data_allocator_init(cdds_publisher->enth, &cdds_publisher->data_allocator);
     // allocate memory for message + header
-    auto sample_size = rmw_cyclonedds_cpp::get_message_size(type_support);
+    auto sample_size = cdds_publisher->sample_size;
     auto chunk_size = DETERMINE_ICEORYX_CHUNK_SIZE(sample_size);
     auto chunk_ptr = dds_data_allocator_alloc(
       &cdds_publisher->data_allocator, chunk_size);
@@ -2497,10 +2500,11 @@ static CddsSubscription * create_cdds_subscription(
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
   bool is_fixed_type = is_type_self_contained(type_support);
+  uint32_t sample_size = rmw_cyclonedds_cpp::get_message_size(type_support);
   auto sertype = create_sertype(
     fqtopic_name.c_str(), type_support->typesupport_identifier,
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
-    rmw_cyclonedds_cpp::make_message_value_type(type_supports), is_fixed_type);
+    rmw_cyclonedds_cpp::make_message_value_type(type_supports), sample_size, is_fixed_type);
   topic = create_topic(dds_ppant, fqtopic_name.c_str(), sertype);
   if (topic < 0) {
     RMW_SET_ERROR_MSG("failed to create topic");

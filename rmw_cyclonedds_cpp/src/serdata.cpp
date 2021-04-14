@@ -577,7 +577,7 @@ struct sertype_rmw * create_sertype(
   const char * topicname, const char * type_support_identifier,
   void * type_support, bool is_request_header,
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type,
-  const bool is_fixed_type)
+  const uint32_t sample_size, const bool is_fixed_type)
 {
   struct sertype_rmw * st = new struct sertype_rmw;
 #if DDS_HAS_DDSI_SERTYPE
@@ -592,7 +592,11 @@ struct sertype_rmw * create_sertype(
   ddsi_sertype_init_flags(
     static_cast<struct ddsi_sertype *>(st),
     type_name.c_str(), &sertype_rmw_ops, &serdata_rmw_ops, flags);
+  // TODO(Sumanth) needs some API in cyclone to set this
+  st->iox_size = sample_size;
 #else
+  (void)sample_size;
+  (void)is_fixed_type;
   ddsi_sertype_init(
     static_cast<struct ddsi_sertype *>(st),
     type_name.c_str(), &sertype_rmw_ops, &serdata_rmw_ops, true);
@@ -607,7 +611,6 @@ struct sertype_rmw * create_sertype(
   st->type_support.type_support_ = type_support;
   st->is_request_header = is_request_header;
   st->cdr_writer = rmw_cyclonedds_cpp::make_cdr_writer(std::move(message_type));
-  st->is_fixed = is_fixed_type ? true : false;
 
   return st;
 }
