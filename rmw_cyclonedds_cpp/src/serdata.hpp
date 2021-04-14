@@ -48,7 +48,6 @@ struct sertype_rmw : ddsi_sertype
   CddsTypeSupport type_support;
   bool is_request_header;
   std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRWriter> cdr_writer;
-  bool is_fixed;
 };
 
 class serdata_rmw : public ddsi_serdata
@@ -92,6 +91,7 @@ struct sertype_rmw * create_sertype(
   const char * topicname, const char * type_support_identifier,
   void * type_support, bool is_request_header,
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type_support,
+  const uint32_t sample_size = 0U,
   const bool is_fixed_type = false);
 
 struct ddsi_serdata * serdata_rmw_from_serialized_message(
