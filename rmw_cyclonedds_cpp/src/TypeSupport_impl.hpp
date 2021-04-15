@@ -485,13 +485,16 @@ bool TypeSupport<MembersType>::is_type_self_contained(const MembersType * member
     // if string or wstring or sequence
     if ((member.type_id_ == ::rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING) ||
       (member.type_id_ == ::rosidl_typesupport_introspection_cpp::ROS_TYPE_WSTRING) ||
-      (member.array_size_ && !member.is_upper_bound_))
+      // array => is_array = true, array_size > 0, upper_bound = 0
+      // unbounded sequence => is_array = true, array size = 0, upper_bound = 0
+      // bounded sequence => is_array = true, array size > 0, upper_bound = 1
+      (member.is_array_ && (!member.array_size_ || member.is_upper_bound_)))
     {
-      ret = false;  // type is not self contained
+      ret &= false;  // type is not self contained
     } else if (member.type_id_ == ::rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE) {
       // handle nested messages
       auto sub_members = (const MembersType *)member.members_->data;
-      is_type_self_contained(sub_members);
+      ret &= is_type_self_contained(sub_members);
     }
   }
 
