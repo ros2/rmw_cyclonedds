@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <string>
+#include <mutex>
 
 #include "TypeSupport2.hpp"
 #include "bytewise.hpp"
@@ -48,6 +49,8 @@ struct sertype_rmw : ddsi_sertype
   CddsTypeSupport type_support;
   bool is_request_header;
   std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRWriter> cdr_writer;
+  bool is_fixed;
+  std::mutex serialize_lock;
 };
 
 class serdata_rmw : public ddsi_serdata
