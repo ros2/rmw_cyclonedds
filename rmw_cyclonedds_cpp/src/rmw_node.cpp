@@ -354,6 +354,7 @@ struct CddsSubscription : CddsEntity
 {
   rmw_gid_t gid;
   dds_entity_t rdcondh;
+  rosidl_message_type_support_t type_supports;
 #ifdef DDS_HAS_SHM
   dds_data_allocator_t data_allocator;
 #endif  // DDS_HAS_SHM
@@ -2541,6 +2542,7 @@ static CddsSubscription * create_cdds_subscription(
     RMW_SET_ERROR_MSG("failed to create readcondition");
     goto fail_readcond;
   }
+  sub->type_supports = *type_support;
   sub->is_loaning_available =
 #ifdef DDS_HAS_SHM
     is_fixed_type && is_loan_available(sub->enth);
