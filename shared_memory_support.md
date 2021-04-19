@@ -1,22 +1,22 @@
-# Using Shared Memory with ROS2
+# Using Shared Memory with ROS 2
 
 This rmw_cyclonedds implementation uses [cyclonedds](https://projects.eclipse.org/projects/iot.cyclonedds) which includes support for fast Shared Memory data transfer based on [iceoryx](https://projects.eclipse.org/projects/technology.iceoryx). Since this feature is still in an experimental stage, it is disabled by default but can be enabled easily in a cyclonedds.xml configuration file.
 
 ## Requirements
 
-Currently Shared Memory transport is only supported on Linux. It is available in the rmw_cyclonedds implementation used by the ROS2 Rolling or Galactic Geochelone distribution.
+Currently Shared Memory transport is only supported on Linux. It is available in the rmw_cyclonedds implementation used by the ROS 2 Rolling or Galactic Geochelone distribution.
 
 ## Installation
 
-ROS2 needs to be installed as described in [Installing ROS2](https://docs.ros.org/en/rolling/Installation/Ubuntu-Install-Binary.html).
+ROS 2 needs to be installed as described in [Installing ROS 2](https://docs.ros.org/en/rolling/Installation/Ubuntu-Install-Binary.html).
 
-It can also be build from sources directly [Building ROS2](https://docs.ros.org/en/rolling/Installation/Ubuntu-Development-Setup.html).
+It can also be build from sources directly [Building ROS 2](https://docs.ros.org/en/rolling/Installation/Ubuntu-Development-Setup.html).
 
 In both cases rmw_cyclonedds is build with Shared Memory support by default.
 
 ## Configuration
 
-In your ROS2 workspace `ros2_rolling` create a configuration file `cyclonedds.xml` with the following content.
+In your ROS 2 workspace `ros2_rolling` create a configuration file `cyclonedds.xml` with the following content.
 
 ```xml
 <?xml version="1.0" encoding="UTF-8" ?>
@@ -33,7 +33,7 @@ In your ROS2 workspace `ros2_rolling` create a configuration file `cyclonedds.xm
 </CycloneDDS>
 ```
 
-Enter your ROS2 workspace and enable this configuration.
+Enter your ROS 2 workspace and enable this configuration.
 
 ```console
 cd ros2_rolling
@@ -55,7 +55,7 @@ Note that further aligment with DDS QoS is work in progress. Currently these opt
 
 ## Run an Example
 
-We can now the simple [talker/listener example](https://docs.ros.org/en/rolling/Installation/Ubuntu-Development-Setup.html#id12).
+We can now run the basic [talker/listener example](https://docs.ros.org/en/rolling/Installation/Ubuntu-Development-Setup.html#try-some-examples).
 In one terminal start the talker
 
 ```console
@@ -72,7 +72,7 @@ export CYCLONEDDS_URI=file://$PWD/cyclonedds.xml
 ros2 run demo_nodes_cpp listener
 ```
 
-If the Shared Memory configration was successfully activated and recognized, you should get some output containing
+If the Shared Memory configuration was successfully activated and recognized, you should get some output containing
 
 ```console
 [Warning]: RouDi not found - waiting
@@ -91,7 +91,7 @@ in a third terminal. Now the talker should start sending data to the listener.
 In this example Shared Memory is not actually used for transfer, since the message type contains a string, which is a dynamically sized data type (cf. [Types](#Types)). 
 
 Note that RouDi is still required whenever we activate a Shared Memory configuration by exporting the configuration file (it is needed by the underlying cyclonedds implementation in this case).
-We could also run the listener or talker without exporting the configuration file and it would still receive data (via network interface). By running both without exporting the configuration file we will not need to have RouDi running anymore (this is the regular ROS2 setup).
+We could also run the listener or talker without exporting the configuration file and it would still receive data (via network interface). By running both without exporting the configuration file we will not need to have RouDi running anymore (this is the regular ROS 2 setup).
 
 ### Using Shared Memory in the example
 
@@ -138,7 +138,7 @@ Note that by just observing the received data it cannot be determined whether Sh
 
 ## Zero-Copy Publish-Subscribe Communication
 
-Whether true zero-copy publish subscribe communication via Shared Memory is possible depends on several factors. Here zero copy means no copy or serialization is performed.
+Whether true zero-copy publish subscribe communication via Shared Memory is possible depends on several factors. Here zero-copy means no copy or serialization is performed.
 
 1. Shared Memory has to be enabled in the configuration.
 2. The subscription has to be local on the same machine (i.e. same or different process, but no remote subscription).
@@ -159,7 +159,7 @@ We first create a message, populate it before passing it to the publisher.
 
 If the Shared Memory transfer conditions are met, publish will internally loan a Shared Memory chunk from iceoryx and copy the message payload into it without the serialization required for network transfer. Any connected subscription has read-only access to this message data.
 
-While this API will not allow true zero-copy transfer, it still will improve performance for sufficiently large message sizes since it bypasses the loopback interface and does not perform serialization. The actual size where it will outoperform the loopback interface primarily depends on the actual hardware and system load.
+While this API will not allow true zero-copy transfer, it still will improve performance for sufficiently large message sizes since it bypasses the loopback interface and does not perform serialization. The actual size where it will outperform the loopback interface primarily depends on the actual hardware and system load.
 
 ### Loan API
 
@@ -179,7 +179,7 @@ The factors listed above govern whether Shared Memory is used, assuming it was e
 
 ### Local Subscription
 
-Only local subscriptions on the same machine will receive data via Shared Memory and RouDi is required to enable this. Remote subscriptions will always receive the data via the network interface. There can only be one Roudi process be running per machine.
+Only local subscriptions on the same machine will receive data via Shared Memory and RouDi is required to enable this. Remote subscriptions will always receive the data via the network interface. There can only be one Roudi process running per machine.
 
 ### Types
 
@@ -211,8 +211,8 @@ To obtain more loaned messages, it needs to publish some of the loaned messages.
 
 ### Iceoryx Shared Memory Configuration
 
-Iceoryx uses configurable memory pools to define different sizes of memory chunks that will be used to store messages in Shared Memory. These will be obtained when data is send via iceoryx, either when explicitly requested with the [Loan API](#Loan-API) or implicitly by the [Regular Publish API](#Regular-Publish-API).
+Iceoryx uses configurable memory pools to define different sizes of memory chunks that will be used to store messages in Shared Memory. These will be obtained when data is sent via iceoryx, either when explicitly requested with the [Loan API](#Loan-API) or implicitly by the [Regular Publish API](#Regular-Publish-API).
 
-Depending on the size and frequency of messages send, the default configuration may not be sufficient to guarantee that memory can be loaned and hence the data send. In this case it might help to use a custom configuration for the shared memory pools to increase the available Shared Memory. The configuration options are described in the [iceoryx configuration guide](https://github.com/eclipse-iceoryx/iceoryx/blob/master/doc/website/advanced/configuration-guide.md).
+Depending on the size and frequency of messages send, the default configuration may not be sufficient to guarantee that memory can be loaned and hence the data sent. In this case it might help to use a custom configuration for the shared memory pools to increase the available Shared Memory. The configuration options are described in the [iceoryx configuration guide](https://github.com/eclipse-iceoryx/iceoryx/blob/master/doc/website/advanced/configuration-guide.md).
 
 Note that currently the internal loan call is blocking, which means if no memory is available it will not return (this will change in the future). This may happen if the configured memory is not sufficient for the overall system load, i.e. the memory needed was not available in the first place or is used by other samples which are currently read or written.
