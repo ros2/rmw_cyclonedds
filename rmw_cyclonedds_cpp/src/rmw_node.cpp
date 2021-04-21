@@ -354,6 +354,9 @@ struct CddsSubscription : CddsEntity
 {
   rmw_gid_t gid;
   dds_entity_t rdcondh;
+#ifdef DDS_HAS_SHM
+  dds_data_allocator_t data_allocator;
+#endif  // DDS_HAS_SHM
   bool is_loaning_available;
 };
 
@@ -1579,6 +1582,29 @@ extern "C" rmw_ret_t rmw_publish_serialized_message(
   auto pub = static_cast<CddsPublisher *>(publisher->data);
   struct ddsi_serdata * d = serdata_rmw_from_serialized_message(
     pub->sertype, serialized_message->buffer, serialized_message->buffer_length);
+#ifdef DDS_HAS_SHM
+  // publishing a serialized message when SHM is ON
+  if (pub->is_loaning_available) {
+    dds_data_allocator_init(pub->enth, &pub->data_allocator);
+    auto sample_size = d->type->iox_size;
+    auto chunk_ptr = dds_data_allocator_alloc(
+      &pub->data_allocator,
+      DETERMINE_ICEORYX_CHUNK_SIZE(sample_size));
+    RMW_CHECK_FOR_NULL_WITH_MSG(
+      chunk_ptr,
+      "Failed to get loan",
+      return RMW_RET_ERROR);
+    auto ice_hdr = static_cast<iceoryx_header_t *>(chunk_ptr);
+    ice_hdr->data_size = sample_size;
+    auto ptr = SHIFT_PAST_ICEORYX_HEADER(ice_hdr);
+    rmw_cyclonedds_cpp::init_message(&pub->type_supports, ptr);
+    if (rmw_deserialize(serialized_message, &pub->type_supports, ptr) != RMW_RET_OK) {
+      RMW_SET_ERROR_MSG("Failed to deserialize sample into laoned memory");
+      return RMW_RET_ERROR;
+    }
+    d->iox_chunk = ice_hdr;
+  }
+#endif
   const bool ok = (dds_writecdr(pub->enth, d) >= 0);
   return ok ? RMW_RET_OK : RMW_RET_ERROR;
 }
@@ -2977,17 +3003,38 @@ static rmw_ret_t rmw_take_ser_int(
           message_info->publisher_gid.data, &info.publication_handle,
           sizeof(info.publication_handle));
       }
-      size_t size = ddsi_serdata_size(d);
-      if (rmw_serialized_message_resize(serialized_message, size) != RMW_RET_OK) {
+
+      // taking a serialized msg from shared memory
+#ifdef DDS_HAS_SHM
+      if (sub->is_loaning_available && d->iox_chunk != nullptr) {
+        if (rmw_serialize(
+            SHIFT_PAST_ICEORYX_HEADER(d->iox_chunk), &sub->type_supports,
+            serialized_message) != RMW_RET_OK)
+        {
+          RMW_SET_ERROR_MSG("Failed to srialize sample from loaned memory");
+          return RMW_RET_ERROR;
+        }
+        // free the loaned memory
+        dds_data_allocator_init(sub->enth, &sub->data_allocator);
+        dds_data_allocator_free(&sub->data_allocator, d->iox_chunk);
+        dds_data_allocator_fini(&sub->data_allocator);
+        *taken = true;
+        return RMW_RET_OK;
+      } else  // NOLINT
+#endif
+      {
+        size_t size = ddsi_serdata_size(d);
+        if (rmw_serialized_message_resize(serialized_message, size) != RMW_RET_OK) {
+          ddsi_serdata_unref(d);
+          *taken = false;
+          return RMW_RET_ERROR;
+        }
+        ddsi_serdata_to_ser(d, 0, size, serialized_message->buffer);
+        serialized_message->buffer_length = size;
         ddsi_serdata_unref(d);
-        *taken = false;
-        return RMW_RET_ERROR;
+        *taken = true;
+        return RMW_RET_OK;
       }
-      ddsi_serdata_to_ser(d, 0, size, serialized_message->buffer);
-      serialized_message->buffer_length = size;
-      ddsi_serdata_unref(d);
-      *taken = true;
-      return RMW_RET_OK;
     }
     ddsi_serdata_unref(d);
   }
