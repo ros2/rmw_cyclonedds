@@ -1739,7 +1739,13 @@ static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qo
         break;
       case DDS_HISTORY_KEEP_ALL:
         qos_policies->history = RMW_QOS_POLICY_HISTORY_KEEP_ALL;
-        qos_policies->depth = (uint32_t) depth;
+        // When using a policy of KEEP_ALL, the depth is meaningless.
+        // CycloneDDS reports this as -1, but the rmw_qos_profile_t structure
+        // expects an unsigned number.  Casting -1 to unsigned would yield
+        // a value of 2^32 - 1, but unfortunately our XML-RPC connection
+        // (used for the command-line tools) doesn't understand anything
+        // larger than 2^31 - 1.  Just set the depth to 0 here instead.
+        qos_policies->depth = 0;
         break;
       default:
         rmw_cyclonedds_cpp::unreachable();
