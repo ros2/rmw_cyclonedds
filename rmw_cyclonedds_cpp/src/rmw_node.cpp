@@ -2307,7 +2307,7 @@ static rmw_ret_t borrow_loaned_message_int(
   // if the publisher can loan
   if (cdds_publisher->is_loaning_available) {
     // initialize the data allocator
-    dds_data_allocator_init(cdds_publisher->enth, &cdds_publisher->data_allocator);
+    dds_data_allocator_init(cdds_publisher->enth, &cdds_publisher->data_allocator, false);
     // allocate memory for message + header
     auto sample_size = rmw_cyclonedds_cpp::get_message_size(type_support);
     auto chunk_size = DETERMINE_ICEORYX_CHUNK_SIZE(sample_size);
@@ -3170,7 +3170,7 @@ static rmw_ret_t return_loaned_message_from_subscription_int(
   // if the subscription allow loaning
   if (cdds_subscription->is_loaning_available) {
     dds_data_allocator_t data_allocator;
-    dds_data_allocator_init(cdds_subscription->enth, &data_allocator);
+    dds_data_allocator_init(cdds_subscription->enth, &data_allocator, false);
     dds_data_allocator_free(&data_allocator, SHIFT_BACK_TO_ICEORYX_HEADER(loaned_message));
     dds_data_allocator_fini(&data_allocator);
   } else {
