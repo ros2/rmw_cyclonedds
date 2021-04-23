@@ -491,8 +491,9 @@ static void dds_listener_callback(dds_entity_t entity, void * arg)
     (void)entity; \
     auto data = static_cast<user_callback_data_t *>(arg); \
     std::lock_guard<std::mutex> guard(data->mutex); \
-    if (data->event_callback[DDS_ ## EVENT_TYPE ## _STATUS_ID]) { \
-      data->callback(data->event_data[DDS_ ## EVENT_TYPE ## _STATUS_ID], 1); \
+    auto cb = data->event_callback[DDS_ ## EVENT_TYPE ## _STATUS_ID]; \
+    if (cb) { \
+      cb(data->event_data[DDS_ ## EVENT_TYPE ## _STATUS_ID], 1); \
     } else { \
       data->event_unread_count[DDS_ ## EVENT_TYPE ## _STATUS_ID]++; \
     } \
