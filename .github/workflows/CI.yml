@@ -31,7 +31,7 @@ jobs:
       run: git config --global --add remote.origin.fetch '+refs/pull/*:refs/remotes/origin/pull/*'
     - name: Build and test ROS
       id: ros_ci
-      uses: ros-tooling/action-ros-ci@v0.1
+      uses: ros-tooling/action-ros-ci@v0.2
       with:
         package-name: >
           rmw_cyclonedds_cpp
