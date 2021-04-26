@@ -5,7 +5,6 @@ definitions:
 
 repositories:
   ros2/rosidl_typesupport_connext/COLCON_IGNORE: *empty_repo
-  ros2/rmw_connext/COLCON_IGNORE: *empty_repo
   ros2/rmw_connextdds/COLCON_IGNORE: *empty_repo
 
   ros2/rosidl_typesupport_fastrtps/COLCON_IGNORE: *empty_repo
