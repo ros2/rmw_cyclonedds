@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.22.2 (2021-04-26)
+-------------------
 * Fix the history depth for KEEP_ALL. (`#305 <https://github.com/ros2/rmw_cyclonedds/issues/305>`_)
 * Contributors: Chris Lalancette
 
