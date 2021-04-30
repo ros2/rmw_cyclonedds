@@ -3090,36 +3090,36 @@ static rmw_ret_t rmw_take_loan_int(
           message_info->publisher_gid.data, &info.publication_handle,
           sizeof(info.publication_handle));
       }
-    }
-    if (d->iox_chunk != nullptr) {
-      *loaned_message = SHIFT_PAST_ICEORYX_HEADER(d->iox_chunk);
-      *taken = true;
-      // doesn't allocate, but initialise the allocator to free the chunk later
-      dds_data_allocator_init(
-        cdds_subscription->enth, &cdds_subscription->data_allocator);
-      return RMW_RET_OK;
-    } else if (d->type->iox_size > 0U) {
-      // allocate on the heap
-      dds_data_allocator_init_heap(&cdds_subscription->data_allocator);
-      auto chunk_size = DETERMINE_ICEORYX_CHUNK_SIZE(d->type->iox_size);
-      auto chunk_ptr = dds_data_allocator_alloc(
-        &cdds_subscription->data_allocator, chunk_size);
-      RMW_CHECK_FOR_NULL_WITH_MSG(
-        chunk_ptr,
-        "Failed to allocate memory for the received sample",
-        return RMW_RET_ERROR);
-      auto ice_hdr = static_cast<iceoryx_header_t *>(chunk_ptr);
-      ice_hdr->data_size = d->type->iox_size;
-      auto ptr = SHIFT_PAST_ICEORYX_HEADER(ice_hdr);
-      rmw_cyclonedds_cpp::init_message(&cdds_subscription->type_supports, ptr);
-      ddsi_serdata_to_sample(d, ptr, nullptr, nullptr);
-      *loaned_message = ptr;
-      *taken = true;
-      return RMW_RET_OK;
-    } else {
-      RMW_SET_ERROR_MSG("Data nor loan is available to take");
-      *taken = false;
-      return RMW_RET_ERROR;
+      if (d->iox_chunk != nullptr) {
+        *loaned_message = SHIFT_PAST_ICEORYX_HEADER(d->iox_chunk);
+        *taken = true;
+        // doesn't allocate, but initialise the allocator to free the chunk later
+        dds_data_allocator_init(
+          cdds_subscription->enth, &cdds_subscription->data_allocator);
+        return RMW_RET_OK;
+      } else if (d->type->iox_size > 0U) {
+        // allocate on the heap
+        dds_data_allocator_init_heap(&cdds_subscription->data_allocator);
+        auto chunk_size = DETERMINE_ICEORYX_CHUNK_SIZE(d->type->iox_size);
+        auto chunk_ptr = dds_data_allocator_alloc(
+          &cdds_subscription->data_allocator, chunk_size);
+        RMW_CHECK_FOR_NULL_WITH_MSG(
+          chunk_ptr,
+          "Failed to allocate memory for the received sample",
+          return RMW_RET_ERROR);
+        auto ice_hdr = static_cast<iceoryx_header_t *>(chunk_ptr);
+        ice_hdr->data_size = d->type->iox_size;
+        auto ptr = SHIFT_PAST_ICEORYX_HEADER(ice_hdr);
+        rmw_cyclonedds_cpp::init_message(&cdds_subscription->type_supports, ptr);
+        ddsi_serdata_to_sample(d, ptr, nullptr, nullptr);
+        *loaned_message = ptr;
+        *taken = true;
+        return RMW_RET_OK;
+      } else {
+        RMW_SET_ERROR_MSG("Data nor loan is available to take");
+        *taken = false;
+        return RMW_RET_ERROR;
+      }
     }
   }
   *taken = false;
