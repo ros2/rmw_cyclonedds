@@ -2854,6 +2854,14 @@ static rmw_ret_t rmw_take_int(
   dds_sample_info_t info;
   while (dds_take(sub->enth, &ros_message, &info, 1, 1) == 1) {
     if (info.valid_data) {
+#ifdef DDS_HAS_SHM
+      if (sub->is_loaning_available) {
+        // if the sample has been transferred using iceoryx, the sample from iceoryx chunk is
+        // copied into ros_message in `_to_sample()` and the chunk is released here
+        dds_data_allocator_init(sub->enth, &sub->data_allocator);
+        dds_data_allocator_fini(&sub->data_allocator);
+      }
+#endif
       *taken = true;
       if (message_info) {
         message_info->publisher_gid.implementation_identifier = eclipse_cyclonedds_identifier;
