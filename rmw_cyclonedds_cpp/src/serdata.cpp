@@ -320,15 +320,24 @@ static bool serdata_rmw_to_sample(
     if (d->kind != SDK_DATA) {
       /* ROS 2 doesn't do keys in a meaningful way yet */
     } else if (!type->is_request_header) {
-      cycdeser sd(d->data(), d->size());
-      if (using_introspection_c_typesupport(type->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(type->type_support.type_support_);
-        return typed_typesupport->deserializeROSmessage(sd, sample);
-      } else if (using_introspection_cpp_typesupport(type->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_cpp *>(type->type_support.type_support_);
-        return typed_typesupport->deserializeROSmessage(sd, sample);
+      // handle the sample transferred using iceoryx
+      if (d->iox_chunk) {
+        // copy the data iceoryx chunk
+        std::memcpy(sample, SHIFT_PAST_ICEORYX_HEADER(d->iox_chunk), type->iox_size);
+        return true;
+      } else {
+        cycdeser sd(d->data(), d->size());
+        if (using_introspection_c_typesupport(type->type_support.typesupport_identifier_)) {
+          auto typed_typesupport =
+            static_cast<MessageTypeSupport_c *>(type->type_support.type_support_);
+          return typed_typesupport->deserializeROSmessage(sd, sample);
+        } else if (using_introspection_cpp_typesupport(
+            type->type_support.typesupport_identifier_))
+        {
+          auto typed_typesupport =
+            static_cast<MessageTypeSupport_cpp *>(type->type_support.type_support_);
+          return typed_typesupport->deserializeROSmessage(sd, sample);
+        }
       }
     } else {
       /* The "prefix" lambda is there to inject the service invocation header data into the CDR
