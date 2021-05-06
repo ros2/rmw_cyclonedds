@@ -75,6 +75,32 @@ align_int_(size_t __align, T __int) noexcept
   return (__int - 1u + __align) & ~(__align - 1);
 }
 
+inline void resize_field(
+  const rosidl_typesupport_introspection_cpp::MessageMember * member,
+  void * field,
+  size_t size)
+{
+  if (!member->resize_function) {
+    throw std::runtime_error("unexpected error: resize function is null");
+  }
+
+  member->resize_function(field, size);
+}
+
+inline void resize_field(
+  const rosidl_typesupport_introspection_c__MessageMember * member,
+  void * field,
+  size_t size)
+{
+  if (!member->resize_function) {
+    throw std::runtime_error("unexpected error: resize function is null");
+  }
+
+  if (!member->resize_function(field, size)) {
+    throw std::runtime_error("unable to resize field");
+  }
+}
+
 template<typename T>
 void deserialize_field(
   const rosidl_typesupport_introspection_cpp::MessageMember * member,
@@ -125,7 +151,7 @@ inline void deserialize_field<std::wstring>(
       size = static_cast<uint32_t>(member->array_size_);
     } else {
       deser >> size;
-      member->resize_function(field, size);
+      resize_field(member, field, size);
     }
     for (size_t i = 0; i < size; ++i) {
       void * element = member->get_function(field, i);
@@ -150,7 +176,9 @@ void deserialize_field(
     auto & data = *reinterpret_cast<typename GenericCSequence<T>::type *>(field);
     int32_t dsize = 0;
     deser >> dsize;
-    GenericCSequence<T>::init(&data, dsize);
+    if (!GenericCSequence<T>::init(&data, dsize)) {
+      throw std::runtime_error("unable initialize generic sequence");
+    }
     deser.deserializeA(reinterpret_cast<T *>(data.data), dsize);
   }
 }
@@ -295,11 +323,7 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
               array_size = member->array_size_;
             } else {
               array_size = deser.deserialize_len(1);
-              if (!member->resize_function) {
-                RMW_SET_ERROR_MSG("unexpected error: resize function is null");
-                return false;
-              }
-              member->resize_function(field, array_size);
+              resize_field(member, field, array_size);
             }
 
             if (array_size != 0 && !member->get_function) {
