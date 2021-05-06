@@ -75,9 +75,8 @@ align_int_(size_t __align, T __int) noexcept
   return (__int - 1u + __align) & ~(__align - 1);
 }
 
-template<typename MembersType>
-void resize_field(
-  const MembersType * member,
+inline void resize_field(
+  const rosidl_typesupport_introspection_cpp::MessageMember * member,
   void * field,
   size_t size)
 {
@@ -88,8 +87,7 @@ void resize_field(
   member->resize_function(field, size);
 }
 
-template<>
-inline void resize_field<rosidl_typesupport_introspection_c__MessageMember>(
+inline void resize_field(
   const rosidl_typesupport_introspection_c__MessageMember * member,
   void * field,
   size_t size)
