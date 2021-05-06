@@ -399,6 +399,7 @@ static size_t serdata_rmw_print(
       /* ROS 2 doesn't do keys in a meaningful way yet */
       return static_cast<size_t>(snprintf(buf, bufsize, ":k:{}"));
     } else if (!type->is_request_header) {
+      serialize_into_serdata_rmw_on_demand(const_cast<serdata_rmw *>(d));
       cycprint sd(buf, bufsize, d->data(), d->size());
       if (using_introspection_c_typesupport(type->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
