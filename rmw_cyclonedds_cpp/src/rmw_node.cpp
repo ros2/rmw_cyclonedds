@@ -77,10 +77,7 @@
 #include "namespace_prefix.hpp"
 
 #include "dds/dds.h"
-// TODO(Sumanth) fix this once Cyclone supports this in master
-#ifdef DDS_HAS_SHM
 #include "dds/ddsc/dds_data_allocator.h"
-#endif  // DDS_HAS_SHM
 #include "serdes.hpp"
 #include "serdata.hpp"
 #include "demangle.hpp"
@@ -350,9 +347,7 @@ struct CddsPublisher : CddsEntity
   rmw_gid_t gid;
   struct ddsi_sertype * sertype;
   rosidl_message_type_support_t type_supports;
-#ifdef DDS_HAS_SHM
   dds_data_allocator_t data_allocator;
-#endif  // DDS_HAS_SHM
   uint32_t sample_size;
   bool is_loaning_available;
 };
@@ -362,9 +357,7 @@ struct CddsSubscription : CddsEntity
   rmw_gid_t gid;
   dds_entity_t rdcondh;
   rosidl_message_type_support_t type_supports;
-#ifdef DDS_HAS_SHM
   dds_data_allocator_t data_allocator;
-#endif  // DDS_HAS_SHM
   bool is_loaning_available;
 };
 
@@ -2185,13 +2178,7 @@ static rmw_publisher_t * create_publisher(
   RET_ALLOC_X(rmw_publisher->topic_name, return nullptr);
   memcpy(const_cast<char *>(rmw_publisher->topic_name), topic_name, strlen(topic_name) + 1);
   rmw_publisher->options = *publisher_options;
-
-  rmw_publisher->can_loan_messages =
-#if DDS_HAS_SHM
-    pub->is_loaning_available;
-#else
-    false;
-#endif  // DDS_HAS_SHM
+  rmw_publisher->can_loan_messages = pub->is_loaning_available;
 
   cleanup_rmw_publisher.cancel();
   cleanup_cdds_publisher.cancel();
@@ -2662,13 +2649,8 @@ static rmw_subscription_t * create_subscription(
   RET_ALLOC_X(rmw_subscription->topic_name, return nullptr);
   memcpy(const_cast<char *>(rmw_subscription->topic_name), topic_name, strlen(topic_name) + 1);
   rmw_subscription->options = *subscription_options;
+  rmw_subscription->can_loan_messages = sub->is_loaning_available;
 
-  rmw_subscription->can_loan_messages =
-#ifdef DDS_HAS_SHM
-    sub->is_loaning_available;
-#else
-    false;
-#endif  // DDS_HAS_SHM
   cleanup_subscription.cancel();
   cleanup_rmw_subscription.cancel();
   return rmw_subscription;
@@ -2885,14 +2867,12 @@ static rmw_ret_t rmw_take_int(
   dds_sample_info_t info;
   while (dds_take(sub->enth, &ros_message, &info, 1, 1) == 1) {
     if (info.valid_data) {
-#ifdef DDS_HAS_SHM
       if (sub->is_loaning_available) {
         // if the sample has been transferred using iceoryx, the sample from iceoryx chunk is
         // copied into ros_message in `_to_sample()` and the chunk is released here
         dds_data_allocator_init(sub->enth, &sub->data_allocator);
         dds_data_allocator_fini(&sub->data_allocator);
       }
-#endif
       *taken = true;
       if (message_info) {
         message_info->publisher_gid.implementation_identifier = eclipse_cyclonedds_identifier;
