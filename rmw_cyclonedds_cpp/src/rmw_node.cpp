@@ -1163,6 +1163,7 @@ rmw_context_impl_t::fini()
   return RMW_RET_OK;
 }
 
+#ifdef DDS_HAS_SHM
 template<typename entityT>
 static void * init_and_alloc_sample(
   entityT & entity, const uint32_t sample_size, const bool alloc_on_heap = false)
@@ -1218,6 +1219,7 @@ static rmw_ret_t fini_and_free_sample(entityT & entity, void * loaned_message)
     return RMW_RET_ERROR);
   return RMW_RET_OK;
 }
+#endif  // DDS_HAS_SHM
 
 extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t * context)
 {
