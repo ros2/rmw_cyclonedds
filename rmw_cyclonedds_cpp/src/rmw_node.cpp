@@ -1647,7 +1647,7 @@ extern "C" rmw_ret_t rmw_publish_serialized_message(
     auto sample_ptr = init_and_alloc_sample(pub, d->type->iox_size);
     RET_NULL_X(sample_ptr, return RMW_RET_ERROR);
     if (rmw_deserialize(serialized_message, &pub->type_supports, sample_ptr) != RMW_RET_OK) {
-      RMW_SET_ERROR_MSG("Failed to deserialize sample into laoned memory");
+      RMW_SET_ERROR_MSG("Failed to deserialize sample into loaned memory");
       return RMW_RET_ERROR;
     }
     d->iox_chunk = SHIFT_BACK_TO_ICEORYX_HEADER(sample_ptr);
