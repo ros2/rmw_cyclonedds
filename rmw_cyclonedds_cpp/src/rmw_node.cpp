@@ -1185,7 +1185,7 @@ static void * init_and_alloc_sample(
     return nullptr);
   auto ice_hdr = static_cast<iceoryx_header_t *>(chunk_ptr);
   ice_hdr->data_size = sample_size;
-  auto ptr = SHIFT_PAST_ICEORYX_HEADER(ice_hdr);
+  auto ptr = SHIFT_PAST_ICEORYX_HEADER(chunk_ptr);
   // initialize the memory for message
   rmw_cyclonedds_cpp::init_message(&entity->type_supports, ptr);
   return ptr;

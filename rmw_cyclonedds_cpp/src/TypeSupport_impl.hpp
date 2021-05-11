@@ -478,7 +478,6 @@ std::string TypeSupport<MembersType>::getName()
 template<typename MembersType>
 bool TypeSupport<MembersType>::is_type_self_contained(const MembersType * members)
 {
-  bool ret = true;
   for (uint32_t idx = 0; idx < members->member_count_; ++idx) {
     const auto member = members->members_[idx];
     // if the message is not self contained,
@@ -490,15 +489,17 @@ bool TypeSupport<MembersType>::is_type_self_contained(const MembersType * member
       // bounded sequence => is_array = true, array size > 0, upper_bound = 1
       (member.is_array_ && (!member.array_size_ || member.is_upper_bound_)))
     {
-      ret &= false;  // type is not self contained
+      return false;  // type is not self contained
     } else if (member.type_id_ == ::rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE) {
       // handle nested messages
       auto sub_members = (const MembersType *)member.members_->data;
-      ret &= is_type_self_contained(sub_members);
+      if (!is_type_self_contained(sub_members)) {
+        return false;
+      }
     }
   }
 
-  return ret;
+  return true;
 }
 
 template<typename MembersType>
