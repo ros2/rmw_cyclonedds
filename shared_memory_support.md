@@ -1,22 +1,23 @@
 # Using Shared Memory with ROS 2
 
-This rmw_cyclonedds implementation uses [cyclonedds](https://projects.eclipse.org/projects/iot.cyclonedds) which includes support for fast Shared Memory data transfer based on [iceoryx](https://projects.eclipse.org/projects/technology.iceoryx). Since this feature is still in an experimental stage, it is disabled by default but can be enabled easily in a cyclonedds.xml configuration file.
+This rmw_cyclonedds implementation uses [cyclonedds](https://projects.eclipse.org/projects/iot.cyclonedds) which includes support for fast Shared Memory data transfer based on [iceoryx](https://projects.eclipse.org/projects/technology.iceoryx). Since this feature is still in an experimental stage, it is disabled by default but can be enabled easily by providing a cyclonedds.xml configuration file.
 
 ## Requirements
 
 Currently Shared Memory transport is only supported on Linux. It is available in the rmw_cyclonedds implementation used by the ROS 2 Rolling or Galactic Geochelone distribution.
 
+Note that the Shared Memory feature is not available on Windows.
+
 ## Installation
 
-ROS 2 needs to be installed as described in [Installing ROS 2](https://docs.ros.org/en/rolling/Installation/Ubuntu-Install-Binary.html).
-
-It can also be build from sources directly [Building ROS 2](https://docs.ros.org/en/rolling/Installation/Ubuntu-Development-Setup.html).
+ROS 2 needs to be installed as described in [Installing ROS 2 Rolling](https://docs.ros.org/en/rolling/Installation/Ubuntu-Install-Binary.html).
+It can also be build from sources directly [Building ROS 2 Rolling](https://docs.ros.org/en/rolling/Installation/Ubuntu-Development-Setup.html). Using the ROS 2 Galactic installation as described in [Installing ROS 2 Galactic](https://docs.ros.org/en/galactic/Installation/Ubuntu-Install-Binary.html) and  [Building ROS 2 Galactic](https://docs.ros.org/en/galactic/Installation/Ubuntu-Development-Setup.html) is also possible.
 
 In both cases rmw_cyclonedds is build with Shared Memory support by default.
 
 ## Configuration
 
-In your ROS 2 workspace `ros2_rolling` create a configuration file `cyclonedds.xml` with the following content.
+In your ROS 2 workspace `ros2_ws` create a configuration file `cyclonedds.xml` with the following content.
 
 ```xml
 <?xml version="1.0" encoding="UTF-8" ?>
@@ -36,7 +37,7 @@ In your ROS 2 workspace `ros2_rolling` create a configuration file `cyclonedds.x
 Enter your ROS 2 workspace and enable this configuration.
 
 ```console
-cd ros2_rolling
+cd ros2_ws
 export CYCLONEDDS_URI=file://$PWD/cyclonedds.xml
 ```
 
@@ -53,6 +54,8 @@ Note that depending on the QoS settings Shared Memory might not be used (cf. [Re
 The settings in the configuration file above are also the default values when left unspecified and setting them any higher is currently not possible.
 Note that further aligment with DDS QoS is work in progress. Currently these options exist alongside QoS settings as additional limits.
 
+Further information about these options can be found in [manual of the cyclonedds project](https://github.com/eclipse-cyclonedds/cyclonedds/blob/iceoryx/docs/manual/options.md#cycloneddsdomainsharedmemory).
+
 ## Run an Example
 
 We can now run the basic [talker/listener example](https://docs.ros.org/en/rolling/Installation/Ubuntu-Development-Setup.html#try-some-examples).
@@ -60,7 +63,7 @@ In one terminal start the talker
 
 ```console
 export CYCLONEDDS_URI=file://$PWD/cyclonedds.xml
-. ~/ros2_rolling/install/local_setup.bash
+. ~/ros2_ws/install/local_setup.bash
 ros2 run demo_nodes_cpp talker
 ```
 
@@ -68,7 +71,7 @@ and in another terminal start the listener
 
 ```console
 export CYCLONEDDS_URI=file://$PWD/cyclonedds.xml
-. ~/ros2_rolling/install/local_setup.bash
+. ~/ros2_ws/install/local_setup.bash
 ros2 run demo_nodes_cpp listener
 ```
 
@@ -82,7 +85,7 @@ in both terminals. This is because with Shared Memory enabled, the iceoryx middl
 We can do so by simply running
 
 ```console
-. ~/ros2_rolling/install/local_setup.bash
+. ~/ros2_ws/install/local_setup.bash
 iox-roudi
 ```
 
@@ -231,8 +234,8 @@ The introspection depends on iceoryx_utils and iceoryx_posh and we will build ag
 After installing ROS 2 as described in [Installation](#Installation) navigate to the ROS 2 workspace and execute
 
 ```console
-cd ros2_rolling
-. ~/ros2_rolling/install/setup.bash
+cd ros2_ws
+. ~/ros2_ws/install/setup.bash
 ```
 
 In the introspection folder of the iceoryx repository (part of the ROS 2 installation) run cmake followed by make to build the introspection.
@@ -270,18 +273,8 @@ To verify that a particular connection is using Shared Memory we can proceed as 
 
 From the *Connections* section we can infer whether a specific topic is offered and whether a subscription to this topic exists. Note that AUTOSAR terminology is used for the displayed data but the topic information is available in the Instance and Event columns. Also note that the built-in topics used by the introspection are also listed.
 
-If a publisher which uses Shared Memory publishes data, the memory utilization changes. This is visible in the *MemPool Status* section in the part listed in Segment Id: 1. If Shared Memory is used, the number of chunks in use should go up until a specific saturation point where it will stagnate or start to flutuate slightly as chunks are freed by the suscribing party. This is related to the settings in the [configuration](#Configuration-file-options) as these essentially control how much Shared Memory a specific subscribtion can use at most.
+If a publisher which uses Shared Memory publishes data, the memory utilization changes. This is visible in the *MemPool Status* section in the part listed in Segment Id: 1. If Shared Memory is used, the number of chunks in use should go up until a specific saturation point where it will stagnate or start to fluctuate slightly as chunks are freed by the suscribing party. This is related to the settings in the [configuration](#Configuration-file-options) as these essentially control how much Shared Memory a specific subscribtion can use at most.
 
 If we can observe memory chunks being used this is a strong indication that data is transferred by Shared Memory. However, this does not rule out that part of the communication (e.g. other subscriptions) is using the regular network tranfer. This cannot be conclusive in general if multiple subscriptions exist since we do not know which of them transfer data via Shared Memory by observing this statistic in isolation.
 
 The Min Free statistic is also important, as it counts the minimum number of chunks of a specific size that were free in a particular system execution (i.e. this can only decrease monotonically). If this is running low it indicates that there may be not enough Shared Memory available. This can be increased by using a different [Shared Memory configuration](#Iceoryx-Shared-Memory-Configuration).
-
-
-
-
-
-
-
-
-
-
