@@ -1163,11 +1163,20 @@ static void * init_and_alloc_sample(
 {
   // initialise the data allocator
   if (alloc_on_heap) {
+#ifdef DDS_DATA_ALLOCATOR_ALLOC_ON_HEAP
     RET_EXPECTED(
       dds_data_allocator_init_heap(&entity->data_allocator),
       DDS_RETCODE_OK,
       "Reader data allocator initialization failed for heap",
       return nullptr);
+#else
+    // hard-code DDS_DATA_ALLOCATOR_ALLOC_ON_HEAP if not defined yet
+    RET_EXPECTED(
+      dds_data_allocator_init(((dds_entity_t) (DDS_MIN_PSEUDO_HANDLE + 257)), &entity->data_allocator),
+      DDS_RETCODE_OK,
+      "Reader data allocator initialization failed for heap",
+      return nullptr);
+#endif
   } else {
     RET_EXPECTED(
       dds_data_allocator_init(entity->enth, &entity->data_allocator),
@@ -1197,6 +1206,7 @@ static rmw_ret_t fini_and_free_sample(entityT & entity, void * loaned_message)
   // fini the message
   rmw_cyclonedds_cpp::fini_message(&entity->type_supports, loaned_message);
   // free the message memory
+#ifdef DDS_DATA_ALLOCATOR_ALLOC_ON_HEAP
   RET_EXPECTED(
     dds_data_allocator_free(
       &entity->data_allocator,
@@ -1204,6 +1214,14 @@ static rmw_ret_t fini_and_free_sample(entityT & entity, void * loaned_message)
     DDS_RETCODE_OK,
     "Failed to free the loaned message",
     return RMW_RET_ERROR);
+#else
+  // dds_data_allocator_free gained a return value, DDS_DATA_ALLOCATOR_ALLOC_ON_HEAP can
+  // be used as a proxy for discovering whether it has one or not. This way, the return
+  // value will be checked if at compile-time it is known to exist.
+  dds_data_allocator_free(
+      &entity->data_allocator,
+      SHIFT_BACK_TO_ICEORYX_HEADER(loaned_message));
+#endif
   // fini the allocator
   RET_EXPECTED(
     dds_data_allocator_fini(&entity->data_allocator),
