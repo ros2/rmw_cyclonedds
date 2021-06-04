@@ -2,7 +2,7 @@
 
 **Easy, fast, reliable, small [Eclipse Cyclone DDS](https://github.com/eclipse-cyclonedds/cyclonedds) middleware** for ROS 2. Make your **🐢 run like a 🚀** [Eclipse Cyclone DDS has great adopters](https://iot.eclipse.org/adopters/) and contributors in the ROS community and is an [Eclipse Foundation](https://www.eclipse.org) open source project of [Eclipse IoT](https://iot.eclipse.org) and [OpenADx](https://openadx.eclipse.org) (autonomous driving).
 
-This package lets [*ROS 2*](https://index.ros.org/doc/ros2) use [*Eclipse Cyclone DDS*](https://github.com/eclipse-cyclonedds/cyclonedds) as the underlying DDS implementation.
+This package lets [*ROS 2*](https://docs.ros.org/en/rolling/) use [*Eclipse Cyclone DDS*](https://github.com/eclipse-cyclonedds/cyclonedds) as the underlying DDS implementation.
 Cyclone DDS is ready to use. It seeks to give the fastest, easiest, and most robust ROS 2 experience. Let the Cyclone blow you away!
 
 1. Install:
@@ -45,23 +45,23 @@ Here are some ways to generate additional debugging info that can help identify 
 * Configure Cyclone to create richer debugging output:
 
   * To see the output live:
-    
+
     `export CYCLONEDDS_URI='<Tracing><Verbosity>trace</><Out>stderr</></>'`
 
   * To send to `/var/log/`:
-    
+
     `export CYCLONEDDS_URI='<Tracing><Verbosity>trace</><Out>/var/log/cyclonedds.${CYCLONEDDS_PID}.log</></>'`
 
 * Create a Wireshark capture:
-  
+
   `wireshark -k -w wireshark.pcap.gz`
 
 ## Building from source and contributing
 
 The following branches are actively maintained:
 
-* `master`, which targets the upcoming ROS version, [*Foxy*](https://index.ros.org/doc/ros2/Releases/Release-Foxy-Fitzroy/).
-* `dashing-eloquent`, which maintains compatibility with ROS releases [*Dashing*](https://index.ros.org/doc/ros2/Releases/Release-Dashing-Diademata/) and [*Eloquent*](https://index.ros.org/doc/ros2/Releases/Release-Eloquent-Elusor/)
+* `master`, which targets the upcoming ROS version, [*Foxy*](https://docs.ros.org/en/rolling/Releases/Release-Foxy-Fitzroy.html)
+* `dashing-eloquent`, which maintains compatibility with ROS releases [*Dashing*](https://docs.ros.org/en/rolling/Releases/Release-Dashing-Diademata.html) and [*Eloquent*](https://docs.ros.org/en/rolling/Releases/Release-Eloquent-Elusor.html)
 
 If building ROS 2 from source ([ros2.repos](https://github.com/ros2/ros2/blob/master/ros2.repos)), you already have this package and Cyclone DDS:
 
