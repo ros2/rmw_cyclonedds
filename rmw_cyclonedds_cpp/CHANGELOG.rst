@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.23.0 (2021-06-07)
+-------------------
 * Fix zero copy issues. (`#309 <https://github.com/ros2/rmw_cyclonedds/issues/309>`_)
 * Handle allocation errors during message deserialization. (`#313 <https://github.com/ros2/rmw_cyclonedds/issues/313>`_)
 * Update includes after rcutils/get_env.h deprecation. (`#312 <https://github.com/ros2/rmw_cyclonedds/issues/312>`_)
