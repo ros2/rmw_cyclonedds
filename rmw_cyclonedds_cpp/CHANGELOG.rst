@@ -2,6 +2,13 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Fix zero copy issues. (`#309 <https://github.com/ros2/rmw_cyclonedds/issues/309>`_)
+* Handle allocation errors during message deserialization. (`#313 <https://github.com/ros2/rmw_cyclonedds/issues/313>`_)
+* Update includes after rcutils/get_env.h deprecation. (`#312 <https://github.com/ros2/rmw_cyclonedds/issues/312>`_)
+* Contributors: Christophe Bedard, Michel Hidalgo, Sumanth Nirmal
+
 0.22.2 (2021-04-26)
 -------------------
 * Fix the history depth for KEEP_ALL. (`#305 <https://github.com/ros2/rmw_cyclonedds/issues/305>`_)
