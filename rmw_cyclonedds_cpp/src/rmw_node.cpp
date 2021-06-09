@@ -519,6 +519,19 @@ static void listener_set_event_callbacks(dds_listener_t * l)
   dds_lset_liveliness_changed(l, on_liveliness_changed_fn);
 }
 
+static bool get_readwrite_qos(dds_entity_t handle, rmw_qos_profile_t * rmw_qos_policies)
+{
+  dds_qos_t * qos = dds_create_qos();
+  dds_return_t ret = false;
+  if (dds_get_qos(handle, qos) < 0) {
+    RMW_SET_ERROR_MSG("get_readwrite_qos: invalid handle");
+  } else {
+    ret = dds_qos_to_rmw_qos(qos, rmw_qos_policies);
+  }
+  dds_delete_qos(qos);
+  return ret;
+}
+
 extern "C" rmw_ret_t rmw_subscription_set_on_new_message_callback(
   rmw_subscription_t * rmw_subscription,
   rmw_event_callback_t callback,
@@ -535,8 +548,17 @@ extern "C" rmw_ret_t rmw_subscription_set_on_new_message_callback(
   data->user_data = user_data;
 
   if (callback && data->unread_count) {
-    // Push events happened before having assigned a callback
-    callback(user_data, data->unread_count);
+    // Push events happened before having assigned a callback,
+    // limiting them to the QoS depth.
+    rmw_qos_profile_t sub_qos;
+
+    if (!get_readwrite_qos(sub->enth, &sub_qos)) {
+      return RMW_RET_ERROR;
+    }
+
+    size_t events = std::min(data->unread_count, sub_qos.depth);
+
+    callback(user_data, events);
     data->unread_count = 0;
   }
 
@@ -2123,19 +2145,6 @@ static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qo
   }
 
   return true;
-}
-
-static bool get_readwrite_qos(dds_entity_t handle, rmw_qos_profile_t * rmw_qos_policies)
-{
-  dds_qos_t * qos = dds_create_qos();
-  dds_return_t ret = false;
-  if (dds_get_qos(handle, qos) < 0) {
-    RMW_SET_ERROR_MSG("get_readwrite_qos: invalid handle");
-  } else {
-    ret = dds_qos_to_rmw_qos(qos, rmw_qos_policies);
-  }
-  dds_delete_qos(qos);
-  return ret;
 }
 
 static CddsPublisher * create_cdds_publisher(
