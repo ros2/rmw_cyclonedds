@@ -51,15 +51,16 @@ using ResponseTypeSupport_cpp = rmw_cyclonedds_cpp::ResponseTypeSupport<
   rosidl_typesupport_introspection_cpp::ServiceMembers,
   rosidl_typesupport_introspection_cpp::MessageMembers>;
 
-static bool using_introspection_c_typesupport(const char * typesupport_identifier)
-{
-  return typesupport_identifier == rosidl_typesupport_introspection_c__identifier;
+static bool using_introspection_c_typesupport(const char* typesupport_identifier) {
+  return !std::string(typesupport_identifier)
+      .compare(rosidl_typesupport_introspection_c__identifier);
 }
 
-static bool using_introspection_cpp_typesupport(const char * typesupport_identifier)
-{
-  return typesupport_identifier == rosidl_typesupport_introspection_cpp::typesupport_identifier;
+static bool using_introspection_cpp_typesupport(const char* typesupport_identifier) {
+  return !std::string(typesupport_identifier)
+      .compare(rosidl_typesupport_introspection_cpp::typesupport_identifier);
 }
+
 
 void * create_message_type_support(
   const void * untyped_members,
