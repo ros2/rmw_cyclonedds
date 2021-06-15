@@ -77,10 +77,7 @@
 #include "namespace_prefix.hpp"
 
 #include "dds/dds.h"
-// TODO(Sumanth) fix this once Cyclone supports this in master
-#ifdef DDS_HAS_SHM
 #include "dds/ddsc/dds_data_allocator.h"
-#endif  // DDS_HAS_SHM
 #include "serdes.hpp"
 #include "serdata.hpp"
 #include "demangle.hpp"
@@ -124,6 +121,12 @@ using namespace std::literals::chrono_literals;
 #define RET_ALLOC(var) RET_ALLOC_X(var, return RMW_RET_ERROR)
 #define RET_WRONG_IMPLID(var) RET_WRONG_IMPLID_X(var, return RMW_RET_INCORRECT_RMW_IMPLEMENTATION)
 #define RET_NULL_OR_EMPTYSTR(var) RET_NULL_OR_EMPTYSTR_X(var, return RMW_RET_ERROR)
+#define RET_EXPECTED(func, expected_ret, error_msg, code) do { \
+    if ((expected_ret) != (func)) \
+    { \
+      RET_ERR_X(error_msg, code); \
+    } \
+} while (0)
 
 using rmw_dds_common::msg::ParticipantEntitiesInfo;
 
@@ -344,9 +347,8 @@ struct CddsPublisher : CddsEntity
   rmw_gid_t gid;
   struct ddsi_sertype * sertype;
   rosidl_message_type_support_t type_supports;
-#ifdef DDS_HAS_SHM
   dds_data_allocator_t data_allocator;
-#endif  // DDS_HAS_SHM
+  uint32_t sample_size;
   bool is_loaning_available;
 };
 
@@ -354,6 +356,8 @@ struct CddsSubscription : CddsEntity
 {
   rmw_gid_t gid;
   dds_entity_t rdcondh;
+  rosidl_message_type_support_t type_supports;
+  dds_data_allocator_t data_allocator;
   bool is_loaning_available;
 };
 
@@ -1152,6 +1156,64 @@ rmw_context_impl_t::fini()
   return RMW_RET_OK;
 }
 
+#ifdef DDS_HAS_SHM
+template<typename entityT>
+static void * init_and_alloc_sample(
+  entityT & entity, const uint32_t sample_size, const bool alloc_on_heap = false)
+{
+  // initialise the data allocator
+  if (alloc_on_heap) {
+    RET_EXPECTED(
+      dds_data_allocator_init_heap(&entity->data_allocator),
+      DDS_RETCODE_OK,
+      "Reader data allocator initialization failed for heap",
+      return nullptr);
+  } else {
+    RET_EXPECTED(
+      dds_data_allocator_init(entity->enth, &entity->data_allocator),
+      DDS_RETCODE_OK,
+      "Writer allocator initialisation failed",
+      return nullptr);
+  }
+  // allocate memory for message + header
+  auto chunk_ptr = dds_data_allocator_alloc(
+    &entity->data_allocator,
+    DETERMINE_ICEORYX_CHUNK_SIZE(sample_size));
+  RMW_CHECK_FOR_NULL_WITH_MSG(
+    chunk_ptr,
+    "Failed to get loan",
+    return nullptr);
+  auto ice_hdr = static_cast<iceoryx_header_t *>(chunk_ptr);
+  ice_hdr->data_size = sample_size;
+  auto ptr = SHIFT_PAST_ICEORYX_HEADER(chunk_ptr);
+  // initialize the memory for message
+  rmw_cyclonedds_cpp::init_message(&entity->type_supports, ptr);
+  return ptr;
+}
+
+template<typename entityT>
+static rmw_ret_t fini_and_free_sample(entityT & entity, void * loaned_message)
+{
+  // fini the message
+  rmw_cyclonedds_cpp::fini_message(&entity->type_supports, loaned_message);
+  // free the message memory
+  RET_EXPECTED(
+    dds_data_allocator_free(
+      &entity->data_allocator,
+      SHIFT_BACK_TO_ICEORYX_HEADER(loaned_message)),
+    DDS_RETCODE_OK,
+    "Failed to free the loaned message",
+    return RMW_RET_ERROR);
+  // fini the allocator
+  RET_EXPECTED(
+    dds_data_allocator_fini(&entity->data_allocator),
+    DDS_RETCODE_OK,
+    "Failed to fini data allocator",
+    return RMW_RET_ERROR);
+  return RMW_RET_OK;
+}
+#endif  // DDS_HAS_SHM
+
 extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t * context)
 {
   rmw_ret_t ret;
@@ -1579,6 +1641,18 @@ extern "C" rmw_ret_t rmw_publish_serialized_message(
   auto pub = static_cast<CddsPublisher *>(publisher->data);
   struct ddsi_serdata * d = serdata_rmw_from_serialized_message(
     pub->sertype, serialized_message->buffer, serialized_message->buffer_length);
+#ifdef DDS_HAS_SHM
+  // publishing a serialized message when SHM is ON
+  if (pub->is_loaning_available) {
+    auto sample_ptr = init_and_alloc_sample(pub, d->type->iox_size);
+    RET_NULL_X(sample_ptr, return RMW_RET_ERROR);
+    if (rmw_deserialize(serialized_message, &pub->type_supports, sample_ptr) != RMW_RET_OK) {
+      RMW_SET_ERROR_MSG("Failed to deserialize sample into loaned memory");
+      return RMW_RET_ERROR;
+    }
+    d->iox_chunk = SHIFT_BACK_TO_ICEORYX_HEADER(sample_ptr);
+  }
+#endif
   const bool ok = (dds_writecdr(pub->enth, d) >= 0);
   return ok ? RMW_RET_OK : RMW_RET_ERROR;
 }
@@ -2001,10 +2075,11 @@ static CddsPublisher * create_cdds_publisher(
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
   bool is_fixed_type = is_type_self_contained(type_support);
+  uint32_t sample_size = static_cast<uint32_t>(rmw_cyclonedds_cpp::get_message_size(type_support));
   auto sertype = create_sertype(
     fqtopic_name.c_str(), type_support->typesupport_identifier,
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
-    rmw_cyclonedds_cpp::make_message_value_type(type_supports), is_fixed_type);
+    rmw_cyclonedds_cpp::make_message_value_type(type_supports), sample_size, is_fixed_type);
   struct ddsi_sertype * stact;
   topic = create_topic(dds_ppant, fqtopic_name.c_str(), sertype, &stact);
   if (topic < 0) {
@@ -2031,6 +2106,7 @@ static CddsPublisher * create_cdds_publisher(
 #else
     false;
 #endif  // DDS_HAS_SHM
+  pub->sample_size = sample_size;
   dds_delete_qos(qos);
   dds_delete(topic);
   return pub;
@@ -2102,13 +2178,7 @@ static rmw_publisher_t * create_publisher(
   RET_ALLOC_X(rmw_publisher->topic_name, return nullptr);
   memcpy(const_cast<char *>(rmw_publisher->topic_name), topic_name, strlen(topic_name) + 1);
   rmw_publisher->options = *publisher_options;
-
-  rmw_publisher->can_loan_messages =
-#if DDS_HAS_SHM
-    pub->is_loaning_available;
-#else
-    false;
-#endif  // DDS_HAS_SHM
+  rmw_publisher->can_loan_messages = pub->is_loaning_available;
 
   cleanup_rmw_publisher.cancel();
   cleanup_cdds_publisher.cancel();
@@ -2306,23 +2376,9 @@ static rmw_ret_t borrow_loaned_message_int(
 
   // if the publisher can loan
   if (cdds_publisher->is_loaning_available) {
-    // initialize the data allocator
-    dds_data_allocator_init(cdds_publisher->enth, &cdds_publisher->data_allocator);
-    // allocate memory for message + header
-    auto sample_size = rmw_cyclonedds_cpp::get_message_size(type_support);
-    auto chunk_size = DETERMINE_ICEORYX_CHUNK_SIZE(sample_size);
-    auto chunk_ptr = dds_data_allocator_alloc(
-      &cdds_publisher->data_allocator, chunk_size);
-    RMW_CHECK_FOR_NULL_WITH_MSG(
-      chunk_ptr,
-      "Failed to get loan",
-      return RMW_RET_ERROR);
-    // initialize the memory for message
-    auto ice_hdr = static_cast<iceoryx_header_t *>(chunk_ptr);
-    ice_hdr->data_size = sample_size;
-    auto ptr = SHIFT_PAST_ICEORYX_HEADER(ice_hdr);
-    rmw_cyclonedds_cpp::init_message(type_support, ptr);
-    *ros_message = ptr;
+    auto sample_ptr = init_and_alloc_sample(cdds_publisher, cdds_publisher->sample_size);
+    RET_NULL_X(sample_ptr, return RMW_RET_ERROR);
+    *ros_message = sample_ptr;
     return RMW_RET_OK;
   } else {
     RMW_SET_ERROR_MSG("Borrowing loan for a non fixed type is not allowed");
@@ -2372,15 +2428,7 @@ static rmw_ret_t return_loaned_message_from_publisher_int(
 
   // if the publisher can loan
   if (cdds_publisher->is_loaning_available) {
-    // fini message
-    rmw_cyclonedds_cpp::fini_message(&cdds_publisher->type_supports, loaned_message);
-    // free the message memory
-    dds_data_allocator_free(
-      &cdds_publisher->data_allocator,
-      SHIFT_BACK_TO_ICEORYX_HEADER(loaned_message));
-    // fini data collector
-    dds_data_allocator_fini(&cdds_publisher->data_allocator);
-    return RMW_RET_OK;
+    return fini_and_free_sample(cdds_publisher, loaned_message);
   } else {
     RMW_SET_ERROR_MSG("returning loan for a non fixed type is not allowed");
     return RMW_RET_ERROR;
@@ -2494,10 +2542,11 @@ static CddsSubscription * create_cdds_subscription(
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
   bool is_fixed_type = is_type_self_contained(type_support);
+  uint32_t sample_size = static_cast<uint32_t>(rmw_cyclonedds_cpp::get_message_size(type_support));
   auto sertype = create_sertype(
     fqtopic_name.c_str(), type_support->typesupport_identifier,
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
-    rmw_cyclonedds_cpp::make_message_value_type(type_supports), is_fixed_type);
+    rmw_cyclonedds_cpp::make_message_value_type(type_supports), sample_size, is_fixed_type);
   topic = create_topic(dds_ppant, fqtopic_name.c_str(), sertype);
   if (topic < 0) {
     RMW_SET_ERROR_MSG("failed to create topic");
@@ -2515,6 +2564,7 @@ static CddsSubscription * create_cdds_subscription(
     RMW_SET_ERROR_MSG("failed to create readcondition");
     goto fail_readcond;
   }
+  sub->type_supports = *type_support;
   sub->is_loaning_available =
 #ifdef DDS_HAS_SHM
     is_fixed_type && is_loan_available(sub->enth);
@@ -2599,13 +2649,8 @@ static rmw_subscription_t * create_subscription(
   RET_ALLOC_X(rmw_subscription->topic_name, return nullptr);
   memcpy(const_cast<char *>(rmw_subscription->topic_name), topic_name, strlen(topic_name) + 1);
   rmw_subscription->options = *subscription_options;
+  rmw_subscription->can_loan_messages = sub->is_loaning_available;
 
-  rmw_subscription->can_loan_messages =
-#ifdef DDS_HAS_SHM
-    sub->is_loaning_available;
-#else
-    false;
-#endif  // DDS_HAS_SHM
   cleanup_subscription.cancel();
   cleanup_rmw_subscription.cancel();
   return rmw_subscription;
@@ -2977,17 +3022,38 @@ static rmw_ret_t rmw_take_ser_int(
           message_info->publisher_gid.data, &info.publication_handle,
           sizeof(info.publication_handle));
       }
-      size_t size = ddsi_serdata_size(d);
-      if (rmw_serialized_message_resize(serialized_message, size) != RMW_RET_OK) {
+
+      // taking a serialized msg from shared memory
+#ifdef DDS_HAS_SHM
+      if (sub->is_loaning_available && d->iox_chunk != nullptr) {
+        if (rmw_serialize(
+            SHIFT_PAST_ICEORYX_HEADER(d->iox_chunk), &sub->type_supports,
+            serialized_message) != RMW_RET_OK)
+        {
+          RMW_SET_ERROR_MSG("Failed to srialize sample from loaned memory");
+          return RMW_RET_ERROR;
+        }
+        // free the loaned memory
+        dds_data_allocator_init(sub->enth, &sub->data_allocator);
+        dds_data_allocator_free(&sub->data_allocator, d->iox_chunk);
+        dds_data_allocator_fini(&sub->data_allocator);
+        *taken = true;
+        return RMW_RET_OK;
+      } else  // NOLINT
+#endif
+      {
+        size_t size = ddsi_serdata_size(d);
+        if (rmw_serialized_message_resize(serialized_message, size) != RMW_RET_OK) {
+          ddsi_serdata_unref(d);
+          *taken = false;
+          return RMW_RET_ERROR;
+        }
+        ddsi_serdata_to_ser(d, 0, size, serialized_message->buffer);
+        serialized_message->buffer_length = size;
         ddsi_serdata_unref(d);
-        *taken = false;
-        return RMW_RET_ERROR;
+        *taken = true;
+        return RMW_RET_OK;
       }
-      ddsi_serdata_to_ser(d, 0, size, serialized_message->buffer);
-      serialized_message->buffer_length = size;
-      ddsi_serdata_unref(d);
-      *taken = true;
-      return RMW_RET_OK;
     }
     ddsi_serdata_unref(d);
   }
@@ -3027,24 +3093,32 @@ static rmw_ret_t rmw_take_loan_int(
   while (dds_takecdr(cdds_subscription->enth, &d, 1, &info, DDS_ANY_STATE) == 1) {
     if (info.valid_data) {
       if (message_info) {
-        if (message_info) {
-          message_info->publisher_gid.implementation_identifier = eclipse_cyclonedds_identifier;
-          memset(message_info->publisher_gid.data, 0, sizeof(message_info->publisher_gid.data));
-          assert(sizeof(info.publication_handle) <= sizeof(message_info->publisher_gid.data));
-          memcpy(
-            message_info->publisher_gid.data, &info.publication_handle,
-            sizeof(info.publication_handle));
-        }
+        message_info->publisher_gid.implementation_identifier = eclipse_cyclonedds_identifier;
+        memset(message_info->publisher_gid.data, 0, sizeof(message_info->publisher_gid.data));
+        assert(sizeof(info.publication_handle) <= sizeof(message_info->publisher_gid.data));
+        memcpy(
+          message_info->publisher_gid.data, &info.publication_handle,
+          sizeof(info.publication_handle));
       }
-    }
-    if (d->iox_chunk != nullptr) {
-      *loaned_message = SHIFT_PAST_ICEORYX_HEADER(d->iox_chunk);
-      *taken = true;
-      return RMW_RET_OK;
-    } else {
-      RMW_SET_ERROR_MSG("No loan to take from Cyclone");
-      *taken = false;
-      return RMW_RET_ERROR;
+      if (d->iox_chunk != nullptr) {
+        *loaned_message = SHIFT_PAST_ICEORYX_HEADER(d->iox_chunk);
+        *taken = true;
+        // doesn't allocate, but initialise the allocator to free the chunk later
+        dds_data_allocator_init(
+          cdds_subscription->enth, &cdds_subscription->data_allocator);
+        return RMW_RET_OK;
+      } else if (d->type->iox_size > 0U) {
+        auto sample_ptr = init_and_alloc_sample(cdds_subscription, d->type->iox_size, true);
+        RET_NULL_X(sample_ptr, return RMW_RET_ERROR);
+        ddsi_serdata_to_sample(d, sample_ptr, nullptr, nullptr);
+        *loaned_message = sample_ptr;
+        *taken = true;
+        return RMW_RET_OK;
+      } else {
+        RMW_SET_ERROR_MSG("Data nor loan is available to take");
+        *taken = false;
+        return RMW_RET_ERROR;
+      }
     }
   }
   *taken = false;
@@ -3169,12 +3243,10 @@ static rmw_ret_t return_loaned_message_from_subscription_int(
 
   // if the subscription allow loaning
   if (cdds_subscription->is_loaning_available) {
-    dds_data_allocator_t data_allocator;
-    dds_data_allocator_init(cdds_subscription->enth, &data_allocator);
-    dds_data_allocator_free(&data_allocator, SHIFT_BACK_TO_ICEORYX_HEADER(loaned_message));
-    dds_data_allocator_fini(&data_allocator);
+    return fini_and_free_sample(cdds_subscription, loaned_message);
   } else {
     RMW_SET_ERROR_MSG("returning loan for a non fixed type is not allowed");
+    return RMW_RET_ERROR;
   }
   return RMW_RET_OK;
 }
