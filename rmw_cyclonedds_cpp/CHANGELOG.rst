@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Add rmw_publisher_wait_for_all_acked support. (`#294 <https://github.com/ros2/rmw_cyclonedds/issues/294>`_)
+* Contributors: Barry Xu
+
 0.23.0 (2021-06-07)
 -------------------
 * Fix zero copy issues. (`#309 <https://github.com/ros2/rmw_cyclonedds/issues/309>`_)
