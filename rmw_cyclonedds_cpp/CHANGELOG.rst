@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Update Galactic to support zero-copy. (`#321 <https://github.com/ros2/rmw_cyclonedds/issues/321>`_)
+* Contributors: eboasson
+
 0.22.2 (2021-04-26)
 -------------------
 * Fix the history depth for KEEP_ALL. (`#305 <https://github.com/ros2/rmw_cyclonedds/issues/305>`_)
