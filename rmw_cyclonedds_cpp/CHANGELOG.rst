@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.22.3 (2021-06-17)
+-------------------
 * Update Galactic to support zero-copy. (`#321 <https://github.com/ros2/rmw_cyclonedds/issues/321>`_)
 * Contributors: eboasson
 
