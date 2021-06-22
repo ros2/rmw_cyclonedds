@@ -13,7 +13,7 @@ Note that the Shared Memory feature is not available on Windows.
 ROS 2 needs to be installed as described in [Installing ROS 2 Rolling](https://docs.ros.org/en/rolling/Installation/Ubuntu-Install-Binary.html).
 It can also be build from sources directly [Building ROS 2 Rolling](https://docs.ros.org/en/rolling/Installation/Ubuntu-Development-Setup.html). Using the ROS 2 Galactic installation as described in [Installing ROS 2 Galactic](https://docs.ros.org/en/galactic/Installation/Ubuntu-Install-Binary.html) and  [Building ROS 2 Galactic](https://docs.ros.org/en/galactic/Installation/Ubuntu-Development-Setup.html) is also possible.
 
-In both cases rmw_cyclonedds is build with Shared Memory support by default.
+In both cases rmw_cyclonedds is built with Shared Memory support by default.
 
 ## Configuration
 
