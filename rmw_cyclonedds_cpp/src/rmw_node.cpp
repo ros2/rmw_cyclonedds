@@ -872,6 +872,10 @@ rmw_ret_t configure_qos_for_security(
   dds_qset_prop(qos, "dds.sec.access.library.init", "init_access_control");
   dds_qset_prop(qos, "dds.sec.access.library.finalize", "finalize_access_control");
 
+  if (security_files.count("CRL") > 0) {
+    dds_qset_prop(qos, "org.eclipse.cyclonedds.sec.auth.crl", security_files["CRL"].c_str());
+  }
+
   return RMW_RET_OK;
 #else
   (void) qos;
