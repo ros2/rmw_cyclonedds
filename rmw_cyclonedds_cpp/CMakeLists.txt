@@ -72,6 +72,10 @@ target_link_libraries(rmw_cyclonedds_cpp
   CycloneDDS::ddsc
 )
 
+target_link_libraries(rmw_cyclonedds_cpp
+  -latomic
+)
+
 ament_target_dependencies(rmw_cyclonedds_cpp
   "rcutils"
   "rcpputils"
