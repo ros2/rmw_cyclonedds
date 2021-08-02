@@ -1549,7 +1549,7 @@ extern "C" rmw_ret_t rmw_publish(
     return RMW_RET_INVALID_ARGUMENT);
   auto pub = static_cast<CddsPublisher *>(publisher->data);
   assert(pub);
-  TRACEPOINT(rmw_publish, static_cast<const void *>(publisher), ros_message);
+  TRACEPOINT(rmw_publish, ros_message);
   if (dds_write(pub->enth, ros_message) >= 0) {
     return RMW_RET_OK;
   } else {
