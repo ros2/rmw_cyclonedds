@@ -508,15 +508,15 @@ MAKE_DDS_EVENT_CALLBACK_FN(sample_lost, SAMPLE_LOST)
 MAKE_DDS_EVENT_CALLBACK_FN(offered_incompatible_qos, OFFERED_INCOMPATIBLE_QOS)
 MAKE_DDS_EVENT_CALLBACK_FN(liveliness_changed, LIVELINESS_CHANGED)
 
-static void listener_set_event_callbacks(dds_listener_t * l)
+static void listener_set_event_callbacks(dds_listener_t * l, void * arg)
 {
-  dds_lset_requested_deadline_missed(l, on_requested_deadline_missed_fn);
-  dds_lset_requested_incompatible_qos(l, on_requested_incompatible_qos_fn);
-  dds_lset_sample_lost(l, on_sample_lost_fn);
-  dds_lset_liveliness_lost(l, on_liveliness_lost_fn);
-  dds_lset_offered_deadline_missed(l, on_offered_deadline_missed_fn);
-  dds_lset_offered_incompatible_qos(l, on_offered_incompatible_qos_fn);
-  dds_lset_liveliness_changed(l, on_liveliness_changed_fn);
+  dds_lset_requested_deadline_missed_arg(l, on_requested_deadline_missed_fn, arg, false);
+  dds_lset_requested_incompatible_qos_arg(l, on_requested_incompatible_qos_fn, arg, false);
+  dds_lset_sample_lost_arg(l, on_sample_lost_fn, arg, false);
+  dds_lset_liveliness_lost_arg(l, on_liveliness_lost_fn, arg, false);
+  dds_lset_offered_deadline_missed_arg(l, on_offered_deadline_missed_fn, arg, false);
+  dds_lset_offered_incompatible_qos_arg(l, on_offered_incompatible_qos_fn, arg, false);
+  dds_lset_liveliness_changed_arg(l, on_liveliness_changed_fn, arg, false);
 }
 
 static bool get_readwrite_qos(dds_entity_t handle, rmw_qos_profile_t * rmw_qos_policies)
@@ -2172,7 +2172,7 @@ static CddsPublisher * create_cdds_publisher(
 
   dds_listener_t * listener = dds_create_listener(&pub->user_callback_data);
   // Set the corresponding callbacks to listen for events
-  listener_set_event_callbacks(listener);
+  listener_set_event_callbacks(listener, &pub->user_callback_data);
 
   if (topic < 0) {
     RMW_SET_ERROR_MSG("failed to create topic");
@@ -2559,9 +2559,9 @@ static CddsSubscription * create_cdds_subscription(
 
   dds_listener_t * listener = dds_create_listener(&sub->user_callback_data);
   // Set the callback to listen for new messages
-  dds_lset_data_available(listener, dds_listener_callback);
+  dds_lset_data_available_arg(listener, dds_listener_callback, &sub->user_callback_data, false);
   // Set the corresponding callbacks to listen for events
-  listener_set_event_callbacks(listener);
+  listener_set_event_callbacks(listener, &sub->user_callback_data);
 
   if (topic < 0) {
     RMW_SET_ERROR_MSG("failed to create topic");
@@ -4149,7 +4149,7 @@ static rmw_ret_t rmw_init_cs(
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> pub_msg_ts, sub_msg_ts;
 
   dds_listener_t * listener = dds_create_listener(cb_data);
-  dds_lset_data_available(listener, dds_listener_callback);
+  dds_lset_data_available_arg(listener, dds_listener_callback, cb_data, false);
 
   if (is_service) {
     std::tie(sub_msg_ts, pub_msg_ts) =
