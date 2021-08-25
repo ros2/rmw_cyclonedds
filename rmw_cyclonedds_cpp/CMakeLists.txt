@@ -68,6 +68,7 @@ add_library(rmw_cyclonedds_cpp
 
 target_link_libraries(rmw_cyclonedds_cpp
   CycloneDDS::ddsc
+  -latomic
 )
 
 ament_target_dependencies(rmw_cyclonedds_cpp
