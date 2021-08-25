@@ -70,9 +70,6 @@ target_include_directories(rmw_cyclonedds_cpp PUBLIC
 
 target_link_libraries(rmw_cyclonedds_cpp
   CycloneDDS::ddsc
-)
-
-target_link_libraries(rmw_cyclonedds_cpp
   -latomic
 )
 
