@@ -68,8 +68,18 @@ add_library(rmw_cyclonedds_cpp
 
 target_link_libraries(rmw_cyclonedds_cpp
   CycloneDDS::ddsc
-  -latomic
 )
+if (CMAKE_GENERATOR_PLATFORM)
+  set (TARGET_ARCH "${CMAKE_GENERATOR_PLATFORM}")
+else ()
+  set (TARGET_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
+endif ()
+
+if (CMAKE_COMPILER_IS_GNUCXX AND TARGET_ARCH MATCHES "^(riscv|RISCV)64$")
+  # using GCC, libatomic is not automatically linked for RISC-V
+  target_link_libraries(rmw_cyclonedds_cpp -latomic)
+endif ()
+
 
 ament_target_dependencies(rmw_cyclonedds_cpp
   "rcutils"
