@@ -2,6 +2,38 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.23.1 (2021-06-16)
+-------------------
+* Add rmw_publisher_wait_for_all_acked support. (`#294 <https://github.com/ros2/rmw_cyclonedds/issues/294>`_)
+* Contributors: Barry Xu
+
+0.23.0 (2021-06-07)
+-------------------
+* Fix zero copy issues. (`#309 <https://github.com/ros2/rmw_cyclonedds/issues/309>`_)
+* Handle allocation errors during message deserialization. (`#313 <https://github.com/ros2/rmw_cyclonedds/issues/313>`_)
+* Update includes after rcutils/get_env.h deprecation. (`#312 <https://github.com/ros2/rmw_cyclonedds/issues/312>`_)
+* Contributors: Christophe Bedard, Michel Hidalgo, Sumanth Nirmal
+
+0.22.2 (2021-04-26)
+-------------------
+* Fix the history depth for KEEP_ALL. (`#305 <https://github.com/ros2/rmw_cyclonedds/issues/305>`_)
+* Contributors: Chris Lalancette
+
+0.22.1 (2021-04-12)
+-------------------
+* Use the macros from Cyclone DDS to work with sample payload when using SHM (`#300 <https://github.com/ros2/rmw_cyclonedds/issues/300>`_)
+* Contributors: Sumanth Nirmal
+
+0.22.0 (2021-04-07)
+-------------------
+* Add loaned sample zero-copy API support (`#297 <https://github.com/ros2/rmw_cyclonedds/issues/297>`_)
+* Contributors: Sumanth Nirmal
+
+0.21.0 (2021-04-06)
+-------------------
+* Indicate missing support for unique network flows (`#282 <https://github.com/ros2/rmw_cyclonedds/issues/282>`_)
+* Contributors: Ananya Muddukrishna
+
 0.20.0 (2021-03-18)
 -------------------
 * Take and return new RMW_DURATION_INFINITE correctly (`#288 <https://github.com/ros2/rmw_cyclonedds/issues/288>`_)

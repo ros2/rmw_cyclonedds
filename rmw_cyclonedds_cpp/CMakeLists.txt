@@ -29,6 +29,7 @@ find_package(ament_cmake_ros REQUIRED)
 
 find_package(rcutils REQUIRED)
 find_package(rcpputils REQUIRED)
+find_package(tracetools REQUIRED)
 
 #find_package(cyclonedds_cmake_module REQUIRED)
 find_package(CycloneDDS QUIET CONFIG)
@@ -62,7 +63,8 @@ add_library(rmw_cyclonedds_cpp
   src/demangle.cpp
   src/deserialization_exception.cpp
   src/Serialization.cpp
-  src/TypeSupport2.cpp)
+  src/TypeSupport2.cpp
+  src/TypeSupport.cpp)
 
 target_link_libraries(rmw_cyclonedds_cpp
   CycloneDDS::ddsc
@@ -76,6 +78,7 @@ ament_target_dependencies(rmw_cyclonedds_cpp
   "rmw"
   "rmw_dds_common"
   "rosidl_runtime_c"
+  "tracetools"
 )
 
 configure_rmw_library(rmw_cyclonedds_cpp)
