@@ -114,6 +114,7 @@ public:
     cycprint & deser,
     std::function<void(cycprint &)> prefix = nullptr);
   std::string getName();
+  bool is_type_self_contained();
   virtual ~TypeSupport() = default;
 
 protected:
@@ -129,7 +130,19 @@ private:
     cycdeser & deser, const MembersType * members, void * ros_message);
   bool printROSmessage(
     cycprint & deser, const MembersType * members);
+  bool is_type_self_contained(const MembersType * members);
 };
+
+size_t get_message_size(
+  const rosidl_message_type_support_t * type_supports);
+
+void init_message(
+  const rosidl_message_type_support_t * type_supports,
+  void * message);
+
+void fini_message(
+  const rosidl_message_type_support_t * type_supports,
+  void * message);
 
 }  // namespace rmw_cyclonedds_cpp
 

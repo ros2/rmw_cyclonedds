@@ -16,11 +16,15 @@
 
 #include <memory>
 #include <string>
+#include <mutex>
 
 #include "TypeSupport2.hpp"
 #include "bytewise.hpp"
 #include "dds/dds.h"
 #include "dds/ddsi/ddsi_serdata.h"
+#ifdef DDS_HAS_SHM
+#include "dds/ddsi/q_xmsg.h"
+#endif  // DDS_HAS_SHM
 
 #if !DDS_HAS_DDSI_SERTYPE
 #define ddsi_sertype ddsi_sertopic
@@ -45,6 +49,8 @@ struct sertype_rmw : ddsi_sertype
   CddsTypeSupport type_support;
   bool is_request_header;
   std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRWriter> cdr_writer;
+  bool is_fixed;
+  std::mutex serialize_lock;
 };
 
 class serdata_rmw : public ddsi_serdata
@@ -87,7 +93,9 @@ void * create_response_type_support(
 struct sertype_rmw * create_sertype(
   const char * topicname, const char * type_support_identifier,
   void * type_support, bool is_request_header,
-  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type_support);
+  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type_support,
+  const uint32_t sample_size = 0U,
+  const bool is_fixed_type = false);
 
 struct ddsi_serdata * serdata_rmw_from_serialized_message(
   const struct ddsi_sertype * typecmn,
