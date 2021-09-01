@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.7.7 (2021-08-31)
+------------------
+* Add -latomic for RISC-V (`#332 <https://github.com/ros2/rmw_cyclonedds/issues/332>`_) (`#333 <https://github.com/ros2/rmw_cyclonedds/issues/333>`_)
+* Contributors: guillaume-pais-siemens
+
 0.7.6 (2020-12-08)
 ------------------
 * Delete problematic assert in rmw_init() (`#265 <https://github.com/ros2/rmw_cyclonedds/issues/265>`_)
