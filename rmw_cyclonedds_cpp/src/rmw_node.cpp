@@ -2036,7 +2036,7 @@ static CddsPublisher * create_cdds_publisher(
   pub->type_supports = *type_supports;
   pub->is_loaning_available =
 #ifdef DDS_HAS_SHM
-    is_fixed_type && is_loan_available(pub->enth);
+    is_fixed_type && dds_is_loan_available(pub->enth);
 #else
     false;
 #endif  // DDS_HAS_SHM
@@ -2535,7 +2535,7 @@ static CddsSubscription * create_cdds_subscription(
   sub->type_supports = *type_support;
   sub->is_loaning_available =
 #ifdef DDS_HAS_SHM
-    is_fixed_type && is_loan_available(sub->enth);
+    is_fixed_type && dds_is_loan_available(sub->enth);
 #else
     false;
 #endif  // DDS_HAS_SHM
