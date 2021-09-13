@@ -267,6 +267,7 @@ struct CddsDomain
   {}
 };
 
+// Definition of struct rmw_context_impl_s as declared in rmw/init.h
 struct rmw_context_impl_s
 {
   rmw_dds_common::Context common;
