@@ -267,7 +267,8 @@ struct CddsDomain
   {}
 };
 
-struct rmw_context_impl_t
+// Definition of struct rmw_context_impl_s as declared in rmw/init.h
+struct rmw_context_impl_s
 {
   rmw_dds_common::Context common;
   dds_domainid_t domain_id;
@@ -294,7 +295,7 @@ struct rmw_context_impl_t
      (protected by initialization_mutex) */
   uint32_t client_service_id;
 
-  rmw_context_impl_t()
+  rmw_context_impl_s()
   : common(), domain_id(UINT32_MAX), ppant(0), client_service_id(0)
   {
     /* destructor relies on these being initialized properly */
@@ -313,7 +314,7 @@ struct rmw_context_impl_t
   rmw_ret_t
   fini();
 
-  ~rmw_context_impl_t()
+  ~rmw_context_impl_s()
   {
     if (0u != this->node_count) {
       RCUTILS_SAFE_FWRITE_TO_STDERR(
@@ -892,7 +893,7 @@ rmw_ret_t configure_qos_for_security(
 }
 
 rmw_ret_t
-rmw_context_impl_t::init(rmw_init_options_t * options, size_t domain_id)
+rmw_context_impl_s::init(rmw_init_options_t * options, size_t domain_id)
 {
   std::lock_guard<std::mutex> guard(initialization_mutex);
   if (0u != this->node_count) {
@@ -1075,7 +1076,7 @@ rmw_context_impl_t::clean_up()
 }
 
 rmw_ret_t
-rmw_context_impl_t::fini()
+rmw_context_impl_s::fini()
 {
   std::lock_guard<std::mutex> guard(initialization_mutex);
   if (0u != --this->node_count) {
