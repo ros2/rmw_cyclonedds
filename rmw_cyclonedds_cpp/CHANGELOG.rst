@@ -2,6 +2,17 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Update rmw_context_impl_t definition (`#337 <https://github.com/ros2/rmw_cyclonedds/issues/337>`_)
+* Add quality declaration for rmw_cyclonedds_cpp (`#335 <https://github.com/ros2/rmw_cyclonedds/issues/335>`_)
+* Fix use of deprecated is_loan_available (`#336 <https://github.com/ros2/rmw_cyclonedds/issues/336>`_)
+* Add -latomic for RISC-V (`#332 <https://github.com/ros2/rmw_cyclonedds/issues/332>`_)
+* Add pub/sub init, publish and take instrumentation using tracetools (`#329 <https://github.com/ros2/rmw_cyclonedds/issues/329>`_)
+* Pass the CRL down to CycloneDDS if it exists (`#325 <https://github.com/ros2/rmw_cyclonedds/issues/325>`_)
+* Use the new rmw_dds_common::get_security_files API (`#323 <https://github.com/ros2/rmw_cyclonedds/issues/323>`_)
+* Contributors: Chris Lalancette, Christophe Bedard, Michel Hidalgo, eboasson, guillaume-pais-siemens
+
 0.23.1 (2021-06-16)
 -------------------
 * Add rmw_publisher_wait_for_all_acked support. (`#294 <https://github.com/ros2/rmw_cyclonedds/issues/294>`_)
