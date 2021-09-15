@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.24.0 (2021-09-15)
+-------------------
 * Update rmw_context_impl_t definition (`#337 <https://github.com/ros2/rmw_cyclonedds/issues/337>`_)
 * Add quality declaration for rmw_cyclonedds_cpp (`#335 <https://github.com/ros2/rmw_cyclonedds/issues/335>`_)
 * Fix use of deprecated is_loan_available (`#336 <https://github.com/ros2/rmw_cyclonedds/issues/336>`_)
