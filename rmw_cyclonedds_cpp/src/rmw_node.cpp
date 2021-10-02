@@ -4306,10 +4306,6 @@ static rmw_ret_t rmw_init_cs(
   if ((qos = create_readwrite_qos(qos_policies, false)) == nullptr) {
     goto fail_qos;
   }
-  dds_reset_qos(qos);
-
-  dds_qset_reliability(qos, DDS_RELIABILITY_RELIABLE, DDS_SECS(1));
-  dds_qset_history(qos, DDS_HISTORY_KEEP_ALL, DDS_LENGTH_UNLIMITED);
 
   // store a unique identifier for this client/service in the user
   // data of the reader and writer so that we can always determine
