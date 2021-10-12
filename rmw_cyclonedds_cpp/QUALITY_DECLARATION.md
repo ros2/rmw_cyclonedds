@@ -147,7 +147,7 @@ It also has several test dependencies, which do not affect the resulting quality
 ### Direct Runtime Non-ROS Dependencies [5.iii]
 
 `rmw_cyclonedds_cpp` has the following runtime non-ROS dependencies:
-* `cyclonedds`: Eclipse Cyclone DDS claims to be Quality Level 3. For more information, please refer to its [quality declaration document](../CYCLONEDDS_QUALITY_DECLARATION.md).
+* `cyclonedds`: Eclipse Cyclone DDS claims to be Quality Level 2. For more information, please refer to its [quality declaration document](https://github.com/eclipse-cyclonedds/cyclonedds/blob/releases/0.8.x/CYCLONEDDS_QUALITY_DECLARATION.md).
 
 ## Platform Support [6]
 
