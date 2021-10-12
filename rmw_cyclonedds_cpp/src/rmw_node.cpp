@@ -5094,3 +5094,87 @@ extern "C" rmw_ret_t rmw_qos_profile_check_compatible(
   return rmw_dds_common::qos_profile_check_compatible(
     publisher_profile, subscription_profile, compatibility, reason, reason_size);
 }
+
+extern "C" rmw_ret_t rmw_client_get_actual_qos(
+  const rmw_client_t * client,
+  rmw_qos_profile_t * qos)
+{
+  RMW_CHECK_ARGUMENT_FOR_NULL(client, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(qos, RMW_RET_INVALID_ARGUMENT);
+
+  auto info = static_cast<CddsClient *>(client->data);
+
+  rmw_qos_profile_t pub_qos = rmw_qos_profile_default;
+  rmw_qos_profile_t sub_qos = rmw_qos_profile_default;
+
+  // Check if the QoS of the client's pub/sub match
+  if (get_readwrite_qos(info->client.pub->enth, &pub_qos)) {
+    if (get_readwrite_qos(info->client.sub->enth, &sub_qos)) {
+      if (pub_qos.history == sub_qos.history &&
+        pub_qos.depth == sub_qos.depth &&
+        pub_qos.reliability == sub_qos.reliability &&
+        pub_qos.durability == sub_qos.durability &&
+        pub_qos.liveliness == sub_qos.liveliness &&
+        pub_qos.deadline.sec == sub_qos.deadline.sec &&
+        pub_qos.deadline.nsec == sub_qos.deadline.nsec &&
+        pub_qos.lifespan.sec == sub_qos.lifespan.sec &&
+        pub_qos.lifespan.nsec == sub_qos.lifespan.nsec &&
+        pub_qos.liveliness_lease_duration.sec == sub_qos.liveliness_lease_duration.sec &&
+        pub_qos.liveliness_lease_duration.nsec == sub_qos.liveliness_lease_duration.nsec)
+      {
+        // The client has a single QoS, we can set it either as the qos
+        // of the publisher or subscriber, as they match.
+        get_readwrite_qos(info->client.pub->enth, qos);
+        return RMW_RET_OK;
+      } else {
+        RMW_SET_ERROR_MSG("client's publisher QoS does not match client's subscription QoS");
+        return RMW_RET_ERROR;
+      }
+    }
+  }
+
+  RMW_SET_ERROR_MSG("failed to get client's QoS");
+  return RMW_RET_ERROR;
+}
+
+extern "C" rmw_ret_t rmw_service_get_actual_qos(
+  const rmw_service_t * service,
+  rmw_qos_profile_t * qos)
+{
+  RMW_CHECK_ARGUMENT_FOR_NULL(service, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(qos, RMW_RET_INVALID_ARGUMENT);
+
+  auto info = static_cast<CddsService *>(service->data);
+
+  rmw_qos_profile_t pub_qos = rmw_qos_profile_default;
+  rmw_qos_profile_t sub_qos = rmw_qos_profile_default;
+
+  // Check if the QoS of the service's pub/sub match
+  if (get_readwrite_qos(info->service.pub->enth, &pub_qos)) {
+    if (get_readwrite_qos(info->service.sub->enth, &sub_qos)) {
+      if (pub_qos.history == sub_qos.history &&
+        pub_qos.depth == sub_qos.depth &&
+        pub_qos.reliability == sub_qos.reliability &&
+        pub_qos.durability == sub_qos.durability &&
+        pub_qos.liveliness == sub_qos.liveliness &&
+        pub_qos.deadline.sec == sub_qos.deadline.sec &&
+        pub_qos.deadline.nsec == sub_qos.deadline.nsec &&
+        pub_qos.lifespan.sec == sub_qos.lifespan.sec &&
+        pub_qos.lifespan.nsec == sub_qos.lifespan.nsec &&
+        pub_qos.liveliness_lease_duration.sec == sub_qos.liveliness_lease_duration.sec &&
+        pub_qos.liveliness_lease_duration.nsec == sub_qos.liveliness_lease_duration.nsec)
+      {
+        // The service has a single QoS, we can set it either as the qos
+        // of the publisher or subscriber, as they match.
+        get_readwrite_qos(info->service.pub->enth, qos);
+        return RMW_RET_OK;
+      } else {
+        RMW_SET_ERROR_MSG("service's publisher QoS does not match service's subscription QoS");
+        return RMW_RET_ERROR;
+      }
+    }
+  }
+
+  RMW_SET_ERROR_MSG("failed to get service's QoS");
+  return RMW_RET_ERROR;
+}
