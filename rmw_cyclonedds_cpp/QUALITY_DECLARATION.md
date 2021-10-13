@@ -48,7 +48,7 @@ Following the recommended guidelines for ROS Core packages, all pull requests mu
 
 ### Continuous Integration [2.iv]
 
-All pull request must pass CI on all [tier 1 platforms](https://www.ros.org/reps/rep-2000.html#support-tiers).
+All pull requests must pass CI on all [tier 1 platforms](https://www.ros.org/reps/rep-2000.html#support-tiers).
 
 ### Documentation Policy [2.v]
 
@@ -88,7 +88,7 @@ The results of the test can be found [here](https://ci.ros2.org/view/nightly/job
 
 ### Feature Testing [4.i]
 
-All of `rmw_cyclonedds_cpp`'s public features are ROS middleware features.
+All of the `rmw_cyclonedds_cpp` public features are ROS middleware features.
 
 Unit, integration, and system tests higher up in the stack, such as those found in [`test_rmw_implementation`](https://github.com/ros2/rmw_implementation/tree/master/test_rmw_implementation), [`test_rclcpp`](https://github.com/ros2/system_tests/tree/master/test_rclcpp), and [`test_communication`](https://github.com/ros2/system_tests/tree/master/test_communication) packages, provide feature coverage.
 Nightly CI jobs in [`ci.ros2.org`](https://ci.ros2.org/) and [`build.ros2.org`](https://build.ros2.org/), where `rmw_cyclonedds_cpp` is the default `rmw` implementation, thoroughly exercise this middleware.
