@@ -5110,26 +5110,25 @@ extern "C" rmw_ret_t rmw_client_get_actual_qos(
   // Check if the QoS of the client's pub/sub match
   if (get_readwrite_qos(info->client.pub->enth, &pub_qos)) {
     if (get_readwrite_qos(info->client.sub->enth, &sub_qos)) {
-      if (pub_qos.history == sub_qos.history &&
-        pub_qos.depth == sub_qos.depth &&
-        pub_qos.reliability == sub_qos.reliability &&
-        pub_qos.durability == sub_qos.durability &&
-        pub_qos.liveliness == sub_qos.liveliness &&
-        pub_qos.deadline.sec == sub_qos.deadline.sec &&
-        pub_qos.deadline.nsec == sub_qos.deadline.nsec &&
-        pub_qos.lifespan.sec == sub_qos.lifespan.sec &&
-        pub_qos.lifespan.nsec == sub_qos.lifespan.nsec &&
-        pub_qos.liveliness_lease_duration.sec == sub_qos.liveliness_lease_duration.sec &&
-        pub_qos.liveliness_lease_duration.nsec == sub_qos.liveliness_lease_duration.nsec)
+      if (pub_qos.history != sub_qos.history ||
+        pub_qos.depth != sub_qos.depth ||
+        pub_qos.reliability != sub_qos.reliability ||
+        pub_qos.durability != sub_qos.durability ||
+        pub_qos.liveliness != sub_qos.liveliness ||
+        pub_qos.deadline.sec != sub_qos.deadline.sec ||
+        pub_qos.deadline.nsec != sub_qos.deadline.nsec ||
+        pub_qos.liveliness_lease_duration.sec != sub_qos.liveliness_lease_duration.sec ||
+        pub_qos.liveliness_lease_duration.nsec != sub_qos.liveliness_lease_duration.nsec ||
+        pub_qos.avoid_ros_namespace_conventions != sub_qos.avoid_ros_namespace_conventions)
       {
-        // The client has a single QoS, we can set it either as the qos
-        // of the publisher or subscriber, as they match.
-        get_readwrite_qos(info->client.pub->enth, qos);
-        return RMW_RET_OK;
-      } else {
+        // This situation can happen if we set system default settings for qos.
+        // As no qos is defined by the user, the dds han chose to assign one qos policy for the
+        // subscriber and a different for the publisher.
         RMW_SET_ERROR_MSG("client's publisher QoS does not match client's subscription QoS");
         return RMW_RET_ERROR;
       }
+      *qos = pub_qos;
+      return RMW_RET_OK;
     }
   }
 
@@ -5149,29 +5148,30 @@ extern "C" rmw_ret_t rmw_service_get_actual_qos(
   rmw_qos_profile_t pub_qos = rmw_qos_profile_default;
   rmw_qos_profile_t sub_qos = rmw_qos_profile_default;
 
-  // Check if the QoS of the service's pub/sub match
+  // Check if the QoS of the server's pub/sub match
+  // LifespanQosPolicy is a publisher-only policy, so don't take into
+  // acount in this comparison
   if (get_readwrite_qos(info->service.pub->enth, &pub_qos)) {
     if (get_readwrite_qos(info->service.sub->enth, &sub_qos)) {
-      if (pub_qos.history == sub_qos.history &&
-        pub_qos.depth == sub_qos.depth &&
-        pub_qos.reliability == sub_qos.reliability &&
-        pub_qos.durability == sub_qos.durability &&
-        pub_qos.liveliness == sub_qos.liveliness &&
-        pub_qos.deadline.sec == sub_qos.deadline.sec &&
-        pub_qos.deadline.nsec == sub_qos.deadline.nsec &&
-        pub_qos.lifespan.sec == sub_qos.lifespan.sec &&
-        pub_qos.lifespan.nsec == sub_qos.lifespan.nsec &&
-        pub_qos.liveliness_lease_duration.sec == sub_qos.liveliness_lease_duration.sec &&
-        pub_qos.liveliness_lease_duration.nsec == sub_qos.liveliness_lease_duration.nsec)
+      if (pub_qos.history != sub_qos.history ||
+        pub_qos.depth != sub_qos.depth ||
+        pub_qos.reliability != sub_qos.reliability ||
+        pub_qos.durability != sub_qos.durability ||
+        pub_qos.liveliness != sub_qos.liveliness ||
+        pub_qos.deadline.sec != sub_qos.deadline.sec ||
+        pub_qos.deadline.nsec != sub_qos.deadline.nsec ||
+        pub_qos.liveliness_lease_duration.sec != sub_qos.liveliness_lease_duration.sec ||
+        pub_qos.liveliness_lease_duration.nsec != sub_qos.liveliness_lease_duration.nsec ||
+        pub_qos.avoid_ros_namespace_conventions != sub_qos.avoid_ros_namespace_conventions)
       {
-        // The service has a single QoS, we can set it either as the qos
-        // of the publisher or subscriber, as they match.
-        get_readwrite_qos(info->service.pub->enth, qos);
-        return RMW_RET_OK;
-      } else {
-        RMW_SET_ERROR_MSG("service's publisher QoS does not match service's subscription QoS");
+        // This situation can happen if we set system default settings for qos.
+        // As no qos is defined by the user, the dds han chose to assign one qos policy for the
+        // subscriber and a different for the publisher.
+        RMW_SET_ERROR_MSG("server's publisher QoS does not match client's subscription QoS");
         return RMW_RET_ERROR;
       }
+      *qos = pub_qos;
+      return RMW_RET_OK;
     }
   }
 
