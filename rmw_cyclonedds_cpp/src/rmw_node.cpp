@@ -1117,8 +1117,9 @@ static void * init_and_alloc_sample(
   auto ice_hdr = static_cast<iceoryx_header_t *>(chunk_ptr);
   ice_hdr->data_size = sample_size;
   auto ptr = SHIFT_PAST_ICEORYX_HEADER(chunk_ptr);
-  // initialize the memory for message
-  rmw_cyclonedds_cpp::init_message(&entity->type_supports, ptr);
+  // Don't initialize the message memory, as this allocated memory will anyways be filled by the
+  // user and initializing the memory here just creates undesired performance hit with the
+  // zero-copy path
   return ptr;
 }
 
