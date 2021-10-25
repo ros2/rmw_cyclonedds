@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.0.0 (2021-10-25)
+------------------
 * Fix undesired memory initialization in zero-copy data path. (`#348 <https://github.com/ros2/rmw_cyclonedds/issues/348>`_)
 * Fix QoS depth settings for clients/service being ignored. (`#340 <https://github.com/ros2/rmw_cyclonedds/issues/340>`_)
 * Link to Cyclone DDS in Quality Declaration. (`#342 <https://github.com/ros2/rmw_cyclonedds/issues/342>`_)
