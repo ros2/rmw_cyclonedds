@@ -2,6 +2,13 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Fix undesired memory initialization in zero-copy data path. (`#348 <https://github.com/ros2/rmw_cyclonedds/issues/348>`_)
+* Fix QoS depth settings for clients/service being ignored. (`#340 <https://github.com/ros2/rmw_cyclonedds/issues/340>`_)
+* Link to Cyclone DDS in Quality Declaration. (`#342 <https://github.com/ros2/rmw_cyclonedds/issues/342>`_)
+* Contributors: Chen Lihui, Erik Boasson, Joe Speed, Sumanth Nirmal
+
 0.24.0 (2021-09-15)
 -------------------
 * Update rmw_context_impl_t definition (`#337 <https://github.com/ros2/rmw_cyclonedds/issues/337>`_)
