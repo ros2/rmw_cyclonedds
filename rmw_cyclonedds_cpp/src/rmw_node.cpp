@@ -3013,27 +3013,27 @@ extern "C" rmw_ret_t rmw_subscription_get_actual_qos(
   return RMW_RET_ERROR;
 }
 
-extern "C" rmw_ret_t rmw_subscription_set_cft_expression_parameters(
+extern "C" rmw_ret_t rmw_subscription_set_content_filter(
   rmw_subscription_t * subscription,
-  const rmw_subscription_content_filtered_topic_options_t * options)
+  const rmw_subscription_content_filter_options_t * options)
 {
   static_cast<void>(subscription);
   static_cast<void>(options);
 
-  RMW_SET_ERROR_MSG("rmw_subscription_set_cft_expression_parameters: unimplemented");
+  RMW_SET_ERROR_MSG("rmw_subscription_set_content_filter: unimplemented");
   return RMW_RET_UNSUPPORTED;
 }
 
-extern "C" rmw_ret_t rmw_subscription_get_cft_expression_parameters(
+extern "C" rmw_ret_t rmw_subscription_get_content_filter(
   const rmw_subscription_t * subscription,
   rcutils_allocator_t * allocator,
-  rmw_subscription_content_filtered_topic_options_t * options)
+  rmw_subscription_content_filter_options_t * options)
 {
   static_cast<void>(subscription);
   static_cast<void>(allocator);
   static_cast<void>(options);
 
-  RMW_SET_ERROR_MSG("rmw_subscription_get_cft_expression_parameters: unimplemented");
+  RMW_SET_ERROR_MSG("rmw_subscription_get_content_filter: unimplemented");
   return RMW_RET_UNSUPPORTED;
 }
 
