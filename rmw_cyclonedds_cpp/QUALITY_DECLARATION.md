@@ -2,7 +2,7 @@ This document is a declaration of software quality for the `rmw_cyclonedds_cpp` 
 
 # `rmw_cyclonedds_cpp` Quality Declaration
 
-The package `rmw_cyclonedds_cpp` claims to be in the **Quality Level 3** category.
+The package `rmw_cyclonedds_cpp` claims to be in the **Quality Level 2** category.
 
 Below are the rationales, notes, and caveats for this claim, organized by each requirement listed in the [Package Requirements for Quality Level 4 in REP-2004](https://www.ros.org/reps/rep-2004.html).
 
