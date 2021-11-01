@@ -6,6 +6,7 @@
   <description>Implement the ROS middleware interface using Eclipse CycloneDDS in C++.</description>
   <maintainer email="erik.boasson@adlinktech.com">Erik Boasson</maintainer>
   <maintainer email="ivanpauno@ekumenlabs.com">Ivan Paunovic</maintainer>
+  <maintainer email="michel@ekumenlabs.com">Michel Hidalgo</maintainer>
   <license>Apache License 2.0</license>
 
   <buildtool_depend>ament_cmake_ros</buildtool_depend>
