@@ -5096,8 +5096,8 @@ extern "C" rmw_ret_t rmw_qos_profile_check_compatible(
 }
 
 extern "C" rmw_ret_t rmw_client_request_publisher_get_actual_qos(
-    const rmw_client_t * client,
-    rmw_qos_profile_t * qos)
+  const rmw_client_t * client,
+  rmw_qos_profile_t * qos)
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(client, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_ARGUMENT_FOR_NULL(qos, RMW_RET_INVALID_ARGUMENT);
@@ -5113,8 +5113,8 @@ extern "C" rmw_ret_t rmw_client_request_publisher_get_actual_qos(
 }
 
 extern "C" rmw_ret_t rmw_client_response_subscription_get_actual_qos(
-    const rmw_client_t * client,
-    rmw_qos_profile_t * qos)
+  const rmw_client_t * client,
+  rmw_qos_profile_t * qos)
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(client, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_ARGUMENT_FOR_NULL(qos, RMW_RET_INVALID_ARGUMENT);
