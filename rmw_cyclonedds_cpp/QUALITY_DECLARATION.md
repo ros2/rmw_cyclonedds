@@ -2,7 +2,7 @@ This document is a declaration of software quality for the `rmw_cyclonedds_cpp` 
 
 # `rmw_cyclonedds_cpp` Quality Declaration
 
-The package `rmw_cyclonedds_cpp` claims to be in the **Quality Level 4** category.
+The package `rmw_cyclonedds_cpp` claims to be in the **Quality Level 3** category.
 
 Below are the rationales, notes, and caveats for this claim, organized by each requirement listed in the [Package Requirements for Quality Level 4 in REP-2004](https://www.ros.org/reps/rep-2004.html).
 
@@ -14,7 +14,7 @@ Below are the rationales, notes, and caveats for this claim, organized by each r
 
 ### Version Stability [1.ii]
 
-`rmw_cyclonedds_cpp` is not yet at a stable version, i.e. `< 1.0.0`.
+`rmw_cyclonedds_cpp` is at a stable version, i.e. `>= 1.0.0`.
 The current version can be found in its [package.xml](package.xml), and its change history can be found in its [CHANGELOG](CHANGELOG.rst).
 
 ### Public API Declaration [1.iii]
