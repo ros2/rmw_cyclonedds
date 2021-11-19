@@ -2,6 +2,13 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Add client/service QoS getters. (`#343 <https://github.com/ros2/rmw_cyclonedds/issues/343>`_)
+* Updated version number and quality level. (`#349 <https://github.com/ros2/rmw_cyclonedds/issues/349>`_)
+* Update package maintainers. (`#351 <https://github.com/ros2/rmw_cyclonedds/issues/351>`_)
+* Contributors: Joe Speed, Michel Hidalgo, mauropasse
+
 1.0.0 (2021-10-25)
 ------------------
 * Fix undesired memory initialization in zero-copy data path. (`#348 <https://github.com/ros2/rmw_cyclonedds/issues/348>`_)
