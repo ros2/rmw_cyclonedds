@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.1.0 (2021-11-19)
+------------------
 * Add client/service QoS getters. (`#343 <https://github.com/ros2/rmw_cyclonedds/issues/343>`_)
 * Updated version number and quality level. (`#349 <https://github.com/ros2/rmw_cyclonedds/issues/349>`_)
 * Update package maintainers. (`#351 <https://github.com/ros2/rmw_cyclonedds/issues/351>`_)
