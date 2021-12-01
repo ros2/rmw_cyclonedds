@@ -1437,10 +1437,9 @@ extern "C" rmw_ret_t rmw_destroy_node(rmw_node_t * node)
   }
 
   rmw_context_t * context = node->context;
-  rcutils_allocator_t allocator = context->options.allocator;
-  allocator.deallocate(const_cast<char *>(node->name), allocator.state);
-  allocator.deallocate(const_cast<char *>(node->namespace_), allocator.state);
-  allocator.deallocate(node, allocator.state);
+  rmw_free(const_cast<char *>(node->name));
+  rmw_free(const_cast<char *>(node->namespace_));
+  rmw_node_free(const_cast<rmw_node_t *>(node));
   delete node_impl;
   context->impl->fini();
   return result_ret;
