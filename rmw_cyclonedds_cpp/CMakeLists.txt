@@ -33,7 +33,16 @@ find_package(tracetools REQUIRED)
 
 #find_package(cyclonedds_cmake_module REQUIRED)
 find_package(CycloneDDS QUIET CONFIG)
-if(NOT CycloneDDS_FOUND)
+if(CycloneDDS_FOUND)
+  # Support for shared memory in RMW depends on support for shared memory being compiled in
+  # Cyclone DDS and iceoryx_binding_c being available
+  get_target_property(cyclonedds_has_shm CycloneDDS::ddsc SHM_SUPPORT_IS_AVAILABLE)
+  if(cyclonedds_has_shm)
+    find_package(iceoryx_binding_c REQUIRED)
+  else()
+    message(STATUS "Cyclone DDS is NOT compiled with support for shared memory")
+  endif()
+else()
   message(WARNING "Could not find Eclipse Cyclone DDS - skipping '${PROJECT_NAME}'")
   ament_package()
   return()
@@ -68,6 +77,10 @@ add_library(rmw_cyclonedds_cpp
 
 target_link_libraries(rmw_cyclonedds_cpp PRIVATE
   CycloneDDS::ddsc)
+
+if(cyclonedds_has_shm)
+  target_link_libraries(rmw_cyclonedds_cpp PRIVATE iceoryx_binding_c::iceoryx_binding_c)
+endif()
 
 target_link_libraries(rmw_cyclonedds_cpp PUBLIC
   rmw::rmw)

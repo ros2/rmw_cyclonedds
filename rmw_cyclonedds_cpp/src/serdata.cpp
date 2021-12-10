@@ -164,7 +164,14 @@ static uint32_t serdata_rmw_size(const struct ddsi_serdata * dcmn)
 
 static void serdata_rmw_free(struct ddsi_serdata * dcmn)
 {
-  auto * d = static_cast<const serdata_rmw *>(dcmn);
+  auto * d = static_cast<serdata_rmw *>(dcmn);
+
+#ifdef DDS_HAS_SHM
+  if (d->iox_chunk && d->iox_subscriber) {
+    iox_sub_release_chunk(*static_cast<iox_sub_t *>(d->iox_subscriber), d->iox_chunk);
+    d->iox_chunk = nullptr;
+  }
+#endif
   delete d;
 }
 

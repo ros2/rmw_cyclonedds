@@ -24,6 +24,9 @@
 #include "dds/ddsi/ddsi_serdata.h"
 #ifdef DDS_HAS_SHM
 #include "dds/ddsi/q_xmsg.h"
+extern "C" {
+#include "dds/ddsi/shm_sync.h"
+}
 #endif  // DDS_HAS_SHM
 
 #if !DDS_HAS_DDSI_SERTYPE
