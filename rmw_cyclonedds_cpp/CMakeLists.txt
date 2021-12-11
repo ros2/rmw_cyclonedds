@@ -66,9 +66,19 @@ add_library(rmw_cyclonedds_cpp
   src/TypeSupport2.cpp
   src/TypeSupport.cpp)
 
-target_link_libraries(rmw_cyclonedds_cpp
-  CycloneDDS::ddsc
-)
+target_link_libraries(rmw_cyclonedds_cpp PRIVATE
+  CycloneDDS::ddsc)
+
+target_link_libraries(rmw_cyclonedds_cpp PUBLIC
+  rcutils::rcutils
+  rcpputils::rcpputils
+  rosidl_typesupport_introspection_c::rosidl_typesupport_introspection_c
+  rosidl_typesupport_introspection_cpp::rosidl_typesupport_introspection_cpp
+  rmw::rmw
+  ${rmw_dds_common_TARGETS}
+  rosidl_runtime_c::rosidl_runtime_c
+  tracetools::tracetools)
+
 if(CMAKE_GENERATOR_PLATFORM)
   set(TARGET_ARCH "${CMAKE_GENERATOR_PLATFORM}")
 else()
@@ -77,20 +87,8 @@ endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX AND TARGET_ARCH MATCHES "^(riscv|RISCV)64$")
   # using GCC, libatomic is not automatically linked for RISC-V
-  target_link_libraries(rmw_cyclonedds_cpp -latomic)
+  target_link_libraries(rmw_cyclonedds_cpp PUBLIC -latomic)
 endif()
-
-
-ament_target_dependencies(rmw_cyclonedds_cpp
-  "rcutils"
-  "rcpputils"
-  "rosidl_typesupport_introspection_c"
-  "rosidl_typesupport_introspection_cpp"
-  "rmw"
-  "rmw_dds_common"
-  "rosidl_runtime_c"
-  "tracetools"
-)
 
 configure_rmw_library(rmw_cyclonedds_cpp)
 
@@ -101,7 +99,7 @@ target_compile_definitions(${PROJECT_NAME}
     RMW_VERSION_PATCH=${rmw_VERSION_PATCH}
 )
 
-ament_export_libraries(rmw_cyclonedds_cpp)
+ament_export_targets(export_rmw_cyclonedds_cpp)
 
 register_rmw_implementation(
   "c:rosidl_typesupport_c:rosidl_typesupport_introspection_c"
@@ -116,6 +114,7 @@ ament_package()
 
 install(
   TARGETS rmw_cyclonedds_cpp
+  EXPORT export_rmw_cyclonedds_cpp
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
