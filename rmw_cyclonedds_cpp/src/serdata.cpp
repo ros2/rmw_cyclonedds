@@ -544,10 +544,11 @@ bool sertype_rmw_equal(
 uint32_t sertype_rmw_hash(const struct ddsi_sertype * tpcmn)
 {
   const struct sertype_rmw * tp = static_cast<const struct sertype_rmw *>(tpcmn);
-  uint32_t h2 = static_cast<uint32_t>(std::hash<bool>{} (tp->is_request_header));
+  uint32_t h2 = static_cast<uint32_t>(std::hash<bool>{}(tp->is_request_header));
   uint32_t h1 =
-    static_cast<uint32_t>(std::hash<std::string>{} (std::string(
-      tp->type_support.typesupport_identifier_)));
+    static_cast<uint32_t>(std::hash<std::string>{}(
+      std::string(
+        tp->type_support.typesupport_identifier_)));
   return h1 ^ h2;
 }
 
