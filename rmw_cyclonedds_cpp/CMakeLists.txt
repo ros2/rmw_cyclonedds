@@ -70,11 +70,12 @@ target_link_libraries(rmw_cyclonedds_cpp PRIVATE
   CycloneDDS::ddsc)
 
 target_link_libraries(rmw_cyclonedds_cpp PUBLIC
+  rmw::rmw)
+target_link_libraries(rmw_cyclonedds_cpp PRIVATE
   rcutils::rcutils
   rcpputils::rcpputils
   rosidl_typesupport_introspection_c::rosidl_typesupport_introspection_c
   rosidl_typesupport_introspection_cpp::rosidl_typesupport_introspection_cpp
-  rmw::rmw
   ${rmw_dds_common_TARGETS}
   rosidl_runtime_c::rosidl_runtime_c
   tracetools::tracetools)
