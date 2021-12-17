@@ -2,6 +2,14 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Updates for uncrustify 0.72 (`#358 <https://github.com/ros2/rmw_cyclonedds/issues/358>`_)
+* Export only rmw::rmw to downstream targets (`#360 <https://github.com/ros2/rmw_cyclonedds/issues/360>`_)
+* Export modern CMake targets (`#357 <https://github.com/ros2/rmw_cyclonedds/issues/357>`_)
+* Free with the same allocator in rmw_destroy_node (`#355 <https://github.com/ros2/rmw_cyclonedds/issues/355>`_)
+* Contributors: Chris Lalancette, Jacob Perron, Shane Loretz
+
 1.1.0 (2021-11-19)
 ------------------
 * Add client/service QoS getters. (`#343 <https://github.com/ros2/rmw_cyclonedds/issues/343>`_)
