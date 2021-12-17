@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.1.1 (2021-12-17)
+------------------
 * Updates for uncrustify 0.72 (`#358 <https://github.com/ros2/rmw_cyclonedds/issues/358>`_)
 * Export only rmw::rmw to downstream targets (`#360 <https://github.com/ros2/rmw_cyclonedds/issues/360>`_)
 * Export modern CMake targets (`#357 <https://github.com/ros2/rmw_cyclonedds/issues/357>`_)
