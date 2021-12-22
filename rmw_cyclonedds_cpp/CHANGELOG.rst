@@ -2,6 +2,12 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.22.4 (2021-12-22)
+-------------------
+* Fix use of deprecated is_loan_available (`#359 <https://github.com/ros2/rmw_cyclonedds/issues/359>`_)
+* rmw_cyclonedds_cpp/CMakeLists.txt: add -latomic for RISC-V (`#334 <https://github.com/ros2/rmw_cyclonedds/issues/334>`_)
+* Contributors: eboasson, guillaume-pais-siemens
+
 0.22.3 (2021-06-17)
 -------------------
 * Update Galactic to support zero-copy. (`#321 <https://github.com/ros2/rmw_cyclonedds/issues/321>`_)
