@@ -268,7 +268,8 @@ struct CddsDomain
   {}
 };
 
-struct rmw_context_impl_t
+// Definition of struct rmw_context_impl_s as declared in rmw/init.h
+struct rmw_context_impl_s
 {
   rmw_dds_common::Context common;
   dds_domainid_t domain_id;
@@ -295,7 +296,7 @@ struct rmw_context_impl_t
      (protected by initialization_mutex) */
   uint32_t client_service_id;
 
-  rmw_context_impl_t()
+  rmw_context_impl_s()
   : common(), domain_id(UINT32_MAX), ppant(0), client_service_id(0)
   {
     /* destructor relies on these being initialized properly */
@@ -314,7 +315,7 @@ struct rmw_context_impl_t
   rmw_ret_t
   fini();
 
-  ~rmw_context_impl_t()
+  ~rmw_context_impl_s()
   {
     if (0u != this->node_count) {
       RCUTILS_SAFE_FWRITE_TO_STDERR(
@@ -1155,7 +1156,7 @@ rmw_ret_t configure_qos_for_security(
 }
 
 rmw_ret_t
-rmw_context_impl_t::init(rmw_init_options_t * options, size_t domain_id)
+rmw_context_impl_s::init(rmw_init_options_t * options, size_t domain_id)
 {
   std::lock_guard<std::mutex> guard(initialization_mutex);
   if (0u != this->node_count) {
@@ -1338,7 +1339,7 @@ rmw_context_impl_t::clean_up()
 }
 
 rmw_ret_t
-rmw_context_impl_t::fini()
+rmw_context_impl_s::fini()
 {
   std::lock_guard<std::mutex> guard(initialization_mutex);
   if (0u != --this->node_count) {
@@ -1379,8 +1380,9 @@ static void * init_and_alloc_sample(
   auto ice_hdr = static_cast<iceoryx_header_t *>(chunk_ptr);
   ice_hdr->data_size = sample_size;
   auto ptr = SHIFT_PAST_ICEORYX_HEADER(chunk_ptr);
-  // initialize the memory for message
-  rmw_cyclonedds_cpp::init_message(&entity->type_supports, ptr);
+  // Don't initialize the message memory, as this allocated memory will anyways be filled by the
+  // user and initializing the memory here just creates undesired performance hit with the
+  // zero-copy path
   return ptr;
 }
 
@@ -1630,10 +1632,9 @@ extern "C" rmw_ret_t rmw_destroy_node(rmw_node_t * node)
   }
 
   rmw_context_t * context = node->context;
-  rcutils_allocator_t allocator = context->options.allocator;
-  allocator.deallocate(const_cast<char *>(node->name), allocator.state);
-  allocator.deallocate(const_cast<char *>(node->namespace_), allocator.state);
-  allocator.deallocate(node, allocator.state);
+  rmw_free(const_cast<char *>(node->name));
+  rmw_free(const_cast<char *>(node->namespace_));
+  rmw_node_free(const_cast<rmw_node_t *>(node));
   delete node_impl;
   context->impl->fini();
   return result_ret;
@@ -2292,7 +2293,7 @@ static CddsPublisher * create_cdds_publisher(
   pub->type_supports = *type_supports;
   pub->is_loaning_available =
 #ifdef DDS_HAS_SHM
-    is_fixed_type && is_loan_available(pub->enth);
+    is_fixed_type && dds_is_loan_available(pub->enth);
 #else
     false;
 #endif  // DDS_HAS_SHM
@@ -2799,7 +2800,7 @@ static CddsSubscription * create_cdds_subscription(
   sub->type_supports = *type_support;
   sub->is_loaning_available =
 #ifdef DDS_HAS_SHM
-    is_fixed_type && is_loan_available(sub->enth);
+    is_fixed_type && dds_is_loan_available(sub->enth);
 #else
     false;
 #endif  // DDS_HAS_SHM
@@ -4573,10 +4574,6 @@ static rmw_ret_t rmw_init_cs(
   if ((qos = create_readwrite_qos(qos_policies, false)) == nullptr) {
     goto fail_qos;
   }
-  dds_reset_qos(qos);
-
-  dds_qset_reliability(qos, DDS_RELIABILITY_RELIABLE, DDS_SECS(1));
-  dds_qset_history(qos, DDS_HISTORY_KEEP_ALL, DDS_LENGTH_UNLIMITED);
 
   // store a unique identifier for this client/service in the user
   // data of the reader and writer so that we can always determine
@@ -5367,4 +5364,72 @@ extern "C" rmw_ret_t rmw_qos_profile_check_compatible(
 {
   return rmw_dds_common::qos_profile_check_compatible(
     publisher_profile, subscription_profile, compatibility, reason, reason_size);
+}
+
+extern "C" rmw_ret_t rmw_client_request_publisher_get_actual_qos(
+  const rmw_client_t * client,
+  rmw_qos_profile_t * qos)
+{
+  RMW_CHECK_ARGUMENT_FOR_NULL(client, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(qos, RMW_RET_INVALID_ARGUMENT);
+
+  auto cli = static_cast<CddsClient *>(client->data);
+
+  if (get_readwrite_qos(cli->client.pub->enth, qos)) {
+    return RMW_RET_OK;
+  }
+
+  RMW_SET_ERROR_MSG("failed to get client's request publisher QoS");
+  return RMW_RET_ERROR;
+}
+
+extern "C" rmw_ret_t rmw_client_response_subscription_get_actual_qos(
+  const rmw_client_t * client,
+  rmw_qos_profile_t * qos)
+{
+  RMW_CHECK_ARGUMENT_FOR_NULL(client, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(qos, RMW_RET_INVALID_ARGUMENT);
+
+  auto cli = static_cast<CddsClient *>(client->data);
+
+  if (get_readwrite_qos(cli->client.sub->enth, qos)) {
+    return RMW_RET_OK;
+  }
+
+  RMW_SET_ERROR_MSG("failed to get client's response subscription QoS");
+  return RMW_RET_ERROR;
+}
+
+extern "C" rmw_ret_t rmw_service_response_publisher_get_actual_qos(
+  const rmw_service_t * service,
+  rmw_qos_profile_t * qos)
+{
+  RMW_CHECK_ARGUMENT_FOR_NULL(service, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(qos, RMW_RET_INVALID_ARGUMENT);
+
+  auto srv = static_cast<CddsService *>(service->data);
+
+  if (get_readwrite_qos(srv->service.pub->enth, qos)) {
+    return RMW_RET_OK;
+  }
+
+  RMW_SET_ERROR_MSG("failed to get service's response publisher QoS");
+  return RMW_RET_ERROR;
+}
+
+extern "C" rmw_ret_t rmw_service_request_subscription_get_actual_qos(
+  const rmw_service_t * service,
+  rmw_qos_profile_t * qos)
+{
+  RMW_CHECK_ARGUMENT_FOR_NULL(service, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(qos, RMW_RET_INVALID_ARGUMENT);
+
+  auto srv = static_cast<CddsService *>(service->data);
+
+  if (get_readwrite_qos(srv->service.sub->enth, qos)) {
+    return RMW_RET_OK;
+  }
+
+  RMW_SET_ERROR_MSG("failed to get service's request subscription QoS");
+  return RMW_RET_ERROR;
 }

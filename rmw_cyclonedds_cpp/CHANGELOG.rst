@@ -2,6 +2,39 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.1.1 (2021-12-17)
+------------------
+* Updates for uncrustify 0.72 (`#358 <https://github.com/ros2/rmw_cyclonedds/issues/358>`_)
+* Export only rmw::rmw to downstream targets (`#360 <https://github.com/ros2/rmw_cyclonedds/issues/360>`_)
+* Export modern CMake targets (`#357 <https://github.com/ros2/rmw_cyclonedds/issues/357>`_)
+* Free with the same allocator in rmw_destroy_node (`#355 <https://github.com/ros2/rmw_cyclonedds/issues/355>`_)
+* Contributors: Chris Lalancette, Jacob Perron, Shane Loretz
+
+1.1.0 (2021-11-19)
+------------------
+* Add client/service QoS getters. (`#343 <https://github.com/ros2/rmw_cyclonedds/issues/343>`_)
+* Updated version number and quality level. (`#349 <https://github.com/ros2/rmw_cyclonedds/issues/349>`_)
+* Update package maintainers. (`#351 <https://github.com/ros2/rmw_cyclonedds/issues/351>`_)
+* Contributors: Joe Speed, Michel Hidalgo, mauropasse
+
+1.0.0 (2021-10-25)
+------------------
+* Fix undesired memory initialization in zero-copy data path. (`#348 <https://github.com/ros2/rmw_cyclonedds/issues/348>`_)
+* Fix QoS depth settings for clients/service being ignored. (`#340 <https://github.com/ros2/rmw_cyclonedds/issues/340>`_)
+* Link to Cyclone DDS in Quality Declaration. (`#342 <https://github.com/ros2/rmw_cyclonedds/issues/342>`_)
+* Contributors: Chen Lihui, Erik Boasson, Joe Speed, Sumanth Nirmal
+
+0.24.0 (2021-09-15)
+-------------------
+* Update rmw_context_impl_t definition (`#337 <https://github.com/ros2/rmw_cyclonedds/issues/337>`_)
+* Add quality declaration for rmw_cyclonedds_cpp (`#335 <https://github.com/ros2/rmw_cyclonedds/issues/335>`_)
+* Fix use of deprecated is_loan_available (`#336 <https://github.com/ros2/rmw_cyclonedds/issues/336>`_)
+* Add -latomic for RISC-V (`#332 <https://github.com/ros2/rmw_cyclonedds/issues/332>`_)
+* Add pub/sub init, publish and take instrumentation using tracetools (`#329 <https://github.com/ros2/rmw_cyclonedds/issues/329>`_)
+* Pass the CRL down to CycloneDDS if it exists (`#325 <https://github.com/ros2/rmw_cyclonedds/issues/325>`_)
+* Use the new rmw_dds_common::get_security_files API (`#323 <https://github.com/ros2/rmw_cyclonedds/issues/323>`_)
+* Contributors: Chris Lalancette, Christophe Bedard, Michel Hidalgo, eboasson, guillaume-pais-siemens
+
 0.23.1 (2021-06-16)
 -------------------
 * Add rmw_publisher_wait_for_all_acked support. (`#294 <https://github.com/ros2/rmw_cyclonedds/issues/294>`_)

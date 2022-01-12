@@ -69,3 +69,7 @@ If building ROS 2 from source ([ros2.repos](https://github.com/ros2/ros2/blob/ma
     rosdep install --from src -i
     colcon build
     export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
+## Quality Declaration
+
+This package claims to be in the **Quality Level 4** category, see the [Quality Declaration](./rmw_cyclonedds_cpp/QUALITY_DECLARATION.md) for more details.

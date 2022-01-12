@@ -139,8 +139,8 @@ public:
     {
       size_t operator()(const CacheKey & k) const
       {
-        return std::hash<decltype(align)>{} (k.align) ^
-               ((std::hash<decltype(value_type)>{} (k.value_type)) << 1U);
+        return std::hash<decltype(align)>{}(k.align) ^
+               ((std::hash<decltype(value_type)>{}(k.value_type)) << 1U);
       }
     };
   };
