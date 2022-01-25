@@ -36,8 +36,8 @@ find_package(CycloneDDS QUIET CONFIG)
 if(CycloneDDS_FOUND)
   # Support for shared memory in RMW depends on support for shared memory being compiled in
   # Cyclone DDS and iceoryx_binding_c being available
-  get_target_property(cyclonedds_has_shm CycloneDDS::ddsc SHM_SUPPORT_IS_AVAILABLE)
-  if(cyclonedds_has_shm)
+  get_target_property(_cyclonedds_has_shm CycloneDDS::ddsc SHM_SUPPORT_IS_AVAILABLE)
+  if(_cyclonedds_has_shm)
     find_package(iceoryx_binding_c REQUIRED)
   else()
     message(STATUS "Cyclone DDS is NOT compiled with support for shared memory")
@@ -78,7 +78,7 @@ add_library(rmw_cyclonedds_cpp
 target_link_libraries(rmw_cyclonedds_cpp PRIVATE
   CycloneDDS::ddsc)
 
-if(cyclonedds_has_shm)
+if(_cyclonedds_has_shm)
   target_link_libraries(rmw_cyclonedds_cpp PRIVATE iceoryx_binding_c::iceoryx_binding_c)
 endif()
 
