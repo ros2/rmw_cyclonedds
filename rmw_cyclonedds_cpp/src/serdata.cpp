@@ -180,28 +180,33 @@ static struct ddsi_serdata * serdata_rmw_from_ser(
   enum ddsi_serdata_kind kind,
   const struct nn_rdata * fragchain, size_t size)
 {
-  auto d = std::make_unique<serdata_rmw>(type, kind);
-  uint32_t off = 0;
-  assert(fragchain->min == 0);
-  assert(fragchain->maxp1 >= off);    /* CDR header must be in first fragment */
-  d->resize(size);
+  try {
+    auto d = std::make_unique<serdata_rmw>(type, kind);
+    uint32_t off = 0;
+    assert(fragchain->min == 0);
+    assert(fragchain->maxp1 >= off);    /* CDR header must be in first fragment */
+    d->resize(size);
 
-  auto cursor = d->data();
-  while (fragchain) {
-    if (fragchain->maxp1 > off) {
-      /* only copy if this fragment adds data */
-      const unsigned char * payload =
-        NN_RMSG_PAYLOADOFF(fragchain->rmsg, NN_RDATA_PAYLOAD_OFF(fragchain));
-      auto src = payload + off - fragchain->min;
-      auto n_bytes = fragchain->maxp1 - off;
-      memcpy(cursor, src, n_bytes);
-      cursor = byte_offset(cursor, n_bytes);
-      off = fragchain->maxp1;
-      assert(off <= size);
+    auto cursor = d->data();
+    while (fragchain) {
+      if (fragchain->maxp1 > off) {
+        /* only copy if this fragment adds data */
+        const unsigned char * payload =
+          NN_RMSG_PAYLOADOFF(fragchain->rmsg, NN_RDATA_PAYLOAD_OFF(fragchain));
+        auto src = payload + off - fragchain->min;
+        auto n_bytes = fragchain->maxp1 - off;
+        memcpy(cursor, src, n_bytes);
+        cursor = byte_offset(cursor, n_bytes);
+        off = fragchain->maxp1;
+        assert(off <= size);
+      }
+      fragchain = fragchain->nextfrag;
     }
-    fragchain = fragchain->nextfrag;
+    return d.release();
+  } catch (std::exception & e) {
+    RMW_SET_ERROR_MSG(e.what());
+    return nullptr;
   }
-  return d.release();
 }
 
 static struct ddsi_serdata * serdata_rmw_from_ser_iov(
@@ -210,15 +215,20 @@ static struct ddsi_serdata * serdata_rmw_from_ser_iov(
   ddsrt_msg_iovlen_t niov, const ddsrt_iovec_t * iov,
   size_t size)
 {
-  auto d = std::make_unique<serdata_rmw>(type, kind);
-  d->resize(size);
+  try {
+    auto d = std::make_unique<serdata_rmw>(type, kind);
+    d->resize(size);
 
-  auto cursor = d->data();
-  for (ddsrt_msg_iovlen_t i = 0; i < niov; i++) {
-    memcpy(cursor, iov[i].iov_base, iov[i].iov_len);
-    cursor = byte_offset(cursor, iov[i].iov_len);
+    auto cursor = d->data();
+    for (ddsrt_msg_iovlen_t i = 0; i < niov; i++) {
+      memcpy(cursor, iov[i].iov_base, iov[i].iov_len);
+      cursor = byte_offset(cursor, iov[i].iov_len);
+    }
+    return d.release();
+  } catch (std::exception & e) {
+    RMW_SET_ERROR_MSG(e.what());
+    return nullptr;
   }
-  return d.release();
 }
 
 static struct ddsi_serdata * serdata_rmw_from_keyhash(
@@ -251,11 +261,16 @@ static struct ddsi_serdata * serdata_rmw_from_iox(
   const struct ddsi_sertype * typecmn,
   enum  ddsi_serdata_kind kind, void * sub, void * iox_buffer)
 {
-  const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(typecmn);
-  auto d = std::make_unique<serdata_rmw>(type, kind);
-  d->iox_chunk = iox_buffer;
-  d->iox_subscriber = sub;
-  return d.release();
+  try {
+    const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(typecmn);
+    auto d = std::make_unique<serdata_rmw>(type, kind);
+    d->iox_chunk = iox_buffer;
+    d->iox_subscriber = sub;
+    return d.release();
+  } catch (std::exception & e) {
+    RMW_SET_ERROR_MSG(e.what());
+    return nullptr;
+  }
 }
 #endif  // DDS_HAS_SHM
 
