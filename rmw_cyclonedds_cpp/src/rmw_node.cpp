@@ -1583,6 +1583,8 @@ extern "C" rmw_ret_t rmw_publish_serialized_message(
     RET_NULL_X(sample_ptr, return RMW_RET_ERROR);
     if (rmw_deserialize(serialized_message, &pub->type_supports, sample_ptr) != RMW_RET_OK) {
       RMW_SET_ERROR_MSG("Failed to deserialize sample into loaned memory");
+      fini_and_free_sample(pub, sample_ptr);
+      ddsi_serdata_unref(d);
       return RMW_RET_ERROR;
     }
     d->iox_chunk = SHIFT_BACK_TO_ICEORYX_HEADER(sample_ptr);
@@ -1619,12 +1621,14 @@ static rmw_ret_t publish_loaned_int(
 
   // if the publisher allow loaning
   if (cdds_publisher->is_loaning_available) {
-    auto d = std::make_unique<serdata_rmw>(cdds_publisher->sertype, ddsi_serdata_kind::SDK_DATA);
+    auto d = new serdata_rmw(cdds_publisher->sertype, ddsi_serdata_kind::SDK_DATA);
     d->iox_chunk = SHIFT_BACK_TO_ICEORYX_HEADER(ros_message);
-    if (dds_writecdr(cdds_publisher->enth, d.release()) >= 0) {
+    if (dds_writecdr(cdds_publisher->enth, d) >= 0) {
       return RMW_RET_OK;
     } else {
       RMW_SET_ERROR_MSG("Failed to publish data");
+      fini_and_free_sample(cdds_publisher, ros_message);
+      ddsi_serdata_unref(d);
       return RMW_RET_ERROR;
     }
   } else {
