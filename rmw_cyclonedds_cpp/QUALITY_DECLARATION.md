@@ -137,8 +137,8 @@ Results of the nightly linter tests can be found [here](https://ci.ros2.org/view
 * `rmw_dds_common`: [QUALITY DECLARATION](https://github.com/ros2/rmw_dds_common/blob/master/rmw_dds_common/QUALITY_DECLARATION.md)
 * `rosidl_runtime_c`: [QUALITY DECLARATION](https://github.com/ros2/rosidl/blob/master/rosidl_runtime_c/QUALITY_DECLARATION.md)
 * `rosidl_runtime_cpp`: [QUALITY DECLARATION](https://github.com/ros2/rosidl/blob/master/rosidl_runtime_cpp/QUALITY_DECLARATION.md)
-* `rosidl_typesupport_introspection_c`: no quality declaration
-* `rosidl_typesupport_introspection_cpp`: no quality declaration
+* `rosidl_typesupport_introspection_c`: [QUALITY DECLARATION](https://github.com/ros2/rosidl/blob/master/rosidl_typesupport_introspection_c/QUALITY_DECLARATION.md)
+* `rosidl_typesupport_introspection_cpp`: [QUALITY DECLARATION](https://github.com/ros2/rosidl/blob/master/rosidl_typesupport_introspection_cpp/QUALITY_DECLARATION.md)
 * `tracetools`: [QUALITY DECLARATION](https://gitlab.com/ros-tracing/ros2_tracing/-/blob/master/tracetools/QUALITY_DECLARATION.md)
 
 It has several "buildtool" dependencies, which do not affect the resulting quality of the package, because they do not contribute to the public library API.
@@ -201,7 +201,7 @@ The chart below compares the requirements in the REP-2004 with the current state
 |4.v.a| Code style enforcement (linters)| ✓ |
 |4.v.b| Use of static analysis tools | ✓ |
 |5| **Dependencies** | --- |
-|5.i| Must not have ROS lower level dependencies | x |
+|5.i| Must not have ROS lower level dependencies | ✓ |
 |5.ii| Optional ROS lower level dependencies| ✓ |
 |5.iii| Justifies quality use of non-ROS dependencies | ✓ |
 |6| **Platform support** | --- |
