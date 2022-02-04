@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.7.8 (2022-02-04)
+------------------
+* Free with the same allocator in rmw_destroy_node (`#355 <https://github.com/ros2/rmw_cyclonedds/issues/355>`_) (`#369 <https://github.com/ros2/rmw_cyclonedds/issues/369>`_)
+* Contributors: Jacob Perron
+
 0.7.7 (2021-08-31)
 ------------------
 * Add -latomic for RISC-V (`#332 <https://github.com/ros2/rmw_cyclonedds/issues/332>`_) (`#333 <https://github.com/ros2/rmw_cyclonedds/issues/333>`_)
