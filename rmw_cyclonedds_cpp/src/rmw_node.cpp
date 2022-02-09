@@ -1834,22 +1834,20 @@ extern "C" rmw_ret_t rmw_publish_serialized_message(
     serialized_message, "serialized message handle is null",
     return RMW_RET_INVALID_ARGUMENT);
   auto pub = static_cast<CddsPublisher *>(publisher->data);
+
   struct ddsi_serdata * d = serdata_rmw_from_serialized_message(
     pub->sertype, serialized_message->buffer, serialized_message->buffer_length);
-#ifdef DDS_HAS_SHM
-  // publishing a serialized message when SHM is ON
-  if (pub->is_loaning_available) {
-    auto sample_ptr = init_and_alloc_sample(pub, d->type->iox_size);
+
+  // publishing a serialized message when SHM is available
+  // (the type need not necessarily be fixed)
+  if (dds_is_shared_memory_available(pub->enth)) {
+    auto sample_ptr = init_and_alloc_sample(pub, serialized_message->buffer_length);
     RET_NULL_X(sample_ptr, return RMW_RET_ERROR);
-    if (rmw_deserialize(serialized_message, &pub->type_supports, sample_ptr) != RMW_RET_OK) {
-      RMW_SET_ERROR_MSG("Failed to deserialize sample into loaned memory");
-      fini_and_free_sample(pub, sample_ptr);
-      ddsi_serdata_unref(d);
-      return RMW_RET_ERROR;
-    }
-    d->iox_chunk = SHIFT_BACK_TO_ICEORYX_HEADER(sample_ptr);
+    memcpy(sample_ptr, serialized_message->buffer, serialized_message->buffer_length);
+    shm_set_data_state(sample_ptr, IOX_CHUNK_CONTAINS_SERIALIZED_DATA);
+    d->iox_chunk = sample_ptr;
   }
-#endif
+
   const bool ok = (dds_writecdr(pub->enth, d) >= 0);
   return ok ? RMW_RET_OK : RMW_RET_ERROR;
 }
