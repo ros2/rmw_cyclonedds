@@ -582,6 +582,49 @@ uint32_t sertype_rmw_hash(const struct ddsi_sertype * tpcmn)
   return h1 ^ h2;
 }
 
+size_t sertype_get_serialized_size(const struct ddsi_sertype * d, const void * sample)
+{
+  const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(d);
+  try {
+    // ROS 2 doesn't do keys, so its all data (?)
+    if (!type->is_request_header) {
+      return type->cdr_writer->get_serialized_size(sample);
+    } else {
+      // inject the service invocation header data into the CDR stream
+      auto wrap = *static_cast<const cdds_request_wrapper_t *>(sample);
+      return type->cdr_writer->get_serialized_size(wrap);
+    }
+  } catch (std::exception & e) {
+    RMW_SET_ERROR_MSG(e.what());
+  }
+}
+
+bool sertype_serialize_into(
+  const struct ddsi_sertype * d,
+  const void * sample,
+  void * dst_buffer,
+  size_t dst_size)
+{
+  const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(d);
+  try {
+    // ignore destination size (assuming that the destination buffer is resized before correctly)
+    static_cast<void>(dst_size);
+    // ROS 2 doesn't support keys, so its all data (?)
+    if (!type->is_request_header) {
+      type->cdr_writer->serialize(dst_buffer, sample);
+    } else {
+      /* inject the service invocation header data into the CDR stream --
+       * I haven't checked how it is done in the official RMW implementations, so it is
+       * probably incompatible. */
+      auto wrap = *static_cast<const cdds_request_wrapper_t *>(sample);
+      type->cdr_writer->serialize(dst_buffer, wrap);
+    }
+  } catch (std::exception & e) {
+    RMW_SET_ERROR_MSG(e.what());
+  }
+  return true;
+}
+
 static const struct ddsi_sertype_ops sertype_rmw_ops = {
 #if DDS_HAS_DDSI_SERTYPE
   ddsi_sertype_v0,
@@ -599,7 +642,8 @@ static const struct ddsi_sertype_ops sertype_rmw_ops = {
   nullptr,
   nullptr,
   nullptr,
-  nullptr
+  sertype_get_serialized_size,
+  sertype_serialize_into
 #endif
 };
 

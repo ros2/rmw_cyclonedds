@@ -25,7 +25,7 @@
 #ifdef DDS_HAS_SHM
 #include "dds/ddsi/q_xmsg.h"
 extern "C" {
-#include "dds/ddsi/shm_sync.h"
+#include "dds/ddsi/ddsi_shm_transport.h"
 }
 #endif  // DDS_HAS_SHM
 
