@@ -4117,15 +4117,15 @@ static rmw_ret_t get_matched_endpoints(
   if ((ret = fn(h, res.data(), res.size())) < 0) {
     return RMW_RET_ERROR;
   }
-  while ((size_t) ret >= res.size()) {
+  while (static_cast<size_t>(ret) >= res.size()) {
     // 128 is a completely arbitrary margin to reduce the risk of having to retry
     // when matches are create/deleted in parallel
-    res.resize((size_t) ret + 128);
+    res.resize(static_cast<size_t>(ret) + 128);
     if ((ret = fn(h, res.data(), res.size())) < 0) {
       return RMW_RET_ERROR;
     }
   }
-  res.resize((size_t) ret);
+  res.resize(static_cast<size_t>(ret));
   return RMW_RET_OK;
 }
 

@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.1.2 (2022-01-14)
+------------------
+* Fix cpplint errors (`#363 <https://github.com/ros2/rmw_cyclonedds/issues/363>`_)
+* Contributors: Jacob Perron
+
 1.1.1 (2021-12-17)
 ------------------
 * Updates for uncrustify 0.72 (`#358 <https://github.com/ros2/rmw_cyclonedds/issues/358>`_)
