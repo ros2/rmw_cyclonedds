@@ -3359,7 +3359,30 @@ static rmw_ret_t rmw_take_loan_int(
           sizeof(info.publication_handle));
       }
       if (d->iox_chunk != nullptr) {
-        *loaned_message = SHIFT_PAST_ICEORYX_HEADER(d->iox_chunk);
+        // the iox chunk has data, based on the kind of the data return the data accordingly to
+        // the user
+        auto iox_header = iceoryx_header_from_chunk(d->iox_chunk);
+        // if the iox chunk has the data in serialized form
+        if (iox_header->shm_data_state == IOX_CHUNK_CONTAINS_SERIALIZED_DATA) {
+          rmw_serialized_message_t ser_msg;
+          ser_msg.buffer_length = iox_header->data_size;
+          ser_msg.buffer = static_cast<uint8_t *>(d->iox_chunk);
+          if (rmw_deserialize(&ser_msg, &cdds_subscription->type_supports, *loaned_message) !=
+            RMW_RET_OK)
+          {
+            RMW_SET_ERROR_MSG("Failed to deserialize sample from loaned memory");
+            ddsi_serdata_unref(d);
+            *taken = false;
+            return RMW_RET_ERROR;
+          }
+        } else if (iox_header->shm_data_state == IOX_CHUNK_CONTAINS_RAW_DATA) {
+          *loaned_message = d->iox_chunk;
+        } else {
+          RMW_SET_ERROR_MSG("Received iox chunk is uninitialized");
+          ddsi_serdata_unref(d);
+          *taken = false;
+          return RMW_RET_ERROR;
+        }
         *taken = true;
         // doesn't allocate, but initialise the allocator to free the chunk later when the loan
         // is returned
