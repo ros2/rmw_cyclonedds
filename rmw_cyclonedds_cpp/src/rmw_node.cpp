@@ -82,6 +82,7 @@
 
 #include "dds/dds.h"
 #include "dds/ddsc/dds_data_allocator.h"
+#include "dds/ddsc/dds_loan_api.h"
 #include "serdes.hpp"
 #include "serdata.hpp"
 #include "demangle.hpp"
@@ -1370,20 +1371,16 @@ static void * init_and_alloc_sample(
       return nullptr);
   }
   // allocate memory for message + header
-  auto chunk_ptr = dds_data_allocator_alloc(
-    &entity->data_allocator,
-    DETERMINE_ICEORYX_CHUNK_SIZE(sample_size));
+  // the header will be initialized and the chunk pointer will be returned
+  auto chunk_ptr = dds_data_allocator_alloc(&entity->data_allocator, sample_size);
   RMW_CHECK_FOR_NULL_WITH_MSG(
     chunk_ptr,
     "Failed to get loan",
     return nullptr);
-  auto ice_hdr = static_cast<iceoryx_header_t *>(chunk_ptr);
-  ice_hdr->data_size = sample_size;
-  auto ptr = SHIFT_PAST_ICEORYX_HEADER(chunk_ptr);
   // Don't initialize the message memory, as this allocated memory will anyways be filled by the
   // user and initializing the memory here just creates undesired performance hit with the
   // zero-copy path
-  return ptr;
+  return chunk_ptr;
 }
 
 template<typename entityT>
@@ -1395,7 +1392,7 @@ static rmw_ret_t fini_and_free_sample(entityT & entity, void * loaned_message)
   RET_EXPECTED(
     dds_data_allocator_free(
       &entity->data_allocator,
-      SHIFT_BACK_TO_ICEORYX_HEADER(loaned_message)),
+      loaned_message),
     DDS_RETCODE_OK,
     "Failed to free the loaned message",
     return RMW_RET_ERROR);
