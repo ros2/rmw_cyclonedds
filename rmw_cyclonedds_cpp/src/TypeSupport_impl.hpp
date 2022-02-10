@@ -21,6 +21,8 @@
 #include <string>
 #include <vector>
 
+#include "rmw/error_handling.h"
+
 #include "TypeSupport.hpp"
 #include "macros.hpp"
 #include "rmw/error_handling.h"
