@@ -383,9 +383,9 @@ private:
     if (n < 0) {
       **buf = 0;
       return false;
-    } else if ((size_t) n <= *bufsize) {
-      *buf += (size_t) n;
-      *bufsize -= (size_t) n;
+    } else if (static_cast<size_t>(n) <= *bufsize) {
+      *buf += static_cast<size_t>(n);
+      *bufsize -= static_cast<size_t>(n);
       return *bufsize > 0;
     } else {
       *buf += *bufsize;
