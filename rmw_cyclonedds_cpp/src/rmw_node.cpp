@@ -2794,7 +2794,7 @@ extern "C" rmw_ret_t rmw_destroy_subscription(rmw_node_t * node, rmw_subscriptio
     const auto cddssub = static_cast<const CddsSubscription *>(subscription->data);
     std::lock_guard<std::mutex> guard(common->node_update_mutex);
     rmw_dds_common::msg::ParticipantEntitiesInfo msg =
-      common->graph_cache.dissociate_writer(
+      common->graph_cache.dissociate_reader(
       cddssub->gid, common->gid, node->name,
       node->namespace_);
     ret = rmw_publish(common->pub, static_cast<void *>(&msg), nullptr);
