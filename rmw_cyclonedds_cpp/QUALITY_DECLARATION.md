@@ -2,9 +2,9 @@ This document is a declaration of software quality for the `rmw_cyclonedds_cpp` 
 
 # `rmw_cyclonedds_cpp` Quality Declaration
 
-The package `rmw_cyclonedds_cpp` claims to be in the **Quality Level 3** category.
+The package `rmw_cyclonedds_cpp` claims to be in the **Quality Level 2** category.
 
-Below are the rationales, notes, and caveats for this claim, organized by each requirement listed in the [Package Requirements for Quality Level 4 in REP-2004](https://www.ros.org/reps/rep-2004.html).
+Below are the rationales, notes, and caveats for this claim, organized by each requirement listed in the [Package Requirements for Quality Level 2 in REP-2004](https://www.ros.org/reps/rep-2004.html).
 
 ## Version Policy [1]
 
@@ -137,8 +137,8 @@ Results of the nightly linter tests can be found [here](https://ci.ros2.org/view
 * `rmw_dds_common`: [QUALITY DECLARATION](https://github.com/ros2/rmw_dds_common/blob/master/rmw_dds_common/QUALITY_DECLARATION.md)
 * `rosidl_runtime_c`: [QUALITY DECLARATION](https://github.com/ros2/rosidl/blob/master/rosidl_runtime_c/QUALITY_DECLARATION.md)
 * `rosidl_runtime_cpp`: [QUALITY DECLARATION](https://github.com/ros2/rosidl/blob/master/rosidl_runtime_cpp/QUALITY_DECLARATION.md)
-* `rosidl_typesupport_introspection_c`: no quality declaration
-* `rosidl_typesupport_introspection_cpp`: no quality declaration
+* `rosidl_typesupport_introspection_c`: [QUALITY DECLARATION](https://github.com/ros2/rosidl/blob/master/rosidl_typesupport_introspection_c/QUALITY_DECLARATION.md)
+* `rosidl_typesupport_introspection_cpp`: [QUALITY DECLARATION](https://github.com/ros2/rosidl/blob/master/rosidl_typesupport_introspection_cpp/QUALITY_DECLARATION.md)
 * `tracetools`: [QUALITY DECLARATION](https://gitlab.com/ros-tracing/ros2_tracing/-/blob/master/tracetools/QUALITY_DECLARATION.md)
 
 It has several "buildtool" dependencies, which do not affect the resulting quality of the package, because they do not contribute to the public library API.
@@ -173,7 +173,7 @@ The chart below compares the requirements in the REP-2004 with the current state
 |--|--|--|
 |1| **Version policy** |---|
 |1.i|Version Policy available | ✓ |
-|1.ii|Stable version | x |
+|1.ii|Stable version | ✓ |
 |1.iii|Declared public API| ✓ |
 |1.iv|API stability policy| ✓ |
 |1.v|ABI stability policy| ✓ |
@@ -201,7 +201,7 @@ The chart below compares the requirements in the REP-2004 with the current state
 |4.v.a| Code style enforcement (linters)| ✓ |
 |4.v.b| Use of static analysis tools | ✓ |
 |5| **Dependencies** | --- |
-|5.i| Must not have ROS lower level dependencies | x |
+|5.i| Must not have ROS lower level dependencies | ✓ |
 |5.ii| Optional ROS lower level dependencies| ✓ |
 |5.iii| Justifies quality use of non-ROS dependencies | ✓ |
 |6| **Platform support** | --- |
