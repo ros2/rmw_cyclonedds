@@ -2,6 +2,21 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Fix a warning by making a pointer nullptr. (`#375 <https://github.com/ros2/rmw_cyclonedds/issues/375>`_)
+* Bump QDs to QL2 (`#371 <https://github.com/ros2/rmw_cyclonedds/issues/371>`_)
+* Add EventsExecutor (`#256 <https://github.com/ros2/rmw_cyclonedds/issues/256>`_)
+* Call dissociate_reader in rmw_destroy_subscription
+* Wrap creation of new serdata_rmw within a try-catch block
+* Fix memory leak in error scenario on the publish side with SHM
+* Fix memory leaks on the take side with SHM
+* rename _cyclonedds_has_shm to follow the convention
+* Add iceoryx_binding_c as dependency to rmw_cyclonedds_cpp
+* Release iox_chunk to iceoryx in serdata_free if the iox_chunk is still available
+* Update iceoryx_subscriber also when constructing the serdata from the iox chunk
+* Contributors: Chris Lalancette, Christophe Bedard, Erik Boasson, Sumanth Nirmal, iRobot ROS
+
 1.1.2 (2022-01-14)
 ------------------
 * Fix cpplint errors (`#363 <https://github.com/ros2/rmw_cyclonedds/issues/363>`_)
