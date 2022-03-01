@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.2.0 (2022-03-01)
+------------------
 * Fix a warning by making a pointer nullptr. (`#375 <https://github.com/ros2/rmw_cyclonedds/issues/375>`_)
 * Bump QDs to QL2 (`#371 <https://github.com/ros2/rmw_cyclonedds/issues/371>`_)
 * Add EventsExecutor (`#256 <https://github.com/ros2/rmw_cyclonedds/issues/256>`_)
