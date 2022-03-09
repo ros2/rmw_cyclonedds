@@ -176,7 +176,7 @@ static void serdata_rmw_free(struct ddsi_serdata * dcmn)
 
 #ifdef DDS_HAS_SHM
   if (d->iox_chunk && d->iox_subscriber) {
-    iox_sub_release_chunk(*static_cast<iox_sub_t *>(d->iox_subscriber), d->iox_chunk);
+    free_iox_chunk(static_cast<iox_sub_t *>(d->iox_subscriber), &d->iox_chunk);
     d->iox_chunk = nullptr;
   }
 #endif
