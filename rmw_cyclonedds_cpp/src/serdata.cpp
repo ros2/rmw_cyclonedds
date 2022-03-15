@@ -585,18 +585,21 @@ uint32_t sertype_rmw_hash(const struct ddsi_sertype * tpcmn)
 size_t sertype_get_serialized_size(const struct ddsi_sertype * d, const void * sample)
 {
   const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(d);
+  size_t serialized_size = 0;
   try {
-    // ROS 2 doesn't do keys, so its all data (?)
+    // ROS 2 doesn't support keys yet, so only data is handled
     if (!type->is_request_header) {
-      return type->cdr_writer->get_serialized_size(sample);
+      serialized_size = type->cdr_writer->get_serialized_size(sample);
     } else {
       // inject the service invocation header data into the CDR stream
       auto wrap = *static_cast<const cdds_request_wrapper_t *>(sample);
-      return type->cdr_writer->get_serialized_size(wrap);
+      serialized_size = type->cdr_writer->get_serialized_size(wrap);
     }
   } catch (std::exception & e) {
     RMW_SET_ERROR_MSG(e.what());
   }
+
+  return serialized_size;
 }
 
 bool sertype_serialize_into(
