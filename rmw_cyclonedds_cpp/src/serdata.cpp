@@ -689,11 +689,7 @@ struct sertype_rmw * create_sertype(
   const uint32_t sample_size, const bool is_fixed_type)
 {
   struct sertype_rmw * st = new struct sertype_rmw;
-#if DDS_HAS_DDSI_SERTYPE
-  static_cast<void>(topicname);
   std::string type_name = get_type_name(type_support_identifier, type_support);
-  // TODO(Sumanth) fix this once Cyclone supports this API in master
-#ifdef DDS_HAS_SHM
   uint32_t flags = DDSI_SERTYPE_FLAG_TOPICKIND_NO_KEY;
   if (is_fixed_type) {
     flags |= DDSI_SERTYPE_FLAG_FIXED_SIZE;
@@ -701,21 +697,13 @@ struct sertype_rmw * create_sertype(
   ddsi_sertype_init_flags(
     static_cast<struct ddsi_sertype *>(st),
     type_name.c_str(), &sertype_rmw_ops, &serdata_rmw_ops, flags);
+  st->allowed_data_representation = DDS_DATA_REPRESENTATION_FLAG_XCDR1;
+#ifdef DDS_HAS_SHM
   // TODO(Sumanth) needs some API in cyclone to set this
   st->iox_size = sample_size;
 #else
-  (void)sample_size;
-  (void)is_fixed_type;
-  ddsi_sertype_init(
-    static_cast<struct ddsi_sertype *>(st),
-    type_name.c_str(), &sertype_rmw_ops, &serdata_rmw_ops, true);
+  static_cast<void>(sample_size);
 #endif  // DDS_HAS_SHM
-#else
-  std::string type_name = get_type_name(type_support_identifier, type_support);
-  ddsi_sertopic_init(
-    static_cast<struct ddsi_sertopic *>(st), topicname,
-    type_name.c_str(), &sertopic_rmw_ops, &serdata_rmw_ops, true);
-#endif
   st->type_support.typesupport_identifier_ = type_support_identifier;
   st->type_support.type_support_ = type_support;
   st->is_request_header = is_request_header;
