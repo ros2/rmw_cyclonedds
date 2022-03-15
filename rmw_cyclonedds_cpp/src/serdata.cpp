@@ -683,7 +683,7 @@ static std::string get_type_name(const char * type_support_identifier, void * ty
 }
 
 struct sertype_rmw * create_sertype(
-  const char * topicname, const char * type_support_identifier,
+  const char * type_support_identifier,
   void * type_support, bool is_request_header,
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type,
   const uint32_t sample_size, const bool is_fixed_type)

@@ -2263,7 +2263,7 @@ static CddsPublisher * create_cdds_publisher(
   bool is_fixed_type = is_type_self_contained(type_support);
   uint32_t sample_size = static_cast<uint32_t>(rmw_cyclonedds_cpp::get_message_size(type_support));
   auto sertype = create_sertype(
-    fqtopic_name.c_str(), type_support->typesupport_identifier,
+    type_support->typesupport_identifier,
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
     rmw_cyclonedds_cpp::make_message_value_type(type_supports), sample_size, is_fixed_type);
   struct ddsi_sertype * stact = nullptr;
@@ -2770,7 +2770,7 @@ static CddsSubscription * create_cdds_subscription(
   bool is_fixed_type = is_type_self_contained(type_support);
   uint32_t sample_size = static_cast<uint32_t>(rmw_cyclonedds_cpp::get_message_size(type_support));
   auto sertype = create_sertype(
-    fqtopic_name.c_str(), type_support->typesupport_identifier,
+    type_support->typesupport_identifier,
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
     rmw_cyclonedds_cpp::make_message_value_type(type_supports), sample_size, is_fixed_type);
   topic = create_topic(dds_ppant, fqtopic_name.c_str(), sertype);
@@ -4601,7 +4601,7 @@ static rmw_ret_t rmw_init_cs(
   struct sertype_rmw * pub_st, * sub_st;
 
   pub_st = create_sertype(
-    pubtopic_name.c_str(), type_support->typesupport_identifier, pub_type_support, true,
+    type_support->typesupport_identifier, pub_type_support, true,
     std::move(pub_msg_ts));
   struct ddsi_sertype * pub_stact;
   pubtopic = create_topic(node->context->impl->ppant, pubtopic_name.c_str(), pub_st, &pub_stact);
@@ -4611,7 +4611,7 @@ static rmw_ret_t rmw_init_cs(
   }
 
   sub_st = create_sertype(
-    subtopic_name.c_str(), type_support->typesupport_identifier, sub_type_support, true,
+    type_support->typesupport_identifier, sub_type_support, true,
     std::move(sub_msg_ts));
   subtopic = create_topic(node->context->impl->ppant, subtopic_name.c_str(), sub_st);
   if (subtopic < 0) {
