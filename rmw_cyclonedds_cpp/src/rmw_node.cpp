@@ -3252,9 +3252,9 @@ static rmw_ret_t rmw_take_ser_int(
       // taking a serialized msg from shared memory
 #ifdef DDS_HAS_SHM
       if (d->iox_chunk != nullptr) {
-        auto shm_data_state = shm_get_data_state(d->iox_chunk);
-        if (shm_data_state == IOX_CHUNK_CONTAINS_SERIALIZED_DATA) {
-          size_t size = ddsi_serdata_size(d);
+        auto iox_header = iceoryx_header_from_chunk(d->iox_chunk);
+        if (iox_header->shm_data_state == IOX_CHUNK_CONTAINS_SERIALIZED_DATA) {
+          const size_t size = iox_header->data_size;
           if (rmw_serialized_message_resize(serialized_message, size) != RMW_RET_OK) {
             ddsi_serdata_unref(d);
             *taken = false;
@@ -3265,10 +3265,11 @@ static rmw_ret_t rmw_take_ser_int(
           ddsi_serdata_unref(d);
           *taken = true;
           return RMW_RET_OK;
-        } else if (shm_data_state == IOX_CHUNK_CONTAINS_RAW_DATA) {
+        } else if (iox_header->shm_data_state == IOX_CHUNK_CONTAINS_RAW_DATA) {
           if (rmw_serialize(d->iox_chunk, &sub->type_supports, serialized_message) != RMW_RET_OK) {
             RMW_SET_ERROR_MSG("Failed to serialize sample from loaned memory");
             ddsi_serdata_unref(d);
+            *taken = false;
             return RMW_RET_ERROR;
           }
           ddsi_serdata_unref(d);
