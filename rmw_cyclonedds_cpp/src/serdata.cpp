@@ -143,17 +143,16 @@ static void serialize_into_serdata_rmw_on_demand(serdata_rmw * d)
   {
     std::lock_guard<std::mutex> lock(type->serialize_lock);
     if (d->iox_chunk && d->data() == nullptr) {
-        auto iox_header = iceoryx_header_from_chunk(d->iox_chunk);
-        // if the iox chunk has the data in serialized form
-        if (iox_header->shm_data_state == IOX_CHUNK_CONTAINS_SERIALIZED_DATA) {
-          d->resize(iox_header->data_size);
-          memcpy(d->data(), d->iox_chunk, iox_header->data_size);
-          // TODO(Sumanth), free chunk and set to null?
-        } else if (iox_header->shm_data_state == IOX_CHUNK_CONTAINS_RAW_DATA) {
-            serialize_into_serdata_rmw(const_cast<serdata_rmw *>(d), d->iox_chunk);
-        } else {
-          RMW_SET_ERROR_MSG("Received iox chunk is uninitialized");
-        }
+      auto iox_header = iceoryx_header_from_chunk(d->iox_chunk);
+      // if the iox chunk has the data in serialized form
+      if (iox_header->shm_data_state == IOX_CHUNK_CONTAINS_SERIALIZED_DATA) {
+        d->resize(iox_header->data_size);
+        memcpy(d->data(), d->iox_chunk, iox_header->data_size);
+      } else if (iox_header->shm_data_state == IOX_CHUNK_CONTAINS_RAW_DATA) {
+        serialize_into_serdata_rmw(const_cast<serdata_rmw *>(d), d->iox_chunk);
+      } else {
+        RMW_SET_ERROR_MSG("Received iox chunk is uninitialized");
+      }
     }
   }
 #endif

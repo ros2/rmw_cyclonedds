@@ -3355,7 +3355,7 @@ static rmw_ret_t rmw_take_loan_int(
           if (rmw_deserialize(&ser_msg, &cdds_subscription->type_supports, *loaned_message) !=
             RMW_RET_OK)
           {
-            RMW_SET_ERROR_MSG("Failed to deserialize sample from loaned memory");
+            RMW_SET_ERROR_MSG("Failed to deserialize sample from shared memory buffer");
             ddsi_serdata_unref(d);
             *taken = false;
             return RMW_RET_ERROR;
