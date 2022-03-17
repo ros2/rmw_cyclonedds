@@ -1054,8 +1054,8 @@ static bool check_create_domain(dds_domainid_t did, rmw_localhost_only_t localho
        comma. */
     std::string config =
       localhost_only ?
-      "<CycloneDDS><Domain><General><Interfaces><NetworkInterface address=\"127.0.0.1\"/></Interfaces>"
-      "</General></Domain></CycloneDDS>,"
+      "<CycloneDDS><Domain><General><Interfaces><NetworkInterface address=\"127.0.0.1\"/>"
+      "</Interfaces></General></Domain></CycloneDDS>,"
       :
       "";
 
