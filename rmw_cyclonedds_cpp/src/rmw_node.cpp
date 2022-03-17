@@ -3097,7 +3097,7 @@ static void message_info_from_sample_info(
   // TODO(iluetkeb) add received timestamp, when implemented by Cyclone
   message_info->received_timestamp = 0;
   message_info->publication_sequence_number = RMW_MESSAGE_INFO_SEQUENCE_NUMBER_UNSUPPORTED;
-  message_info->reception_sequence_number = RMW_MESSAGE_INFO_SEQUENCE_NUMBER_UNSUPPORTED;  
+  message_info->reception_sequence_number = RMW_MESSAGE_INFO_SEQUENCE_NUMBER_UNSUPPORTED;
 }
 
 static rmw_ret_t rmw_take_int(
