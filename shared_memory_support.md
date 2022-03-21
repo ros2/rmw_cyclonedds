@@ -1,17 +1,17 @@
 # Using Shared Memory with ROS 2
 
-This rmw_cyclonedds implementation uses [cyclonedds](https://projects.eclipse.org/projects/iot.cyclonedds) which includes support for fast Shared Memory data transfer based on [iceoryx](https://projects.eclipse.org/projects/technology.iceoryx). Since this feature is still in an experimental stage, it is disabled by default but can be enabled easily by providing a cyclonedds.xml configuration file.
+This rmw_cyclonedds implementation uses [cyclonedds](https://projects.eclipse.org/projects/iot.cyclonedds) which includes support for fast Shared Memory data transfer based on [iceoryx](https://projects.eclipse.org/projects/technology.iceoryx). Shared Memory is disabled by default but can be enabled easily by providing a cyclonedds.xml configuration file.
 
 ## Requirements
 
-Currently Shared Memory transport is only supported on Linux. It is available in the rmw_cyclonedds implementation used by the ROS 2 Rolling or Galactic Geochelone distribution.
+Currently Shared Memory transport is only supported on Linux. It is available in the rmw_cyclonedds implementation used by the ROS 2 Rolling or Humble Hawksbill distribution.
 
 Note that the Shared Memory feature is not available on Windows.
 
 ## Installation
 
 ROS 2 needs to be installed as described in [Installing ROS 2 Rolling](https://docs.ros.org/en/rolling/Installation/Ubuntu-Install-Binary.html).
-It can also be build from sources directly [Building ROS 2 Rolling](https://docs.ros.org/en/rolling/Installation/Ubuntu-Development-Setup.html). Using the ROS 2 Galactic installation as described in [Installing ROS 2 Galactic](https://docs.ros.org/en/galactic/Installation/Ubuntu-Install-Binary.html) and  [Building ROS 2 Galactic](https://docs.ros.org/en/galactic/Installation/Ubuntu-Development-Setup.html) is also possible.
+It can also be build from sources directly [Building ROS 2 Rolling](https://docs.ros.org/en/rolling/Installation/Ubuntu-Development-Setup.html). Using the latest ROS 2 installation [ROS 2 Humble](https://docs.ros.org/en/galactic/Releases.html) is also possible.
 
 In both cases rmw_cyclonedds is built with Shared Memory support by default.
 
@@ -25,9 +25,6 @@ In your ROS 2 workspace `ros2_ws` create a configuration file `cyclonedds.xml` w
     <Domain id="any">
         <SharedMemory>
             <Enable>true</Enable>
-            <SubQueueCapacity>256</SubQueueCapacity>
-            <SubHistoryRequest>16</SubHistoryRequest>
-            <PubHistoryCapacity>16</PubHistoryCapacity>
             <LogLevel>info</LogLevel>
         </SharedMemory>
     </Domain>
@@ -43,13 +40,10 @@ export CYCLONEDDS_URI=file://$PWD/cyclonedds.xml
 
 ### Configuration file options
 
-Enabling Shared Memory imposes additional restrictions on publishers and subscriptions in ROS applications if Shared Memory is used for communication. In this case the data is received using an internal queue (per subscription).
+Enabling Shared Memory imposes additional restrictions on publishers and subscriptions in ROS applications if Shared Memory is used for communication. In this case the data is received using an internal queue (one queue per subscription).
 Note that depending on the QoS settings Shared Memory might not be used (cf. [Restrictions](#Restrictions)).
 
-1. *SubQueueCapacity* defines the maximum number of samples a subscription can locally store in Shared Memory. If more samples arrive via Shared Memory, the least recent ones will be discarded.
-2. *SubHistoryRequest* is the maximum number of samples a late joining subscription will request from a corresponding publisher.
-3. *PubHistoryCapacity* is the maximum number of samples a publisher will keep for late joining subscriptions.
-4. *Loglevel* controls the output of the iceoryx runtime and can be set to verbose, debug, info, warn, error, fatal and off in order of decreasing output level.
+The *Loglevel* controls the output of the iceoryx runtime and can be set to verbose, debug, info, warn, error, fatal and off in order of decreasing output level.
 
 The settings in the configuration file above are also the default values when left unspecified and setting them any higher is currently not possible.
 Note that further aligment with DDS QoS is work in progress. Currently these options exist alongside QoS settings as additional limits.
@@ -64,7 +58,7 @@ In one terminal start the talker
 ```console
 export CYCLONEDDS_URI=file://$PWD/cyclonedds.xml
 . ~/ros2_ws/install/local_setup.bash
-ros2 run demo_nodes_cpp talker
+RMW_IMPLEMENTATION=rmw_cyclonedds_cpp ros2 run demo_nodes_cpp talker
 ```
 
 and in another terminal start the listener
@@ -72,8 +66,11 @@ and in another terminal start the listener
 ```console
 export CYCLONEDDS_URI=file://$PWD/cyclonedds.xml
 . ~/ros2_ws/install/local_setup.bash
-ros2 run demo_nodes_cpp listener
+RMW_IMPLEMENTATION=rmw_cyclonedds_cpp ros2 run demo_nodes_cpp listener
 ```
+
+Note that we have to specify the middleware implementation with `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`
+since otherwise `rmw fastrtps cpp` is used by default.
 
 If the Shared Memory configuration was successfully activated and recognized, you should get some output containing
 
@@ -91,7 +88,7 @@ iox-roudi
 
 in a third terminal. Now the talker should start sending data to the listener.
 
-In this example Shared Memory is not actually used for transfer, since the message type contains a string, which is a dynamically sized data type (cf. [Types](#Types)). 
+While this example uses shared memory, it does not benefit from zero-copy since the message type contains a string, which is a dynamically sized data type (cf. [Types](#Types)).
 
 Note that RouDi is still required whenever we activate a Shared Memory configuration by exporting the configuration file (it is needed by the underlying cyclonedds implementation in this case).
 We could also run the listener or talker without exporting the configuration file and it would still receive data (via network interface). By running both without exporting the configuration file we will not need to have RouDi running anymore (this is the regular ROS 2 setup).
@@ -106,7 +103,7 @@ In the talker we use
     std::unique_ptr<std_msgs::msg::Uint32> msg_;
     rclcpp::Publisher<std_msgs::msg::UInt32>::SharedPtr pub_;
     rclcpp::TimerBase::SharedPtr timer_;
-    // ... 
+    // ...
     pub_ = this->create_publisher<std_msgs::msg::Uint32>("chatter", qos);
 ```
 
@@ -146,7 +143,6 @@ Whether true zero-copy publish subscribe communication via Shared Memory is poss
 1. Shared Memory has to be enabled in the configuration.
 2. The subscription has to be local on the same machine (i.e. same or different process, but no remote subscription).
 3. The QoS settings admit Shared Memory transfer (cf. [QoS settings](#QoS-settings))
-4. The message type has fixed size (i.e. no strings or sequences of dynamic length)
 
 If these conditions are satisfied we can publish the data in two different ways, but only by using the loan API we will achieve zero-copy transfer.
 
@@ -160,7 +156,7 @@ We first create a message, populate it before passing it to the publisher.
     pub_->publish(std::move(msg_));
 ```
 
-If the Shared Memory transfer conditions are met, publish will internally loan a Shared Memory chunk from iceoryx and copy the message payload into it without the serialization required for network transfer. Any connected subscription has read-only access to this message data.
+If the Shared Memory transfer conditions are met, publish will internally loan a Shared Memory chunk from iceoryx and copy (only for fixed size types) or serialize the message payload into the memory chunk (non-fixed size types). Any connected subscription has read-only access to this message data.
 
 While this API will not allow true zero-copy transfer, it still will improve performance for sufficiently large message sizes since it bypasses the loopback interface and does not perform serialization. The actual size where it will outperform the loopback interface primarily depends on the actual hardware and system load.
 
@@ -188,8 +184,15 @@ Only local subscriptions on the same machine will receive data via Shared Memory
 
 ### Types
 
-The message types used must be of a fixed size, i.e. the size can be determined at compile time.
-This means strings or variable length arrays of the [available message types](http://wiki.ros.org/msg) cannot be used. Nesting types satisfying the fixed size restriction is also possible.
+#### Zero-copy
+
+To benefit from zero-copy transfer, the message types used must be of a fixed size, i.e. the size can be determined at compile time and does not refer to memory
+outside of the message struct itself. This means strings or variable length arrays of the [available message types](http://wiki.ros.org/msg) cannot be used.
+Nesting types satisfying the fixed size restriction is also possible.
+
+#### Shared Memory Serialization
+
+All non-fixed size types like strings will be serialized into shared memory. This incurs much more overhead for serialization and deserialization but still avoids some copies that would be performed if the network stack is used (i.e. compared to the loopback interface in the same process). The runtime/latency benefit in this case is much smaller compared to zero-copy for fixed size types.
 
 ### QoS settings
 
@@ -198,11 +201,13 @@ Only a subset of QoS settings supports Shared Memory. Those are:
 1. Liveliness: Automatic
 2. Deadline: Infinity (0)
 3. Reliability: Reliable or Best Effort
-4. Durability: Volatile
+4. Durability: Volatile or Transient Local
 5. History: Keep Last
-    - with history depth no larger than PubHistoryCapacity (in the configuration file)
 
-These settings (with Reliability: Reliable) are used by default and applicable to a wide range of applications.
+The Keep Last history depth of a writer cannot be larger than the maximum capacity allowed by an iceoryx publisher
+(currently 16). Otherwise the network stack is implictly used.
+
+The ROS 2 default settings Reliable, Volatile and Keep Last(10) are supported and applicable to a wide range of applications.
 
 ### Number of subscriptions per Process
 

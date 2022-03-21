@@ -23,9 +23,8 @@
 #include "dds/dds.h"
 #include "dds/ddsi/ddsi_serdata.h"
 #ifdef DDS_HAS_SHM
-#include "dds/ddsi/q_xmsg.h"
 extern "C" {
-#include "dds/ddsi/shm_sync.h"
+#include "dds/ddsi/ddsi_shm_transport.h"
 }
 #endif  // DDS_HAS_SHM
 
@@ -94,7 +93,7 @@ void * create_response_type_support(
   const char * typesupport_identifier);
 
 struct sertype_rmw * create_sertype(
-  const char * topicname, const char * type_support_identifier,
+  const char * type_support_identifier,
   void * type_support, bool is_request_header,
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type_support,
   const uint32_t sample_size = 0U,
