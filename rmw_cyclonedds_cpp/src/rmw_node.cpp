@@ -42,6 +42,7 @@
 #include "rmw/convert_rcutils_ret_to_rmw_ret.h"
 #include "rmw/error_handling.h"
 #include "rmw/event.h"
+#include "rmw/features.h"
 #include "rmw/get_node_info_and_types.h"
 #include "rmw/get_service_names_and_types.h"
 #include "rmw/get_topic_names_and_types.h"
@@ -3083,6 +3084,22 @@ extern "C" rmw_ret_t rmw_destroy_subscription(rmw_node_t * node, rmw_subscriptio
   return ret;
 }
 
+static void message_info_from_sample_info(
+  const dds_sample_info_t & info, rmw_message_info_t * message_info)
+{
+  message_info->publisher_gid.implementation_identifier = eclipse_cyclonedds_identifier;
+  memset(message_info->publisher_gid.data, 0, sizeof(message_info->publisher_gid.data));
+  assert(sizeof(info.publication_handle) <= sizeof(message_info->publisher_gid.data));
+  memcpy(
+    message_info->publisher_gid.data, &info.publication_handle,
+    sizeof(info.publication_handle));
+  message_info->source_timestamp = info.source_timestamp;
+  // TODO(iluetkeb) add received timestamp, when implemented by Cyclone
+  message_info->received_timestamp = 0;
+  message_info->publication_sequence_number = RMW_MESSAGE_INFO_SEQUENCE_NUMBER_UNSUPPORTED;
+  message_info->reception_sequence_number = RMW_MESSAGE_INFO_SEQUENCE_NUMBER_UNSUPPORTED;
+}
+
 static rmw_ret_t rmw_take_int(
   const rmw_subscription_t * subscription, void * ros_message,
   bool * taken, rmw_message_info_t * message_info)
@@ -3107,15 +3124,7 @@ static rmw_ret_t rmw_take_int(
     if (info.valid_data) {
       *taken = true;
       if (message_info) {
-        message_info->publisher_gid.implementation_identifier = eclipse_cyclonedds_identifier;
-        memset(message_info->publisher_gid.data, 0, sizeof(message_info->publisher_gid.data));
-        assert(sizeof(info.publication_handle) <= sizeof(message_info->publisher_gid.data));
-        memcpy(
-          message_info->publisher_gid.data, &info.publication_handle,
-          sizeof(info.publication_handle));
-        message_info->source_timestamp = info.source_timestamp;
-        // TODO(iluetkeb) add received timestamp, when implemented by Cyclone
-        message_info->received_timestamp = 0;
+        message_info_from_sample_info(info, message_info);
       }
 #if REPORT_LATE_MESSAGES > 0
       dds_time_t tnow = dds_time();
@@ -3212,12 +3221,7 @@ static rmw_ret_t rmw_take_seq(
       taken_msg.push_back(message);
       (*taken)++;
       if (message_info) {
-        message_info->publisher_gid.implementation_identifier = eclipse_cyclonedds_identifier;
-        memset(message_info->publisher_gid.data, 0, sizeof(message_info->publisher_gid.data));
-        assert(sizeof(info.publication_handle) <= sizeof(message_info->publisher_gid.data));
-        memcpy(
-          message_info->publisher_gid.data, &info.publication_handle,
-          sizeof(info.publication_handle));
+        message_info_from_sample_info(info, message_info);
       }
     } else {
       not_taken_msg.push_back(message);
@@ -3260,12 +3264,7 @@ static rmw_ret_t rmw_take_ser_int(
   while (dds_takecdr(sub->enth, &d, 1, &info, DDS_ANY_STATE) == 1) {
     if (info.valid_data) {
       if (message_info) {
-        message_info->publisher_gid.implementation_identifier = eclipse_cyclonedds_identifier;
-        memset(message_info->publisher_gid.data, 0, sizeof(message_info->publisher_gid.data));
-        assert(sizeof(info.publication_handle) <= sizeof(message_info->publisher_gid.data));
-        memcpy(
-          message_info->publisher_gid.data, &info.publication_handle,
-          sizeof(info.publication_handle));
+        message_info_from_sample_info(info, message_info);
       }
 
       // taking a serialized msg from shared memory
@@ -3336,12 +3335,7 @@ static rmw_ret_t rmw_take_loan_int(
   while (dds_takecdr(cdds_subscription->enth, &d, 1, &info, DDS_ANY_STATE) == 1) {
     if (info.valid_data) {
       if (message_info) {
-        message_info->publisher_gid.implementation_identifier = eclipse_cyclonedds_identifier;
-        memset(message_info->publisher_gid.data, 0, sizeof(message_info->publisher_gid.data));
-        assert(sizeof(info.publication_handle) <= sizeof(message_info->publisher_gid.data));
-        memcpy(
-          message_info->publisher_gid.data, &info.publication_handle,
-          sizeof(info.publication_handle));
+        message_info_from_sample_info(info, message_info);
       }
       if (d->iox_chunk != nullptr) {
         *loaned_message = SHIFT_PAST_ICEORYX_HEADER(d->iox_chunk);
@@ -5443,4 +5437,10 @@ extern "C" rmw_ret_t rmw_service_request_subscription_get_actual_qos(
 
   RMW_SET_ERROR_MSG("failed to get service's request subscription QoS");
   return RMW_RET_ERROR;
+}
+
+extern "C" bool rmw_feature_supported(rmw_feature_t feature)
+{
+  (void)feature;
+  return false;
 }
