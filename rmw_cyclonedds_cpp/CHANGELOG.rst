@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.3.0 (2022-03-25)
+------------------
 * Fix error message in rmw_init_options_copy(). (`#380 <https://github.com/ros2/rmw_cyclonedds/issues/380>`_)
 * Add content filter topic feature empty stub. (`#289 <https://github.com/ros2/rmw_cyclonedds/issues/289>`_)
 * Update to work with Cyclone 0.9.0 and Iceoryx 2.0 (`#379 <https://github.com/ros2/rmw_cyclonedds/issues/379>`_)
