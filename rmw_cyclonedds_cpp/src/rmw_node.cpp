@@ -2588,6 +2588,10 @@ static rmw_ret_t borrow_loaned_message_int(
     publisher->implementation_identifier,
     eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RCUTILS_CHECK_ARGUMENT_FOR_NULL(ros_message, RMW_RET_INVALID_ARGUMENT);
+  if (*ros_message) {
+    return RMW_RET_INVALID_ARGUMENT;
+  }
   auto cdds_publisher = static_cast<CddsPublisher *>(publisher->data);
   if (!cdds_publisher) {
     RMW_SET_ERROR_MSG("publisher data is null");
