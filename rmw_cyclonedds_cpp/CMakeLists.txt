@@ -89,7 +89,7 @@ target_link_libraries(rmw_cyclonedds_cpp PRIVATE
   rcpputils::rcpputils
   rosidl_typesupport_introspection_c::rosidl_typesupport_introspection_c
   rosidl_typesupport_introspection_cpp::rosidl_typesupport_introspection_cpp
-  ${rmw_dds_common_TARGETS}
+  rmw_dds_common::rmw_dds_common_library
   rosidl_runtime_c::rosidl_runtime_c
   tracetools::tracetools)
 
