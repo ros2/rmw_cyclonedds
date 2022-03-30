@@ -368,6 +368,7 @@ static bool serdata_rmw_to_sample(
         probably incompatible. */
       cdds_request_wrapper_t * const wrap = static_cast<cdds_request_wrapper_t *>(sample);
       auto prefix = [wrap](cycdeser & ser) {ser >> wrap->header.guid; ser >> wrap->header.seq;};
+      serialize_into_serdata_rmw_on_demand(const_cast<serdata_rmw *>(d));
       cycdeser sd(d->data(), d->size());
       if (using_introspection_c_typesupport(type->type_support.typesupport_identifier_)) {
         auto typed_typesupport =
