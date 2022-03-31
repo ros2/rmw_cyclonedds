@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Depend on just rmw_dds_common::rmw_dds_common_library (`#385 <https://github.com/ros2/rmw_cyclonedds/issues/385>`_)
+* Contributors: Shane Loretz
+
 1.3.0 (2022-03-25)
 ------------------
 * Fix error message in rmw_init_options_copy(). (`#380 <https://github.com/ros2/rmw_cyclonedds/issues/380>`_)
