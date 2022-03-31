@@ -5019,10 +5019,10 @@ static rmw_ret_t get_topic_name(dds_entity_t endpoint_handle, std::string & name
     // handle reused for something with a longer name (which is exceedingly
     // unlikely), and so it really is an error
     return RMW_RET_ERROR;
-  } else {
-    name = std::string(tmp.begin(), tmp.begin() + rc);
-    return RMW_RET_OK;
   }
+
+  name = std::string(tmp.begin(), tmp.begin() + rc);
+  return RMW_RET_OK;
 }
 
 static rmw_ret_t check_for_service_reader_writer(const CddsCS & client, bool * is_available)
