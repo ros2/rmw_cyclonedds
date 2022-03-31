@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.3.1 (2022-03-31)
+------------------
 * Depend on just rmw_dds_common::rmw_dds_common_library (`#385 <https://github.com/ros2/rmw_cyclonedds/issues/385>`_)
 * Contributors: Shane Loretz
 
