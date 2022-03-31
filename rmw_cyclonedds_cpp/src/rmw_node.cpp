@@ -5005,19 +5005,25 @@ extern "C" rmw_ret_t rmw_get_service_names_and_types(
 
 static rmw_ret_t get_topic_name(dds_entity_t endpoint_handle, std::string & name)
 {
-  /* dds_get_name needs a bit of TLC ... */
   std::vector<char> tmp(128);
-  do {
-    if (dds_get_name(dds_get_topic(endpoint_handle), tmp.data(), tmp.size()) < 0) {
-      return RMW_RET_ERROR;
-    }
-    auto end = std::find(tmp.begin(), tmp.end(), 0);
-    if (end != tmp.end()) {
-      name = std::string(tmp.begin(), end);
-      return RMW_RET_OK;
-    }
-    tmp.resize(2 * tmp.size());
-  } while (true);
+  dds_return_t rc;
+  rc = dds_get_name(dds_get_topic(endpoint_handle), tmp.data(), tmp.size());
+  if (rc > 0 && static_cast<size_t>(rc) > tmp.size()) {
+    // topic name is too long for the buffer, but now we know how long it is
+    tmp.resize(static_cast<size_t>(rc) + 1);
+    rc = dds_get_name(dds_get_topic(endpoint_handle), tmp.data(), tmp.size());
+  }
+  if (rc < 0) {
+    return RMW_RET_ERROR;
+  } else if (static_cast<size_t>(rc) >= tmp.size()) {
+    // topic names can't change, so the topic must have been deleted and the
+    // handle reused for something with a longer name (which is exceedingly
+    // unlikely), and so it really is an error
+    return RMW_RET_ERROR;
+  } else {
+    name = std::string(tmp.begin(), tmp.begin() + rc);
+    return RMW_RET_OK;
+  }
 }
 
 static rmw_ret_t check_for_service_reader_writer(const CddsCS & client, bool * is_available)
