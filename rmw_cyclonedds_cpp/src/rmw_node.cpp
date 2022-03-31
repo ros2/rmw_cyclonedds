@@ -5006,8 +5006,7 @@ extern "C" rmw_ret_t rmw_get_service_names_and_types(
 static rmw_ret_t get_topic_name(dds_entity_t endpoint_handle, std::string & name)
 {
   std::vector<char> tmp(128);
-  dds_return_t rc;
-  rc = dds_get_name(dds_get_topic(endpoint_handle), tmp.data(), tmp.size());
+  dds_return_t rc = dds_get_name(dds_get_topic(endpoint_handle), tmp.data(), tmp.size());
   if (rc > 0 && static_cast<size_t>(rc) > tmp.size()) {
     // topic name is too long for the buffer, but now we know how long it is
     tmp.resize(static_cast<size_t>(rc) + 1);
