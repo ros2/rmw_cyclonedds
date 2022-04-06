@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.3.3 (2022-04-06)
+------------------
 * Fix get_topic_name and handling long service names
 * Contributors: Erik Boasson
 
