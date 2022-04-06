@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Fix get_topic_name and handling long service names
+* Contributors: Erik Boasson
+
 1.3.2 (2022-04-05)
 ------------------
 * Add serialization for SDK_DATA
