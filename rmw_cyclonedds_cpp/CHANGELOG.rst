@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Free with the same allocator in rmw_destroy_node (`#355 <https://github.com/ros2/rmw_cyclonedds/issues/355>`_) (`#368 <https://github.com/ros2/rmw_cyclonedds/issues/368>`_)
+* Contributors: Jacob Perron
+
 0.22.4 (2021-12-22)
 -------------------
 * Fix use of deprecated is_loan_available (`#359 <https://github.com/ros2/rmw_cyclonedds/issues/359>`_)
