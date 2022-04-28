@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.22.5 (2022-04-28)
+-------------------
 * Free with the same allocator in rmw_destroy_node (`#355 <https://github.com/ros2/rmw_cyclonedds/issues/355>`_) (`#368 <https://github.com/ros2/rmw_cyclonedds/issues/368>`_)
 * Contributors: Jacob Perron
 
