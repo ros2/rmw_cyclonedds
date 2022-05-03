@@ -2402,6 +2402,13 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
       return nullptr;
     }
   }
+  // Adapt any 'best available' QoS options
+  rmw_qos_profile_t adapted_qos_policies = *qos_policies;
+  rmw_ret_t ret = rmw_dds_common::qos_profile_get_best_available_for_topic_publisher(
+    node, topic_name, &adapted_qos_policies, rmw_get_subscriptions_info_by_topic);
+  if (RMW_RET_OK != ret) {
+    return nullptr;
+  }
   RMW_CHECK_ARGUMENT_FOR_NULL(publisher_options, nullptr);
   if (publisher_options->require_unique_network_flow_endpoints ==
     RMW_UNIQUE_NETWORK_FLOW_ENDPOINTS_STRICTLY_REQUIRED)
@@ -2413,7 +2420,7 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
 
   rmw_publisher_t * pub = create_publisher(
     node->context->impl->ppant, node->context->impl->dds_pub,
-    type_supports, topic_name, qos_policies,
+    type_supports, topic_name, &adapted_qos_policies,
     publisher_options);
   if (pub == nullptr) {
     return nullptr;
@@ -2910,6 +2917,13 @@ extern "C" rmw_subscription_t * rmw_create_subscription(
       return nullptr;
     }
   }
+  // Adapt any 'best available' QoS options
+  rmw_qos_profile_t adapted_qos_policies = *qos_policies;
+  rmw_ret_t ret = rmw_dds_common::qos_profile_get_best_available_for_topic_subscription(
+    node, topic_name, &adapted_qos_policies, rmw_get_publishers_info_by_topic);
+  if (RMW_RET_OK != ret) {
+    return nullptr;
+  }
   RMW_CHECK_ARGUMENT_FOR_NULL(subscription_options, nullptr);
   if (subscription_options->require_unique_network_flow_endpoints ==
     RMW_UNIQUE_NETWORK_FLOW_ENDPOINTS_STRICTLY_REQUIRED)
@@ -2921,7 +2935,7 @@ extern "C" rmw_subscription_t * rmw_create_subscription(
 
   rmw_subscription_t * sub = create_subscription(
     node->context->impl->ppant, node->context->impl->dds_sub,
-    type_supports, topic_name, qos_policies,
+    type_supports, topic_name, &adapted_qos_policies,
     subscription_options);
   if (sub == nullptr) {
     return nullptr;
@@ -4729,14 +4743,17 @@ extern "C" rmw_client_t * rmw_create_client(
   const char * service_name,
   const rmw_qos_profile_t * qos_policies)
 {
+  RMW_CHECK_ARGUMENT_FOR_NULL(qos_policies, nullptr);
   CddsClient * info = new CddsClient();
 #if REPORT_BLOCKED_REQUESTS
   info->lastcheck = 0;
 #endif
+  rmw_qos_profile_t adapted_qos_policies =
+    rmw_dds_common::qos_profile_update_best_available_for_services(*qos_policies);
   if (
     rmw_init_cs(
       &info->client, &info->user_callback_data,
-      node, type_supports, service_name, qos_policies, false) != RMW_RET_OK)
+      node, type_supports, service_name, &adapted_qos_policies, false) != RMW_RET_OK)
   {
     delete (info);
     return nullptr;
@@ -4834,11 +4851,14 @@ extern "C" rmw_service_t * rmw_create_service(
   const char * service_name,
   const rmw_qos_profile_t * qos_policies)
 {
+  RMW_CHECK_ARGUMENT_FOR_NULL(qos_policies, nullptr);
   CddsService * info = new CddsService();
+  rmw_qos_profile_t adapted_qos_policies =
+    rmw_dds_common::qos_profile_update_best_available_for_services(*qos_policies);
   if (
     rmw_init_cs(
       &info->service, &info->user_callback_data,
-      node, type_supports, service_name, qos_policies, true) != RMW_RET_OK)
+      node, type_supports, service_name, &adapted_qos_policies, true) != RMW_RET_OK)
   {
     delete (info);
     return nullptr;
