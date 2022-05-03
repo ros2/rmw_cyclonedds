@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.4.0 (2022-05-03)
+------------------
+* Handle 'best_available' QoS policies (`#389 <https://github.com/ros2/rmw_cyclonedds/issues/389>`_)
+* Contributors: Jose Luis Rivero
+
 1.3.3 (2022-04-06)
 ------------------
 * Fix get_topic_name and handling long service names
