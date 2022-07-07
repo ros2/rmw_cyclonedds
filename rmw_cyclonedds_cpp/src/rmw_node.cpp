@@ -4763,6 +4763,9 @@ extern "C" rmw_client_t * rmw_create_client(
   rmw_client->implementation_identifier = eclipse_cyclonedds_identifier;
   rmw_client->data = info;
   rmw_client->service_name = reinterpret_cast<const char *>(rmw_allocate(strlen(service_name) + 1));
+  std::copy(info->client.id.data, info->client.id.data + sizeof(info->client.id.data),
+      rmw_client->writer_guid);
+
   RET_NULL_X(rmw_client->service_name, goto fail_service_name);
   memcpy(const_cast<char *>(rmw_client->service_name), service_name, strlen(service_name) + 1);
 
