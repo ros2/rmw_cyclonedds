@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.7.9 (2022-07-25)
+------------------
+* Fix the history depth for KEEP_ALL (`#305 <https://github.com/ros2/rmw_cyclonedds/issues/305>`_) (`#394 <https://github.com/ros2/rmw_cyclonedds/issues/394>`_)
+* Contributors: Chris Lalancette
+
 0.7.8 (2022-02-04)
 ------------------
 * Free with the same allocator in rmw_destroy_node (`#355 <https://github.com/ros2/rmw_cyclonedds/issues/355>`_) (`#369 <https://github.com/ros2/rmw_cyclonedds/issues/369>`_)
