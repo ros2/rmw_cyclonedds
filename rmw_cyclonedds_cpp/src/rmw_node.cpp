@@ -2494,6 +2494,24 @@ extern "C" rmw_ret_t rmw_get_gid_for_publisher(const rmw_publisher_t * publisher
   return RMW_RET_OK;
 }
 
+extern "C" rmw_ret_t rmw_get_gid_for_client(const rmw_client_t * client, rmw_gid_t * gid)
+{
+  RMW_CHECK_ARGUMENT_FOR_NULL(gid, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    client,
+    client->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_ARGUMENT_FOR_NULL(gid, RMW_RET_INVALID_ARGUMENT);
+
+  const CddsClient *cli = static_cast<const CddsClient*>(client->data);
+  gid->implementation_identifier = eclipse_cyclonedds_identifier;
+  memset(gid->data, 0, sizeof(gid->data));
+  assert(sizeof(cli->client.id.data) <= sizeof(gid->data));
+  memcpy(gid->data, cli->client.id.data, sizeof(cli->client.id.data));
+  return RMW_RET_OK;
+}
+
 extern "C" rmw_ret_t rmw_compare_gids_equal(
   const rmw_gid_t * gid1, const rmw_gid_t * gid2,
   bool * result)
