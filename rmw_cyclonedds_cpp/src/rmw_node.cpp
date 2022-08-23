@@ -1801,7 +1801,7 @@ void set_error_message_from_create_topic(dds_entity_t topic)
   } else if (DDS_RETCODE_PRECONDITION_NOT_MET == topic) {
     RMW_SET_ERROR_MSG(
       "failed to create topic because it's already in use"
-      " in this context with different message type");
+      " in this context with a different message type");
   } else {
     RMW_SET_ERROR_MSG("failed to create topic for unknown reasons");
   }
