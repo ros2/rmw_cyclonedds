@@ -1787,23 +1787,24 @@ static dds_entity_t create_topic(dds_entity_t pp, const char * name, struct ddsi
   return tp;
 }
 
-void set_error_message_from_create_topic(dds_entity_t topic)
+void set_error_message_from_create_topic(dds_entity_t topic, std::string topic_name)
 {
   assert(topic < 0);
   if (DDS_RETCODE_BAD_PARAMETER == topic) {
-    RMW_SET_ERROR_MSG(
-      "failed to create topic because the function was given"
-      " invalid parameters");
+    std::string error_msg = "failed to create topic [" + topic_name +
+      "] because the function was given invalid parameters";
+    RMW_SET_ERROR_MSG(error_msg.c_str());
   } else if (DDS_RETCODE_INCONSISTENT_POLICY == topic) {
-    RMW_SET_ERROR_MSG(
-      "failed to create topic because it's already in use"
-      " in this context with incompatible QoS settings");
+    std::string error_msg = "failed to create topic [" + topic_name +
+      "] because it's already in use in this context with incompatible QoS settings";
+    RMW_SET_ERROR_MSG(error_msg.c_str());
   } else if (DDS_RETCODE_PRECONDITION_NOT_MET == topic) {
-    RMW_SET_ERROR_MSG(
-      "failed to create topic because it's already in use"
-      " in this context with a different message type");
+    std::string error_msg = "failed to create topic [" + topic_name +
+      "] because it's already in use in this context with a different message type";
+    RMW_SET_ERROR_MSG(error_msg.c_str());
   } else {
-    RMW_SET_ERROR_MSG("failed to create topic for unknown reasons");
+    std::string error_msg = "failed to create topic [" + topic_name + "] for unknown reasons";
+    RMW_SET_ERROR_MSG(error_msg.c_str());
   }
 }
 
@@ -2293,7 +2294,7 @@ static CddsPublisher * create_cdds_publisher(
   listener_set_event_callbacks(listener, &pub->user_callback_data);
 
   if (topic < 0) {
-    set_error_message_from_create_topic(topic);
+    set_error_message_from_create_topic(topic, fqtopic_name);
     goto fail_topic;
   }
   if ((qos = create_readwrite_qos(qos_policies, false)) == nullptr) {
@@ -2803,7 +2804,7 @@ static CddsSubscription * create_cdds_subscription(
   listener_set_event_callbacks(listener, &sub->user_callback_data);
 
   if (topic < 0) {
-    set_error_message_from_create_topic(topic);
+    set_error_message_from_create_topic(topic, fqtopic_name);
     goto fail_topic;
   }
   if ((qos = create_readwrite_qos(qos_policies, ignore_local_publications)) == nullptr) {
@@ -4635,7 +4636,7 @@ static rmw_ret_t rmw_init_cs(
   struct ddsi_sertype * pub_stact;
   pubtopic = create_topic(node->context->impl->ppant, pubtopic_name.c_str(), pub_st, &pub_stact);
   if (pubtopic < 0) {
-    set_error_message_from_create_topic(pubtopic);
+    set_error_message_from_create_topic(pubtopic, pubtopic_name);
     goto fail_pubtopic;
   }
 
@@ -4644,7 +4645,7 @@ static rmw_ret_t rmw_init_cs(
     std::move(sub_msg_ts));
   subtopic = create_topic(node->context->impl->ppant, subtopic_name.c_str(), sub_st);
   if (subtopic < 0) {
-    set_error_message_from_create_topic(subtopic);
+    set_error_message_from_create_topic(subtopic, subtopic_name);
     goto fail_subtopic;
   }
   // before proceeding to outright ignore given QoS policies, sanity check them
