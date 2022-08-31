@@ -23,7 +23,7 @@ jobs:
     - name: Set up git to see all pull requests
       run: git config --global --add remote.origin.fetch '+refs/pull/*:refs/remotes/origin/pull/*'
     - name: Build and test ROS
-      uses: ros-tooling/action-ros-ci@0.0.19
+      uses: ros-tooling/action-ros-ci@v0.2
       with:
         target-ros2-distro: foxy
         package-name: >
