@@ -1787,23 +1787,23 @@ static dds_entity_t create_topic(dds_entity_t pp, const char * name, struct ddsi
   return tp;
 }
 
-void set_error_message_from_create_topic(dds_entity_t topic, std::string topic_name)
+void set_error_message_from_create_topic(dds_entity_t topic, const std::string & topic_name)
 {
   assert(topic < 0);
   if (DDS_RETCODE_BAD_PARAMETER == topic) {
-    std::string error_msg = "failed to create topic [" + topic_name +
+    const std::string error_msg = "failed to create topic [" + topic_name +
       "] because the function was given invalid parameters";
     RMW_SET_ERROR_MSG(error_msg.c_str());
   } else if (DDS_RETCODE_INCONSISTENT_POLICY == topic) {
-    std::string error_msg = "failed to create topic [" + topic_name +
+    const std::string error_msg = "failed to create topic [" + topic_name +
       "] because it's already in use in this context with incompatible QoS settings";
     RMW_SET_ERROR_MSG(error_msg.c_str());
   } else if (DDS_RETCODE_PRECONDITION_NOT_MET == topic) {
-    std::string error_msg = "failed to create topic [" + topic_name +
+    const std::string error_msg = "failed to create topic [" + topic_name +
       "] because it's already in use in this context with a different message type";
     RMW_SET_ERROR_MSG(error_msg.c_str());
   } else {
-    std::string error_msg = "failed to create topic [" + topic_name + "] for unknown reasons";
+    const std::string error_msg = "failed to create topic [" + topic_name + "] for unknown reasons";
     RMW_SET_ERROR_MSG(error_msg.c_str());
   }
 }
