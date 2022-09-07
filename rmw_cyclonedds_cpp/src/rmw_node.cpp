@@ -40,6 +40,7 @@
 
 #include "rmw/allocators.h"
 #include "rmw/convert_rcutils_ret_to_rmw_ret.h"
+#include "rmw/discovery_params.h"
 #include "rmw/error_handling.h"
 #include "rmw/event.h"
 #include "rmw/features.h"
@@ -255,7 +256,7 @@ struct CddsDomain
      There are a few issues with the current support for creating domains explicitly in
      Cyclone, fixing those might relax alter or relax some of the above. */
 
-  bool localhost_only;
+  rmw_discovery_params_t discovery_params;
   uint32_t refcount;
 
   /* handle of the domain entity */
@@ -263,8 +264,10 @@ struct CddsDomain
 
   /* Default constructor so operator[] can be safely be used to look one up */
   CddsDomain()
-  : localhost_only(false), refcount(0), domain_handle(0)
-  {}
+  : refcount(0), domain_handle(0)
+  {
+    discovery_params = rmw_get_zero_initialized_discovery_params();
+  }
 
   ~CddsDomain()
   {}
@@ -739,6 +742,8 @@ extern "C" rmw_ret_t rmw_init_options_init(
   init_options->allocator = allocator;
   init_options->impl = nullptr;
   init_options->localhost_only = RMW_LOCALHOST_ONLY_DEFAULT;
+  init_options->discovery_params.automatic_discovery_range = RMW_AUTOMATIC_DISCOVERY_RANGE_DEFAULT;
+  init_options->discovery_params.static_peers_count = 0;
   init_options->domain_id = RMW_DEFAULT_DOMAIN_ID;
   init_options->enclave = NULL;
   init_options->security_options = rmw_get_zero_initialized_security_options();
@@ -1030,39 +1035,63 @@ static rmw_ret_t discovery_thread_stop(rmw_dds_common::Context & common_context)
   return RMW_RET_OK;
 }
 
-static bool check_create_domain(dds_domainid_t did, rmw_localhost_only_t localhost_only_option)
+static bool check_create_domain(dds_domainid_t did, rmw_discovery_params_t * discovery_params)
 {
-  const bool localhost_only = (localhost_only_option == RMW_LOCALHOST_ONLY_ENABLED);
   std::lock_guard<std::mutex> lock(gcdds().domains_lock);
-  /* return true: n_nodes incremented, localhost_only set correctly, domain exists
+  /* return true: n_nodes incremented, discovery params set correctly, domain exists
      "      false: n_nodes unchanged, domain left intact if it already existed */
   CddsDomain & dom = gcdds().domains[did];
   if (dom.refcount != 0) {
-    /* Localhost setting must match */
-    if (localhost_only == dom.localhost_only) {
+    /* Discovery parameters must match */
+    if (rmw_discovery_params_equal(discovery_params, &dom.discovery_params)) {
       dom.refcount++;
       return true;
     } else {
       RCUTILS_LOG_ERROR_NAMED(
         "rmw_cyclonedds_cpp",
-        "rmw_create_node: attempt at creating localhost-only and non-localhost-only nodes "
-        "in the same domain");
+        "check_create_domain: attempt at creating nodes in the same domain with different "
+        "discovery parameters");
       return false;
     }
   } else {
     dom.refcount = 1;
-    dom.localhost_only = localhost_only;
+    dom.discovery_params = *discovery_params;
 
-    /* Localhost-only: set network interface address (shortened form of config would be
-       possible, too, but I think it is clearer to spell it out completely).  Empty
-       configuration fragments are ignored, so it is safe to unconditionally append a
-       comma. */
-    std::string config =
-      localhost_only ?
-      "<CycloneDDS><Domain><General><Interfaces><NetworkInterface address=\"127.0.0.1\"/>"
-      "</Interfaces></General></Domain></CycloneDDS>,"
-      :
-      "";
+    std::string config;
+
+    switch (discovery_params->automatic_discovery_range) {
+      case RMW_AUTOMATIC_DISCOVERY_RANGE_OFF:
+        /* Automatic discovery off: disable multicast for participant discovery. */
+        config += "<CycloneDDS><Domain><General><AllowMulticast>ssm</AllowMulticast>"
+          //"<MulticastRecvNetworkInterfaceAddresses>none"
+          //"</MulticastRecvNetworkInterfaceAddresses>"
+          "</General></Domain></CycloneDDS>,";
+        break;
+      case RMW_AUTOMATIC_DISCOVERY_RANGE_SUBNET:
+        /* Automatic discovery on subnet: Basically use the Cyclone DDS default settings. */
+        config += "<CycloneDDS><Domain><General><AllowMulticast>true</AllowMulticast>"
+          "<MulticastRecvNetworkInterfaceAddresses>all"
+          "</MulticastRecvNetworkInterfaceAddresses>"
+          "</General></Domain></CycloneDDS>,";
+        break;
+      default:  /* RMW_AUTOMATIC_DISCOVERY_RANGE_LOCALHOST or _DEFAULT */
+        /* Automatic discovery on localhost only: How to achieve this? */
+        config += "<CycloneDDS><Domain><General><AllowMulticast>true</AllowMulticast>"
+          "<MulticastRecvNetworkInterfaceAddresses>224.0.0.1"
+          "</MulticastRecvNetworkInterfaceAddresses>"
+          "</General></Domain></CycloneDDS>,";
+        break;
+    }
+
+    if (discovery_params->static_peers_count > 0) {
+      config += "<CycloneDDS><Domain><Discovery><Peers>";
+      for (size_t ii = 0; ii < discovery_params->static_peers_count; ++ii) {
+        config += "<Peer address=\"";
+        config += discovery_params->static_peers[ii];
+        config += "\"/>";
+      }
+      config += "</Peers></Discovery></Domain></CycloneDDS>,";
+    }
 
     /* Emulate default behaviour of Cyclone of reading CYCLONEDDS_URI */
     const char * get_env_error;
@@ -1077,6 +1106,8 @@ static bool check_create_domain(dds_domainid_t did, rmw_localhost_only_t localho
       gcdds().domains.erase(did);
       return false;
     }
+
+    RCUTILS_LOG_INFO_NAMED("rmw_cyclonedds_cpp", "Config XML is %s", config.c_str());
 
     if ((dom.domain_handle = dds_create_domain(did, config.c_str())) < 0) {
       RCUTILS_LOG_ERROR_NAMED(
@@ -1177,7 +1208,7 @@ rmw_context_impl_s::init(rmw_init_options_t * options, size_t domain_id)
     version of dds_create_domain that doesn't return a handle.  */
   this->domain_id = static_cast<dds_domainid_t>(domain_id);
 
-  if (!check_create_domain(this->domain_id, options->localhost_only)) {
+  if (!check_create_domain(this->domain_id, &options->discovery_params)) {
     return RMW_RET_ERROR;
   }
 
@@ -1435,7 +1466,7 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
 
   if (options->domain_id >= UINT32_MAX && options->domain_id != RMW_DEFAULT_DOMAIN_ID) {
     RCUTILS_LOG_ERROR_NAMED(
-      "rmw_cyclonedds_cpp", "rmw_create_node: domain id out of range");
+      "rmw_cyclonedds_cpp", "rmw_init: domain id out of range");
     return RMW_RET_INVALID_ARGUMENT;
   }
 
