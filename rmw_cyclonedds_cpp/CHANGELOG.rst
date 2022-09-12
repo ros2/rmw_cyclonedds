@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.7.10 (2022-09-12)
+-------------------
+* Improve error message when create_topic fails (`#405 <https://github.com/ros2/rmw_cyclonedds/issues/405>`_ `#408 <https://github.com/ros2/rmw_cyclonedds/issues/408>`_)
+* Contributors: Shane Loretz, Tully Foote
+
 0.7.9 (2022-07-25)
 ------------------
 * Fix the history depth for KEEP_ALL (`#305 <https://github.com/ros2/rmw_cyclonedds/issues/305>`_) (`#394 <https://github.com/ros2/rmw_cyclonedds/issues/394>`_)
