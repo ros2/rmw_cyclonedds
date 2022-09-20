@@ -2,6 +2,12 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.7.11 (2022-09-20)
+-------------------
+* Handle allocation errors during message deserialization (`#313 <https://github.com/ros2/rmw_cyclonedds/issues/313>`_) (`#419 <https://github.com/ros2/rmw_cyclonedds/issues/419>`_)
+* Adds topic name to error msg when create_topic fails (`#410 <https://github.com/ros2/rmw_cyclonedds/issues/410>`_) (`#422 <https://github.com/ros2/rmw_cyclonedds/issues/422>`)_
+* Contributors: Jacob Perron, Michel Hidalgo, Tully Foote, Voldivh
+
 0.7.10 (2022-09-12)
 -------------------
 * Improve error message when create_topic fails (`#405 <https://github.com/ros2/rmw_cyclonedds/issues/405>`_ `#408 <https://github.com/ros2/rmw_cyclonedds/issues/408>`_)
