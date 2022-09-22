@@ -545,6 +545,7 @@ extern "C" rmw_ret_t rmw_subscription_set_on_new_message_callback(
   rmw_event_callback_t callback,
   const void * user_data)
 {
+  RMW_CHECK_ARGUMENT_FOR_NULL(rmw_subscription, RMW_RET_INVALID_ARGUMENT);
   auto sub = static_cast<CddsSubscription *>(rmw_subscription->data);
 
   user_callback_data_t * data = &(sub->user_callback_data);
@@ -578,6 +579,7 @@ extern "C" rmw_ret_t rmw_service_set_on_new_request_callback(
   rmw_event_callback_t callback,
   const void * user_data)
 {
+  RMW_CHECK_ARGUMENT_FOR_NULL(rmw_service, RMW_RET_INVALID_ARGUMENT);
   auto srv = static_cast<CddsService *>(rmw_service->data);
 
   user_callback_data_t * data = &(srv->user_callback_data);
@@ -602,6 +604,7 @@ extern "C" rmw_ret_t rmw_client_set_on_new_response_callback(
   rmw_event_callback_t callback,
   const void * user_data)
 {
+  RMW_CHECK_ARGUMENT_FOR_NULL(rmw_client, RMW_RET_INVALID_ARGUMENT);
   auto cli = static_cast<CddsClient *>(rmw_client->data);
 
   user_callback_data_t * data = &(cli->user_callback_data);
@@ -648,6 +651,7 @@ extern "C" rmw_ret_t rmw_event_set_callback(
   rmw_event_callback_t callback,
   const void * user_data)
 {
+  RMW_CHECK_ARGUMENT_FOR_NULL(rmw_event, RMW_RET_INVALID_ARGUMENT);
   switch (rmw_event->event_type) {
     case RMW_EVENT_LIVELINESS_CHANGED:
       {
