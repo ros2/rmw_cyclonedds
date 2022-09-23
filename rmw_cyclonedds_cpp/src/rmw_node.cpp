@@ -2489,8 +2489,30 @@ extern "C" rmw_ret_t rmw_get_gid_for_publisher(const rmw_publisher_t * publisher
   auto pub = static_cast<const CddsPublisher *>(publisher->data);
   gid->implementation_identifier = eclipse_cyclonedds_identifier;
   memset(gid->data, 0, sizeof(gid->data));
-  assert(sizeof(pub->pubiid) <= sizeof(gid->data));
+  static_assert(
+    sizeof(pub->pubiid) <= sizeof(gid->data),
+    "publisher id is larger than max rmw gid size");
   memcpy(gid->data, &pub->pubiid, sizeof(pub->pubiid));
+  return RMW_RET_OK;
+}
+
+extern "C" rmw_ret_t rmw_get_gid_for_client(const rmw_client_t * client, rmw_gid_t * gid)
+{
+  RMW_CHECK_ARGUMENT_FOR_NULL(client, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    client,
+    client->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_ARGUMENT_FOR_NULL(gid, RMW_RET_INVALID_ARGUMENT);
+
+  const CddsClient * cli = static_cast<const CddsClient *>(client->data);
+  gid->implementation_identifier = eclipse_cyclonedds_identifier;
+  memset(gid->data, 0, sizeof(gid->data));
+  static_assert(
+    sizeof(cli->client.id.data) <= sizeof(gid->data),
+    "client id is larger than max rmw gid size");
+  memcpy(gid->data, cli->client.id.data, sizeof(cli->client.id.data));
   return RMW_RET_OK;
 }
 
