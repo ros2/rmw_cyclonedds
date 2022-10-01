@@ -54,6 +54,10 @@ find_package(rosidl_runtime_c REQUIRED)
 find_package(rosidl_typesupport_introspection_c REQUIRED)
 find_package(rosidl_typesupport_introspection_cpp REQUIRED)
 
+if(_cyclonedds_has_shm)
+  ament_export_dependencies(iceoryx_binding_c)
+endif()
+ament_export_dependencies(CycloneDDS)
 ament_export_dependencies(rcutils)
 ament_export_dependencies(rcpputils)
 ament_export_dependencies(rmw)
@@ -61,6 +65,7 @@ ament_export_dependencies(rosidl_runtime_c)
 ament_export_dependencies(rmw_dds_common)
 ament_export_dependencies(rosidl_typesupport_introspection_c)
 ament_export_dependencies(rosidl_typesupport_introspection_cpp)
+ament_export_dependencies(tracetools)
 
 add_library(rmw_cyclonedds_cpp
   src/rmw_get_network_flow_endpoints.cpp
