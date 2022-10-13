@@ -371,9 +371,7 @@ struct CddsSubscription : CddsEntity
 
 struct client_service_id_t
 {
-  // strangely, the writer_guid in an rmw_request_id_t is smaller than the identifier in
-  // an rmw_gid_t
-  uint8_t data[sizeof((reinterpret_cast<rmw_request_id_t *>(0))->writer_guid)]; // NOLINT
+  uint8_t data[RMW_GID_STORAGE_SIZE];
 };
 
 struct CddsCS
@@ -4284,15 +4282,22 @@ static rmw_ret_t rmw_take_response_request(
   while (dds_take(cs->sub->enth, &wrap_ptr, &info, 1, 1) == 1) {
     if (info.valid_data) {
       static_assert(
-        sizeof(request_header->request_id.writer_guid) ==
+        sizeof(request_header->request_id.client_gid.data) >=
         sizeof(wrap.header.guid) + sizeof(info.publication_handle),
         "request header size assumptions not met");
       memcpy(
-        static_cast<void *>(request_header->request_id.writer_guid),
+        static_cast<void *>(request_header->request_id.client_gid.data),
         static_cast<const void *>(&wrap.header.guid), sizeof(wrap.header.guid));
       memcpy(
-        static_cast<void *>(request_header->request_id.writer_guid + sizeof(wrap.header.guid)),
+        static_cast<void *>(request_header->request_id.client_gid.data + sizeof(wrap.header.guid)),
         static_cast<const void *>(&info.publication_handle), sizeof(info.publication_handle));
+      // Fill unused bytes of the GID with zeros
+      const size_t gid_size = sizeof(wrap.header.guid) + sizeof(info.publication_handle);
+      memset(
+        static_cast<void *>(request_header->request_id.client_gid.data + gid_size),
+        0,
+        sizeof(request_header->request_id.client_gid.data) - gid_size);
+      request_header->request_id.client_gid.implementation_identifier = eclipse_cyclonedds_identifier;
       request_header->request_id.sequence_number = wrap.header.seq;
       request_header->source_timestamp = info.source_timestamp;
       // TODO(iluetkeb) replace with real received timestamp when available in cyclone
@@ -4455,14 +4460,14 @@ extern "C" rmw_ret_t rmw_send_response(
   cdds_request_header_t header;
   dds_instance_handle_t reqwrih;
   static_assert(
-    sizeof(request_header->writer_guid) == sizeof(header.guid) + sizeof(reqwrih),
+    sizeof(request_header->client_gid.data) >= sizeof(header.guid) + sizeof(reqwrih),
     "request header size assumptions not met");
   memcpy(
-    static_cast<void *>(&header.guid), static_cast<const void *>(request_header->writer_guid),
+    static_cast<void *>(&header.guid), static_cast<const void *>(request_header->client_gid.data),
     sizeof(header.guid));
   memcpy(
     static_cast<void *>(&reqwrih),
-    static_cast<const void *>(request_header->writer_guid + sizeof(header.guid)), sizeof(reqwrih));
+    static_cast<const void *>(request_header->client_gid.data + sizeof(header.guid)), sizeof(reqwrih));
   header.seq = request_header->sequence_number;
   // Block until the response reader has been matched by the response writer (this is a
   // workaround: rmw_service_server_is_available should keep returning false until this
