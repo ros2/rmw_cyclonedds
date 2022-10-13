@@ -1535,6 +1535,9 @@ extern "C" rmw_ret_t rmw_deserialize(
   } catch (rmw_cyclonedds_cpp::Exception & e) {
     RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("rmw_serialize: %s", e.what());
     ok = false;
+  } catch (std::runtime_error & e) {
+    RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("rmw_serialize: %s", e.what());
+    ok = false;
   }
 
   return ok ? RMW_RET_OK : RMW_RET_ERROR;
