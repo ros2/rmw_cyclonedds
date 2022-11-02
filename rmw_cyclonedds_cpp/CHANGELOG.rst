@@ -2,6 +2,15 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Export CycloneDDS dependency (`#424 <https://github.com/ros2/rmw_cyclonedds/issues/424>`_)
+* add NULL check before accessing object. (`#423 <https://github.com/ros2/rmw_cyclonedds/issues/423>`_)
+* Add rmw_get_gid_for_client impl (`#402 <https://github.com/ros2/rmw_cyclonedds/issues/402>`_)
+* Makes topic_name a const ref
+* Adds topic name to error msg when create_topic fails
+* Contributors: Brian, Shane Loretz, Tomoya Fujita, Tully Foote, Voldivh
+
 1.4.1 (2022-09-13)
 ------------------
 * Improve error message when create_topic fails (`#405 <https://github.com/ros2/rmw_cyclonedds/issues/405>`_)
