@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.5.0 (2022-11-02)
+------------------
 * Export CycloneDDS dependency (`#424 <https://github.com/ros2/rmw_cyclonedds/issues/424>`_)
 * add NULL check before accessing object. (`#423 <https://github.com/ros2/rmw_cyclonedds/issues/423>`_)
 * Add rmw_get_gid_for_client impl (`#402 <https://github.com/ros2/rmw_cyclonedds/issues/402>`_)
