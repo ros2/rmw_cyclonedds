@@ -1062,35 +1062,37 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_params_t * dis
     switch (discovery_params->automatic_discovery_range) {
       case RMW_AUTOMATIC_DISCOVERY_RANGE_OFF:
         /* Automatic discovery off: disable multicast for participant discovery. */
-        config += "<CycloneDDS><Domain><General><AllowMulticast>ssm</AllowMulticast>"
+        config += "<CycloneDDS><Domain><General><AllowMulticast>asm,ssm</AllowMulticast>"
           //"<MulticastRecvNetworkInterfaceAddresses>none"
           //"</MulticastRecvNetworkInterfaceAddresses>"
-          "</General></Domain></CycloneDDS>,";
+          "</General>";
         break;
       case RMW_AUTOMATIC_DISCOVERY_RANGE_SUBNET:
         /* Automatic discovery on subnet: Basically use the Cyclone DDS default settings. */
         config += "<CycloneDDS><Domain><General><AllowMulticast>true</AllowMulticast>"
           "<MulticastRecvNetworkInterfaceAddresses>all"
           "</MulticastRecvNetworkInterfaceAddresses>"
-          "</General></Domain></CycloneDDS>,";
+          "</General>";
         break;
       default:  /* RMW_AUTOMATIC_DISCOVERY_RANGE_LOCALHOST or _DEFAULT */
         /* Automatic discovery on localhost only: How to achieve this? */
         config += "<CycloneDDS><Domain><General><AllowMulticast>true</AllowMulticast>"
           "<MulticastRecvNetworkInterfaceAddresses>224.0.0.1"
           "</MulticastRecvNetworkInterfaceAddresses>"
-          "</General></Domain></CycloneDDS>,";
+          "</General>";
         break;
     }
 
     if (discovery_params->static_peers_count > 0) {
-      config += "<CycloneDDS><Domain><Discovery><Peers>";
+      config += "<Discovery><Peers>";
       for (size_t ii = 0; ii < discovery_params->static_peers_count; ++ii) {
         config += "<Peer address=\"";
         config += discovery_params->static_peers[ii];
         config += "\"/>";
       }
       config += "</Peers></Discovery></Domain></CycloneDDS>,";
+    } else {
+      config += "</Domain></CycloneDDS>";
     }
 
     /* Emulate default behaviour of Cyclone of reading CYCLONEDDS_URI */
