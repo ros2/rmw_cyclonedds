@@ -718,7 +718,7 @@ extern "C" rmw_ret_t rmw_event_set_callback(
         break;
       }
 
-    case RMW_EVENT_PUBLISHER_INCONSISTENT_TOPIC:
+    case RMW_EVENT_PUBLISHER_INCOMPATIBLE_TYPE:
       {
         auto pub_event = static_cast<CddsPublisher *>(rmw_event->data);
         event_set_callback(
@@ -727,7 +727,7 @@ extern "C" rmw_ret_t rmw_event_set_callback(
         break;
       }
 
-    case RMW_EVENT_SUBSCRIPTION_INCONSISTENT_TOPIC:
+    case RMW_EVENT_SUBSCRIPTION_INCOMPATIBLE_TYPE:
       {
         auto sub_event = static_cast<CddsSubscription *>(rmw_event->data);
         event_set_callback(
@@ -3647,8 +3647,8 @@ static const std::unordered_map<rmw_event_type_t, uint32_t> mask_map{
   {RMW_EVENT_REQUESTED_QOS_INCOMPATIBLE, DDS_REQUESTED_INCOMPATIBLE_QOS_STATUS},
   {RMW_EVENT_OFFERED_QOS_INCOMPATIBLE, DDS_OFFERED_INCOMPATIBLE_QOS_STATUS},
   {RMW_EVENT_MESSAGE_LOST, DDS_SAMPLE_LOST_STATUS},
-  {RMW_EVENT_PUBLISHER_INCONSISTENT_TOPIC, DDS_INCONSISTENT_TOPIC_STATUS},
-  {RMW_EVENT_SUBSCRIPTION_INCONSISTENT_TOPIC, DDS_INCONSISTENT_TOPIC_STATUS},
+  {RMW_EVENT_PUBLISHER_INCOMPATIBLE_TYPE, DDS_INCONSISTENT_TOPIC_STATUS},
+  {RMW_EVENT_SUBSCRIPTION_INCOMPATIBLE_TYPE, DDS_INCONSISTENT_TOPIC_STATUS},
 };
 
 static bool is_event_supported(const rmw_event_type_t event_t)
@@ -3821,8 +3821,8 @@ extern "C" rmw_ret_t rmw_take_event(
         }
       }
 
-    case RMW_EVENT_PUBLISHER_INCONSISTENT_TOPIC: {
-        auto it = static_cast<rmw_inconsistent_topic_status_t *>(event_info);
+    case RMW_EVENT_PUBLISHER_INCOMPATIBLE_TYPE: {
+        auto it = static_cast<rmw_incompatible_type_status_t *>(event_info);
         auto pub = static_cast<CddsPublisher *>(event_handle->data);
 
         const dds_entity_t topic = dds_get_topic(pub->enth);
@@ -3838,8 +3838,8 @@ extern "C" rmw_ret_t rmw_take_event(
         }
       }
 
-    case RMW_EVENT_SUBSCRIPTION_INCONSISTENT_TOPIC: {
-        auto it = static_cast<rmw_inconsistent_topic_status_t *>(event_info);
+    case RMW_EVENT_SUBSCRIPTION_INCOMPATIBLE_TYPE: {
+        auto it = static_cast<rmw_incompatible_type_status_t *>(event_info);
         auto sub = static_cast<CddsSubscription *>(event_handle->data);
 
         const dds_entity_t topic = dds_get_topic(sub->enth);
