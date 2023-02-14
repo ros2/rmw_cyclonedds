@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.5.1 (2023-02-14)
+------------------
 * Make sure to add semicolons to the CHECK_TYPE_IDENTIFIER_MATCH. (`#432 <https://github.com/ros2/rmw_cyclonedds/issues/432>`_)
 * [rolling] Update maintainers - 2022-11-07 (`#428 <https://github.com/ros2/rmw_cyclonedds/issues/428>`_)
 * Contributors: Audrow Nash, Chris Lalancette
