@@ -942,6 +942,7 @@ static void handle_builtintopic_endpoint(
         gid,
         std::string(s->topic_name),
         std::string(s->type_name),
+        nullptr,
         ppgid,
         qos_profile,
         is_reader);
