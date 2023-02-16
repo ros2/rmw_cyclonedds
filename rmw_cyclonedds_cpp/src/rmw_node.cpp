@@ -511,11 +511,56 @@ static void dds_listener_callback(dds_entity_t entity, void * arg)
 MAKE_DDS_EVENT_CALLBACK_FN(requested_deadline_missed, REQUESTED_DEADLINE_MISSED)
 MAKE_DDS_EVENT_CALLBACK_FN(liveliness_lost, LIVELINESS_LOST)
 MAKE_DDS_EVENT_CALLBACK_FN(offered_deadline_missed, OFFERED_DEADLINE_MISSED)
-MAKE_DDS_EVENT_CALLBACK_FN(requested_incompatible_qos, REQUESTED_INCOMPATIBLE_QOS)
 MAKE_DDS_EVENT_CALLBACK_FN(sample_lost, SAMPLE_LOST)
-MAKE_DDS_EVENT_CALLBACK_FN(offered_incompatible_qos, OFFERED_INCOMPATIBLE_QOS)
 MAKE_DDS_EVENT_CALLBACK_FN(liveliness_changed, LIVELINESS_CHANGED)
-MAKE_DDS_EVENT_CALLBACK_FN(inconsistent_topic, INCONSISTENT_TOPIC)
+
+/**
+ * Because the inconsistent topic is not handled correctly in CycloneDDS,
+ * this callback is signalled via the incompatible qos handlers
+ */
+// MAKE_DDS_EVENT_CALLBACK_FN(inconsistent_topic, INCONSISTENT_TOPIC)
+
+static void on_requested_incompatible_qos_fn(
+  dds_entity_t entity,
+  const dds_requested_incompatible_qos_status_t status,
+  void * arg)
+{
+  (void)entity;
+  auto data = static_cast<user_callback_data_t *>(arg);
+  std::lock_guard<std::mutex> guard(data->mutex);
+  uint32_t type = DDS_REQUESTED_INCOMPATIBLE_QOS_STATUS_ID;
+  if (DDS_TYPE_CONSISTENCY_ENFORCEMENT_QOS_POLICY_ID == status.last_policy_id) {
+    /* incompatible types */
+    type = DDS_INCONSISTENT_TOPIC_STATUS_ID;
+  }
+  auto cb = data->event_callback[type];
+  if (cb) {
+    cb(data->event_data[type], 1);
+  } else {
+    data->event_unread_count[type]++;
+  }
+}
+
+static void on_offered_incompatible_qos_fn(
+  dds_entity_t entity,
+  const dds_offered_incompatible_qos_status_t status,
+  void * arg)
+{
+  (void)entity;
+  auto data = static_cast<user_callback_data_t *>(arg);
+  std::lock_guard<std::mutex> guard(data->mutex);
+  uint32_t type = DDS_OFFERED_INCOMPATIBLE_QOS_STATUS_ID;
+  if (DDS_TYPE_CONSISTENCY_ENFORCEMENT_QOS_POLICY_ID == status.last_policy_id) {
+    /* incompatible types */
+    type = DDS_INCONSISTENT_TOPIC_STATUS_ID;
+  }
+  auto cb = data->event_callback[type];
+  if (cb) {
+    cb(data->event_data[type], 1);
+  } else {
+    data->event_unread_count[type]++;
+  }
+}
 
 static void listener_set_event_callbacks(dds_listener_t * l, void * arg)
 {
@@ -526,7 +571,6 @@ static void listener_set_event_callbacks(dds_listener_t * l, void * arg)
   dds_lset_offered_deadline_missed_arg(l, on_offered_deadline_missed_fn, arg, false);
   dds_lset_offered_incompatible_qos_arg(l, on_offered_incompatible_qos_fn, arg, false);
   dds_lset_liveliness_changed_arg(l, on_liveliness_changed_fn, arg, false);
-  dds_lset_inconsistent_topic_arg(l, on_inconsistent_topic_fn, arg, false);
 }
 
 static bool get_readwrite_qos(dds_entity_t handle, rmw_qos_profile_t * rmw_qos_policies)
