@@ -925,10 +925,13 @@ static void handle_builtintopic_endpoint(
   dds_entity_t reader, rmw_context_impl_t * impl,
   bool is_reader)
 {
+  uint8_t type_hash[RCUTILS_SHA256_BLOCK_SIZE];
   dds_sample_info_t si;
   void * raw = NULL;
   while (dds_take(reader, &raw, &si, 1, 1) == 1) {
     auto s = static_cast<const dds_builtintopic_endpoint_t *>(raw);
+    RCUTILS_LOG_ERROR("Discovery: %s --- %p",
+      s->topic_name, type_hash);
     rmw_gid_t gid;
     convert_guid_to_gid(s->key, gid);
     if (si.instance_state != DDS_ALIVE_INSTANCE_STATE) {
@@ -938,11 +941,18 @@ static void handle_builtintopic_endpoint(
       rmw_gid_t ppgid;
       dds_qos_to_rmw_qos(s->qos, &qos_profile);
       convert_guid_to_gid(s->participant_key, ppgid);
+
+      if (RMW_RET_OK != rmw_dds_common::parse_type_hash_from_user_data_qos(
+        s->qos->user_data.value, s->qos->user_data.length, type_hash))
+      {
+        throw std::runtime_error("TODO(emersonknapp) handle null typehash");
+      }
+
       impl->common.graph_cache.add_entity(
         gid,
         std::string(s->topic_name),
         std::string(s->type_name),
-        nullptr,
+        type_hash,
         ppgid,
         qos_profile,
         is_reader);
@@ -2054,8 +2064,31 @@ static rmw_time_t dds_duration_to_rmw(dds_duration_t duration)
   }
 }
 
+static const uint8_t * get_type_hash(
+  const rosidl_message_type_support_t * type_support
+)
+{
+  RCUTILS_LOG_WARN("Get type hash");
+  if (type_support->typesupport_identifier == rosidl_typesupport_introspection_c__identifier) {
+    RCUTILS_LOG_WARN("It's the C");
+    auto members = static_cast<
+      const rosidl_typesupport_introspection_c__MessageMembers *>(type_support->data);
+    return members->type_hash_;
+  } else if (type_support->typesupport_identifier == rosidl_typesupport_introspection_cpp::typesupport_identifier) {
+    RCUTILS_LOG_WARN("It's the C++");
+    auto members =
+      static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(type_support->data);
+    return members->type_hash_;
+  } else {
+    RCUTILS_LOG_WARN("Unknown!!");
+    RMW_SET_ERROR_MSG("Unknown typesupport identifier");
+    return nullptr;
+  }
+}
+
 static dds_qos_t * create_readwrite_qos(
   const rmw_qos_profile_t * qos_policies,
+  const uint8_t * type_hash,
   bool ignore_local_publications)
 {
   dds_duration_t ldur;
@@ -2137,7 +2170,7 @@ static dds_qos_t * create_readwrite_qos(
     case RMW_QOS_POLICY_LIVELINESS_AUTOMATIC:
       dds_qset_liveliness(qos, DDS_LIVELINESS_AUTOMATIC, ldur);
       break;
-    case RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC:
+    case LINESS_MANUAL_BY_TOPIC:
       dds_qset_liveliness(qos, DDS_LIVELINESS_MANUAL_BY_TOPIC, ldur);
       break;
     case RMW_QOS_POLICY_LIVELINESS_UNKNOWN:
@@ -2148,6 +2181,11 @@ static dds_qos_t * create_readwrite_qos(
   if (ignore_local_publications) {
     dds_qset_ignorelocal(qos, DDS_IGNORELOCAL_PARTICIPANT);
   }
+
+  std::vector<uint8_t> user_data;
+  rmw_dds_common::encode_type_hash_for_user_data_qos(type_hash, user_data);
+  dds_qset_userdata(qos, user_data.data(), user_data.size());
+
   return qos;
 }
 
@@ -2325,6 +2363,7 @@ static CddsPublisher * create_cdds_publisher(
   CddsPublisher * pub = new CddsPublisher();
   dds_entity_t topic;
   dds_qos_t * qos;
+  const uint8_t * type_hash;
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
   bool is_fixed_type = is_type_self_contained(type_support);
@@ -2344,7 +2383,10 @@ static CddsPublisher * create_cdds_publisher(
     set_error_message_from_create_topic(topic, fqtopic_name);
     goto fail_topic;
   }
-  if ((qos = create_readwrite_qos(qos_policies, false)) == nullptr) {
+
+  type_hash = get_type_hash(type_support);
+  RCUTILS_LOG_WARN("Type hash addr: %p", type_hash);
+  if ((qos = create_readwrite_qos(qos_policies, type_hash, false)) == nullptr) {
     goto fail_qos;
   }
   if ((pub->enth = dds_create_writer(dds_pub, topic, qos, listener)) < 0) {
@@ -2860,6 +2902,8 @@ static CddsSubscription * create_cdds_subscription(
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
   bool is_fixed_type = is_type_self_contained(type_support);
   uint32_t sample_size = static_cast<uint32_t>(rmw_cyclonedds_cpp::get_message_size(type_support));
+  const uint8_t * type_hash;
+
   auto sertype = create_sertype(
     type_support->typesupport_identifier,
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
@@ -2876,7 +2920,11 @@ static CddsSubscription * create_cdds_subscription(
     set_error_message_from_create_topic(topic, fqtopic_name);
     goto fail_topic;
   }
-  if ((qos = create_readwrite_qos(qos_policies, ignore_local_publications)) == nullptr) {
+  type_hash = get_type_hash(type_support);
+  RCUTILS_LOG_WARN("Type hash addr: %p", type_hash);
+  if ((qos = create_readwrite_qos(
+    qos_policies, type_hash, ignore_local_publications)) == nullptr)
+  {
     goto fail_qos;
   }
   if ((sub->enth = dds_create_reader(dds_sub, topic, qos, listener)) < 0) {
@@ -4800,9 +4848,15 @@ static rmw_ret_t rmw_init_cs(
     goto fail_subtopic;
   }
   // before proceeding to outright ignore given QoS policies, sanity check them
-  dds_qos_t * qos;
-  if ((qos = create_readwrite_qos(qos_policies, false)) == nullptr) {
-    goto fail_qos;
+  dds_qos_t * pub_qos;
+  dds_qos_t * sub_qos;
+  const uint8_t * pub_type_hash = get_type_hash(pub_type_support);
+  const uint8_t * sub_type_hash = get_type_hash(sub_type_support);
+  if ((pub_qos = create_readwrite_qos(qos_policies, pub_type_hash, false)) == nullptr) {
+    goto fail_pub_qos;
+  }
+  if ((sub_qos = create_readwrite_qos(qos_policies, sub_type_hash, false)) == nullptr) {
+    goto fail_sub_qos;
   }
 
   // store a unique identifier for this client/service in the user
@@ -4814,13 +4868,13 @@ static rmw_ret_t rmw_init_cs(
       cs->id) + std::string(";");
     dds_qset_userdata(qos, user_data.c_str(), user_data.size());
   }
-  if ((pub->enth = dds_create_writer(node->context->impl->dds_pub, pubtopic, qos, nullptr)) < 0) {
+  if ((pub->enth = dds_create_writer(node->context->impl->dds_pub, pubtopic, pub_qos, nullptr)) < 0) {
     RMW_SET_ERROR_MSG("failed to create writer");
     goto fail_writer;
   }
   get_entity_gid(pub->enth, pub->gid);
   pub->sertype = pub_stact;
-  if ((sub->enth = dds_create_reader(node->context->impl->dds_sub, subtopic, qos, listener)) < 0) {
+  if ((sub->enth = dds_create_reader(node->context->impl->dds_sub, subtopic, sub_qos, listener)) < 0) {
     RMW_SET_ERROR_MSG("failed to create reader");
     goto fail_reader;
   }
@@ -4849,8 +4903,10 @@ fail_readcond:
 fail_reader:
   dds_delete(pub->enth);
 fail_writer:
-  dds_delete_qos(qos);
-fail_qos:
+  dds_delete_qos(sub_qos);
+fail_sub_qos:
+  dds_delete_qos(pub_qos);
+fail_pub_qos:
   dds_delete(subtopic);
 fail_subtopic:
   dds_delete(pubtopic);
