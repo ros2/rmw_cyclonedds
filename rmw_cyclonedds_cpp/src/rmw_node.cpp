@@ -932,7 +932,6 @@ static void handle_builtintopic_endpoint(
   bool is_reader)
 {
   uint8_t type_hash[RCUTILS_SHA256_BLOCK_SIZE];
-  memset(type_hash, 0x2c, RCUTILS_SHA256_BLOCK_SIZE);
 
   dds_sample_info_t si;
   void * raw = NULL;
@@ -2076,28 +2075,51 @@ static const uint8_t * get_type_hash(
   const rosidl_message_type_support_t * type_support
 )
 {
-  RCUTILS_LOG_WARN("Get type hash");
   if (type_support->typesupport_identifier == rosidl_typesupport_introspection_c__identifier) {
-    RCUTILS_LOG_WARN("It's the C");
     auto members = static_cast<
       const rosidl_typesupport_introspection_c__MessageMembers *>(type_support->data);
     return members->type_hash_;
   } else if (type_support->typesupport_identifier == rosidl_typesupport_introspection_cpp::typesupport_identifier) {
-    RCUTILS_LOG_WARN("It's the C++");
     auto members =
       static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(type_support->data);
     return members->type_hash_;
   } else {
-    RCUTILS_LOG_WARN("Unknown!!");
     RMW_SET_ERROR_MSG("Unknown typesupport identifier");
     return nullptr;
   }
 }
 
-static const uint8_t * get_service_type_hash(
+static const uint8_t * get_service_request_type_hash(
   const rosidl_service_type_support_t * type_support
 )
 {
+  if (type_support->typesupport_identifier == rosidl_typesupport_introspection_c__identifier) {
+    auto members = static_cast<
+      const rosidl_typesupport_introspection_c__ServiceMembers *>(type_support->data);
+    return members->request_members_->type_hash_;
+  } else if (type_support->typesupport_identifier == rosidl_typesupport_introspection_cpp::typesupport_identifier) {
+    auto members = static_cast<
+      const rosidl_typesupport_introspection_cpp::ServiceMembers *>(type_support->data);
+    return members->request_members_->type_hash_;
+  }
+  RMW_SET_ERROR_MSG("Unknown typesupport identifier");
+  return nullptr;
+}
+
+static const uint8_t * get_service_response_type_hash(
+  const rosidl_service_type_support_t * type_support
+)
+{
+  if (type_support->typesupport_identifier == rosidl_typesupport_introspection_c__identifier) {
+    auto members =
+      static_cast<const rosidl_typesupport_introspection_c__ServiceMembers *>(type_support->data);
+    return members->response_members_->type_hash_;
+  } else if (type_support->typesupport_identifier == rosidl_typesupport_introspection_cpp::typesupport_identifier) {
+    auto members =
+      static_cast<const rosidl_typesupport_introspection_cpp::ServiceMembers *>(type_support->data);
+    return members->response_members_->type_hash_;
+  }
+  RMW_SET_ERROR_MSG("Unknown typesupport identifier");
   return nullptr;
 }
 
@@ -2402,7 +2424,6 @@ static CddsPublisher * create_cdds_publisher(
   }
 
   type_hash = get_type_hash(type_support);
-  RCUTILS_LOG_WARN("Type hash addr: %p", type_hash);
   if ((qos = create_readwrite_qos(qos_policies, type_hash, false, "")) == nullptr) {
     goto fail_qos;
   }
@@ -2938,7 +2959,6 @@ static CddsSubscription * create_cdds_subscription(
     goto fail_topic;
   }
   type_hash = get_type_hash(type_support);
-  RCUTILS_LOG_WARN("Type hash addr: %p", type_hash);
   if ((qos = create_readwrite_qos(
     qos_policies, type_hash, ignore_local_publications, "")) == nullptr)
   {
@@ -4807,8 +4827,7 @@ static rmw_ret_t rmw_init_cs(
   std::string subtopic_name, pubtopic_name;
   void * pub_type_support, * sub_type_support;
   dds_qos_t * pub_qos, * sub_qos;
-  uint8_t pub_type_hash[32];
-  uint8_t sub_type_hash[32];
+  const uint8_t * pub_type_hash, * sub_type_hash;
   std::string user_data;
 
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> pub_msg_ts, sub_msg_ts;
@@ -4816,21 +4835,16 @@ static rmw_ret_t rmw_init_cs(
   dds_listener_t * listener = dds_create_listener(cb_data);
   dds_lset_data_available_arg(listener, dds_listener_callback, cb_data, false);
 
-  // Find
-  // auto service_members = static_cast<const service_type_support_callbacks_t *>(type_support->data);
-  // auto request_members = static_cast<const message_type_support_callbacks_t *>(
-  //   service_members->request_members_->data);
-  // auto response_members = static_cast<const message_type_support_callbacks_t *>(
-  //   service_members->response_members_->data);
-
   if (is_service) {
     std::tie(sub_msg_ts, pub_msg_ts) =
       rmw_cyclonedds_cpp::make_request_response_value_types(type_supports);
 
     sub_type_support = create_request_type_support(
       type_support->data, type_support->typesupport_identifier);
+    sub_type_hash = get_service_request_type_hash(type_support);
     pub_type_support = create_response_type_support(
       type_support->data, type_support->typesupport_identifier);
+    pub_type_hash = get_service_response_type_hash(type_support);
     subtopic_name =
       make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", qos_policies);
     pubtopic_name = make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", qos_policies);
@@ -4840,8 +4854,10 @@ static rmw_ret_t rmw_init_cs(
 
     pub_type_support = create_request_type_support(
       type_support->data, type_support->typesupport_identifier);
+    pub_type_hash = get_service_request_type_hash(type_support);
     sub_type_support = create_response_type_support(
       type_support->data, type_support->typesupport_identifier);
+    sub_type_hash = get_service_response_type_hash(type_support);
     pubtopic_name =
       make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", qos_policies);
     subtopic_name = make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", qos_policies);
@@ -4882,10 +4898,6 @@ static rmw_ret_t rmw_init_cs(
   get_unique_csid(node, cs->id);
   user_data = std::string(is_service ? "serviceid=" : "clientid=") + csid_to_string(
     cs->id) + std::string(";");
-
-  // before proceeding to outright ignore given QoS policies, sanity check them
-  memset(pub_type_hash, 0x1a, 32);
-  memset(sub_type_hash, 0x3c, 32);
 
   if ((pub_qos = create_readwrite_qos(qos_policies, pub_type_hash, false, user_data)) == nullptr) {
     goto fail_pub_qos;
