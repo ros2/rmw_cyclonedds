@@ -77,6 +77,12 @@
 
 #include "rosidl_typesupport_cpp/message_type_support.hpp"
 
+#include "rosidl_typesupport_introspection_cpp/message_introspection.hpp"
+#include "rosidl_typesupport_introspection_cpp/service_introspection.hpp"
+
+#include "rosidl_typesupport_introspection_c/service_introspection.h"
+#include "rosidl_typesupport_introspection_c/message_introspection.h"
+
 #include "tracetools/tracetools.h"
 
 #include "namespace_prefix.hpp"
@@ -926,12 +932,14 @@ static void handle_builtintopic_endpoint(
   bool is_reader)
 {
   uint8_t type_hash[RCUTILS_SHA256_BLOCK_SIZE];
+  memset(type_hash, 0x2c, RCUTILS_SHA256_BLOCK_SIZE);
+
   dds_sample_info_t si;
   void * raw = NULL;
   while (dds_take(reader, &raw, &si, 1, 1) == 1) {
     auto s = static_cast<const dds_builtintopic_endpoint_t *>(raw);
-    RCUTILS_LOG_ERROR("Discovery: %s --- %p",
-      s->topic_name, type_hash);
+    std::string discovered_user_data(s->qos->user_data.value, s->qos->user_data.value + s->qos->user_data.length);
+    RCUTILS_LOG_ERROR("Discovery: %s", s->topic_name);
     rmw_gid_t gid;
     convert_guid_to_gid(s->key, gid);
     if (si.instance_state != DDS_ALIVE_INSTANCE_STATE) {
@@ -2086,10 +2094,18 @@ static const uint8_t * get_type_hash(
   }
 }
 
+static const uint8_t * get_service_type_hash(
+  const rosidl_service_type_support_t * type_support
+)
+{
+  return nullptr;
+}
+
 static dds_qos_t * create_readwrite_qos(
   const rmw_qos_profile_t * qos_policies,
   const uint8_t * type_hash,
-  bool ignore_local_publications)
+  bool ignore_local_publications,
+  const std::string & extra_user_data)
 {
   dds_duration_t ldur;
   dds_qos_t * qos = dds_create_qos();
@@ -2170,7 +2186,7 @@ static dds_qos_t * create_readwrite_qos(
     case RMW_QOS_POLICY_LIVELINESS_AUTOMATIC:
       dds_qset_liveliness(qos, DDS_LIVELINESS_AUTOMATIC, ldur);
       break;
-    case LINESS_MANUAL_BY_TOPIC:
+    case DDS_LIVELINESS_MANUAL_BY_TOPIC:
       dds_qset_liveliness(qos, DDS_LIVELINESS_MANUAL_BY_TOPIC, ldur);
       break;
     case RMW_QOS_POLICY_LIVELINESS_UNKNOWN:
@@ -2182,8 +2198,9 @@ static dds_qos_t * create_readwrite_qos(
     dds_qset_ignorelocal(qos, DDS_IGNORELOCAL_PARTICIPANT);
   }
 
-  std::vector<uint8_t> user_data;
-  rmw_dds_common::encode_type_hash_for_user_data_qos(type_hash, user_data);
+  std::string user_data =
+    extra_user_data +
+    rmw_dds_common::encode_type_hash_for_user_data_qos(type_hash);
   dds_qset_userdata(qos, user_data.data(), user_data.size());
 
   return qos;
@@ -2386,7 +2403,7 @@ static CddsPublisher * create_cdds_publisher(
 
   type_hash = get_type_hash(type_support);
   RCUTILS_LOG_WARN("Type hash addr: %p", type_hash);
-  if ((qos = create_readwrite_qos(qos_policies, type_hash, false)) == nullptr) {
+  if ((qos = create_readwrite_qos(qos_policies, type_hash, false, "")) == nullptr) {
     goto fail_qos;
   }
   if ((pub->enth = dds_create_writer(dds_pub, topic, qos, listener)) < 0) {
@@ -2923,7 +2940,7 @@ static CddsSubscription * create_cdds_subscription(
   type_hash = get_type_hash(type_support);
   RCUTILS_LOG_WARN("Type hash addr: %p", type_hash);
   if ((qos = create_readwrite_qos(
-    qos_policies, type_hash, ignore_local_publications)) == nullptr)
+    qos_policies, type_hash, ignore_local_publications, "")) == nullptr)
   {
     goto fail_qos;
   }
@@ -4789,11 +4806,22 @@ static rmw_ret_t rmw_init_cs(
   auto sub = std::make_unique<CddsSubscription>();
   std::string subtopic_name, pubtopic_name;
   void * pub_type_support, * sub_type_support;
+  dds_qos_t * pub_qos, * sub_qos;
+  uint8_t pub_type_hash[32];
+  uint8_t sub_type_hash[32];
+  std::string user_data;
 
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> pub_msg_ts, sub_msg_ts;
 
   dds_listener_t * listener = dds_create_listener(cb_data);
   dds_lset_data_available_arg(listener, dds_listener_callback, cb_data, false);
+
+  // Find
+  // auto service_members = static_cast<const service_type_support_callbacks_t *>(type_support->data);
+  // auto request_members = static_cast<const message_type_support_callbacks_t *>(
+  //   service_members->request_members_->data);
+  // auto response_members = static_cast<const message_type_support_callbacks_t *>(
+  //   service_members->response_members_->data);
 
   if (is_service) {
     std::tie(sub_msg_ts, pub_msg_ts) =
@@ -4847,27 +4875,25 @@ static rmw_ret_t rmw_init_cs(
     set_error_message_from_create_topic(subtopic, subtopic_name);
     goto fail_subtopic;
   }
-  // before proceeding to outright ignore given QoS policies, sanity check them
-  dds_qos_t * pub_qos;
-  dds_qos_t * sub_qos;
-  const uint8_t * pub_type_hash = get_type_hash(pub_type_support);
-  const uint8_t * sub_type_hash = get_type_hash(sub_type_support);
-  if ((pub_qos = create_readwrite_qos(qos_policies, pub_type_hash, false)) == nullptr) {
-    goto fail_pub_qos;
-  }
-  if ((sub_qos = create_readwrite_qos(qos_policies, sub_type_hash, false)) == nullptr) {
-    goto fail_sub_qos;
-  }
 
   // store a unique identifier for this client/service in the user
   // data of the reader and writer so that we can always determine
   // which pairs belong together
   get_unique_csid(node, cs->id);
-  {
-    std::string user_data = std::string(is_service ? "serviceid=" : "clientid=") + csid_to_string(
-      cs->id) + std::string(";");
-    dds_qset_userdata(qos, user_data.c_str(), user_data.size());
+  user_data = std::string(is_service ? "serviceid=" : "clientid=") + csid_to_string(
+    cs->id) + std::string(";");
+
+  // before proceeding to outright ignore given QoS policies, sanity check them
+  memset(pub_type_hash, 0x1a, 32);
+  memset(sub_type_hash, 0x3c, 32);
+
+  if ((pub_qos = create_readwrite_qos(qos_policies, pub_type_hash, false, user_data)) == nullptr) {
+    goto fail_pub_qos;
   }
+  if ((sub_qos = create_readwrite_qos(qos_policies, sub_type_hash, false, user_data)) == nullptr) {
+    goto fail_sub_qos;
+  }
+
   if ((pub->enth = dds_create_writer(node->context->impl->dds_pub, pubtopic, pub_qos, nullptr)) < 0) {
     RMW_SET_ERROR_MSG("failed to create writer");
     goto fail_writer;
@@ -4888,7 +4914,8 @@ static rmw_ret_t rmw_init_cs(
     goto fail_instance_handle;
   }
   dds_delete_listener(listener);
-  dds_delete_qos(qos);
+  dds_delete_qos(pub_qos);
+  dds_delete_qos(sub_qos);
   dds_delete(subtopic);
   dds_delete(pubtopic);
 
