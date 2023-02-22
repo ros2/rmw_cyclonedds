@@ -1057,43 +1057,67 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_params_t * dis
     dom.refcount = 1;
     dom.discovery_params = *discovery_params;
 
-    std::string config;
+    std::string config = "<CycloneDDS><Domain>";
+    bool add_localhost_as_static_peer = false;
 
     switch (discovery_params->automatic_discovery_range) {
-      case RMW_AUTOMATIC_DISCOVERY_RANGE_OFF:
-        /* Automatic discovery off: disable multicast for participant discovery. */
-        config += "<CycloneDDS><Domain><General><AllowMulticast>asm,ssm</AllowMulticast>"
-          //"<MulticastRecvNetworkInterfaceAddresses>none"
-          //"</MulticastRecvNetworkInterfaceAddresses>"
-          "</General>";
-        break;
       case RMW_AUTOMATIC_DISCOVERY_RANGE_SUBNET:
-        /* Automatic discovery on subnet: Basically use the Cyclone DDS default settings. */
-        config += "<CycloneDDS><Domain><General><AllowMulticast>true</AllowMulticast>"
-          "<MulticastRecvNetworkInterfaceAddresses>all"
-          "</MulticastRecvNetworkInterfaceAddresses>"
-          "</General>";
+        /* This is the default behavior of DDS and does not require a special
+           configuration. */
         break;
-      default:  /* RMW_AUTOMATIC_DISCOVERY_RANGE_LOCALHOST or _DEFAULT */
-        /* Automatic discovery on localhost only: How to achieve this? */
-        config += "<CycloneDDS><Domain><General><AllowMulticast>true</AllowMulticast>"
-          "<MulticastRecvNetworkInterfaceAddresses>224.0.0.1"
-          "</MulticastRecvNetworkInterfaceAddresses>"
+      default:
+        /* This situation would happen if a new option is introduced for the
+           ROS_AUTOMATIC_DISCOVERY_RANGE but rmw_cyclonedds_cpp is not updated
+           to handle it. */
+        /* TODO(MXG): Displaying an integer is not very informative for users.
+           It would be better if rmw knows how to translate the integer values
+           into their associated option strings. However the knowledge of the
+           string values is currently located in rcl instead of rmw. */
+        RCUTILS_LOG_WARN_NAMED(
+          "rmw_cyclonedds_cpp",
+          "check_create_domain: unsupported value for automatic_discovery_range: %i",
+          discovery_params->automatic_discovery_range);
+        /* Intentionally fall through to the LOCALHOST / DEFAULT case */
+      case RMW_AUTOMATIC_DISCOVERY_RANGE_LOCALHOST:
+      case RMW_AUTOMATIC_DISCOVERY_RANGE_DEFAULT:
+        /* Automatic discovery on localhost only */
+        add_localhost_as_static_peer = true;
+        /* Intentionally fall through to the OFF case */
+      case RMW_AUTOMATIC_DISCOVERY_RANGE_OFF:
+        /* Automatic discovery off: disable multicast entirely. */
+        config +=
+          "<General>"
+            "<AllowMulticast>"
+              "false"
+            "</AllowMulticast>"
           "</General>";
         break;
     }
 
-    if (discovery_params->static_peers_count > 0) {
-      config += "<Discovery><Peers>";
+    config +=
+      "<Discovery>"
+        "<ParticipantIndex>"
+          "auto"
+        "</ParticipantIndex>";
+
+    if (discovery_params->static_peers_count > 0 || add_localhost_as_static_peer) {
+      config += "<Peers>";
+
+      if (add_localhost_as_static_peer) {
+        config += "<Peer address=\"127.0.0.1\"/>";
+      }
+
       for (size_t ii = 0; ii < discovery_params->static_peers_count; ++ii) {
         config += "<Peer address=\"";
         config += discovery_params->static_peers[ii];
         config += "\"/>";
       }
-      config += "</Peers></Discovery></Domain></CycloneDDS>,";
-    } else {
-      config += "</Domain></CycloneDDS>";
+      config += "</Peers>";
     }
+
+    /* NOTE: Empty configuration fragments are ignored, so it is safe to
+       unconditionally append a comma. */
+    config += "</Discovery></Domain></CycloneDDS>,";
 
     /* Emulate default behaviour of Cyclone of reading CYCLONEDDS_URI */
     const char * get_env_error;
