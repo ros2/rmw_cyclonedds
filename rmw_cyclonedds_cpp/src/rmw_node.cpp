@@ -2211,12 +2211,8 @@ static dds_qos_t * create_readwrite_qos(
     dds_qset_ignorelocal(qos, DDS_IGNORELOCAL_PARTICIPANT);
   }
 
-  auto allocator = rcutils_get_default_allocator();
-  char * type_hash_c_str = nullptr;
-  if (RCUTILS_RET_OK != rosidl_stringify_type_hash(&type_hash, allocator, &type_hash_c_str)) {
-    return nullptr;
-  }
-  std::string user_data = extra_user_data + "typehash=" + std::string(type_hash_c_str) + ";";
+  std::string user_data = extra_user_data +
+    rmw_dds_common::encode_type_hash_for_user_data_qos(type_hash);
   dds_qset_userdata(qos, user_data.data(), user_data.size());
 
   return qos;
