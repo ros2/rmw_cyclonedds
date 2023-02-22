@@ -931,8 +931,6 @@ static void handle_builtintopic_endpoint(
   dds_entity_t reader, rmw_context_impl_t * impl,
   bool is_reader)
 {
-  uint8_t type_hash[RCUTILS_SHA256_BLOCK_SIZE];
-
   dds_sample_info_t si;
   void * raw = NULL;
   while (dds_take(reader, &raw, &si, 1, 1) == 1) {
@@ -948,13 +946,8 @@ static void handle_builtintopic_endpoint(
       rmw_gid_t ppgid;
       dds_qos_to_rmw_qos(s->qos, &qos_profile);
       convert_guid_to_gid(s->participant_key, ppgid);
-
-      if (RMW_RET_OK != rmw_dds_common::parse_type_hash_from_user_data_qos(
-        s->qos->user_data.value, s->qos->user_data.length, type_hash))
-      {
-        throw std::runtime_error("TODO(emersonknapp) handle null typehash");
-      }
-
+      auto type_hash = rmw_dds_common::parse_type_hash_from_user_data_qos(
+        s->qos->user_data.value, s->qos->user_data.length);
       impl->common.graph_cache.add_entity(
         gid,
         std::string(s->topic_name),
@@ -2071,9 +2064,7 @@ static rmw_time_t dds_duration_to_rmw(dds_duration_t duration)
   }
 }
 
-static const uint8_t * get_type_hash(
-  const rosidl_message_type_support_t * type_support
-)
+static rosidl_type_hash_t get_type_hash(const rosidl_message_type_support_t * type_support)
 {
   if (type_support->typesupport_identifier == rosidl_typesupport_introspection_c__identifier) {
     auto members = static_cast<
@@ -2085,11 +2076,11 @@ static const uint8_t * get_type_hash(
     return members->type_hash_;
   } else {
     RMW_SET_ERROR_MSG("Unknown typesupport identifier");
-    return nullptr;
+    return rosidl_get_zero_initialized_type_hash();
   }
 }
 
-static const uint8_t * get_service_request_type_hash(
+static rosidl_type_hash_t get_service_request_type_hash(
   const rosidl_service_type_support_t * type_support
 )
 {
@@ -2103,10 +2094,10 @@ static const uint8_t * get_service_request_type_hash(
     return members->request_members_->type_hash_;
   }
   RMW_SET_ERROR_MSG("Unknown typesupport identifier");
-  return nullptr;
+  return rosidl_get_zero_initialized_type_hash();
 }
 
-static const uint8_t * get_service_response_type_hash(
+static rosidl_type_hash_t get_service_response_type_hash(
   const rosidl_service_type_support_t * type_support
 )
 {
@@ -2120,12 +2111,12 @@ static const uint8_t * get_service_response_type_hash(
     return members->response_members_->type_hash_;
   }
   RMW_SET_ERROR_MSG("Unknown typesupport identifier");
-  return nullptr;
+  return rosidl_get_zero_initialized_type_hash();
 }
 
 static dds_qos_t * create_readwrite_qos(
   const rmw_qos_profile_t * qos_policies,
-  const uint8_t * type_hash,
+  const rosidl_type_hash_t & type_hash,
   bool ignore_local_publications,
   const std::string & extra_user_data)
 {
@@ -2220,9 +2211,12 @@ static dds_qos_t * create_readwrite_qos(
     dds_qset_ignorelocal(qos, DDS_IGNORELOCAL_PARTICIPANT);
   }
 
-  std::string user_data =
-    extra_user_data +
-    rmw_dds_common::encode_type_hash_for_user_data_qos(type_hash);
+  auto allocator = rcutils_get_default_allocator();
+  char * type_hash_c_str = nullptr;
+  if (RCUTILS_RET_OK != rosidl_stringify_type_hash(&type_hash, allocator, &type_hash_c_str)) {
+    return nullptr;
+  }
+  std::string user_data = extra_user_data + "typehash=" + std::string(type_hash_c_str) + ";";
   dds_qset_userdata(qos, user_data.data(), user_data.size());
 
   return qos;
@@ -2402,7 +2396,7 @@ static CddsPublisher * create_cdds_publisher(
   CddsPublisher * pub = new CddsPublisher();
   dds_entity_t topic;
   dds_qos_t * qos;
-  const uint8_t * type_hash;
+  rosidl_type_hash_t type_hash;
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
   bool is_fixed_type = is_type_self_contained(type_support);
@@ -2936,11 +2930,11 @@ static CddsSubscription * create_cdds_subscription(
   CddsSubscription * sub = new CddsSubscription();
   dds_entity_t topic;
   dds_qos_t * qos;
+  rosidl_type_hash_t type_hash;
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
   bool is_fixed_type = is_type_self_contained(type_support);
   uint32_t sample_size = static_cast<uint32_t>(rmw_cyclonedds_cpp::get_message_size(type_support));
-  const uint8_t * type_hash;
 
   auto sertype = create_sertype(
     type_support->typesupport_identifier,
@@ -4827,7 +4821,7 @@ static rmw_ret_t rmw_init_cs(
   std::string subtopic_name, pubtopic_name;
   void * pub_type_support, * sub_type_support;
   dds_qos_t * pub_qos, * sub_qos;
-  const uint8_t * pub_type_hash, * sub_type_hash;
+  rosidl_type_hash_t pub_type_hash, sub_type_hash;
   std::string user_data;
 
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> pub_msg_ts, sub_msg_ts;
