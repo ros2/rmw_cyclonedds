@@ -936,7 +936,7 @@ static void handle_builtintopic_endpoint(
   while (dds_take(reader, &raw, &si, 1, 1) == 1) {
     auto s = static_cast<const dds_builtintopic_endpoint_t *>(raw);
     std::string discovered_user_data(s->qos->user_data.value, s->qos->user_data.value + s->qos->user_data.length);
-    RCUTILS_LOG_ERROR("Discovery: %s", s->topic_name);
+    RCUTILS_LOG_WARN("Discovery: %s\n  -- %s", s->type_name, discovered_user_data.c_str());
     rmw_gid_t gid;
     convert_guid_to_gid(s->key, gid);
     if (si.instance_state != DDS_ALIVE_INSTANCE_STATE) {
