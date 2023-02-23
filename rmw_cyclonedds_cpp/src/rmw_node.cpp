@@ -515,7 +515,7 @@ MAKE_DDS_EVENT_CALLBACK_FN(sample_lost, SAMPLE_LOST)
 MAKE_DDS_EVENT_CALLBACK_FN(liveliness_changed, LIVELINESS_CHANGED)
 
 /**
- * Because the inconsistent topic is not handled correctly in CycloneDDS,
+ * Because the inconsistent topic is not raised by CycloneDDS when a reader/writer fail to match because of differing type definitions
  * this callback is signalled via the incompatible qos handlers
  */
 // MAKE_DDS_EVENT_CALLBACK_FN(inconsistent_topic, INCONSISTENT_TOPIC)
