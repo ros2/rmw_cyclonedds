@@ -935,8 +935,6 @@ static void handle_builtintopic_endpoint(
   void * raw = NULL;
   while (dds_take(reader, &raw, &si, 1, 1) == 1) {
     auto s = static_cast<const dds_builtintopic_endpoint_t *>(raw);
-    std::string discovered_user_data(s->qos->user_data.value, s->qos->user_data.value + s->qos->user_data.length);
-    RCUTILS_LOG_WARN("Discovery: %s\n  -- %s", s->type_name, discovered_user_data.c_str());
     rmw_gid_t gid;
     convert_guid_to_gid(s->key, gid);
     if (si.instance_state != DDS_ALIVE_INSTANCE_STATE) {
@@ -946,8 +944,12 @@ static void handle_builtintopic_endpoint(
       rmw_gid_t ppgid;
       dds_qos_to_rmw_qos(s->qos, &qos_profile);
       convert_guid_to_gid(s->participant_key, ppgid);
-      auto type_hash = rmw_dds_common::parse_type_hash_from_user_data_qos(
-        s->qos->user_data.value, s->qos->user_data.length);
+      std::string type_hash_str;
+      rosidl_type_hash_t type_hash = rosidl_get_zero_initialized_type_hash();
+      if (get_user_data_key(s->qos, "typehash", type_hash_str)) {
+        rosidl_parse_type_hash_string(
+          type_hash_str.c_str(), &type_hash);
+      }
       impl->common.graph_cache.add_entity(
         gid,
         std::string(s->topic_name),
@@ -2199,7 +2201,7 @@ static dds_qos_t * create_readwrite_qos(
     case RMW_QOS_POLICY_LIVELINESS_AUTOMATIC:
       dds_qset_liveliness(qos, DDS_LIVELINESS_AUTOMATIC, ldur);
       break;
-    case DDS_LIVELINESS_MANUAL_BY_TOPIC:
+    case RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC:
       dds_qset_liveliness(qos, DDS_LIVELINESS_MANUAL_BY_TOPIC, ldur);
       break;
     case RMW_QOS_POLICY_LIVELINESS_UNKNOWN:
@@ -2931,7 +2933,6 @@ static CddsSubscription * create_cdds_subscription(
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
   bool is_fixed_type = is_type_self_contained(type_support);
   uint32_t sample_size = static_cast<uint32_t>(rmw_cyclonedds_cpp::get_message_size(type_support));
-
   auto sertype = create_sertype(
     type_support->typesupport_identifier,
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
