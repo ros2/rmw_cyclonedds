@@ -36,6 +36,7 @@
 #include "rcutils/filesystem.h"
 #include "rcutils/format_string.h"
 #include "rcutils/logging_macros.h"
+#include "rcutils/process.h"
 #include "rcutils/strdup.h"
 
 #include "rmw/allocators.h"
@@ -1059,6 +1060,7 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_params_t * dis
 
     std::string config = "<CycloneDDS><Domain>";
     bool add_localhost_as_static_peer = false;
+    bool multicast_off = false;
 
     switch (discovery_params->automatic_discovery_range) {
       case RMW_AUTOMATIC_DISCOVERY_RANGE_SUBNET:
@@ -1078,13 +1080,15 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_params_t * dis
           "check_create_domain: unsupported value for automatic_discovery_range: %i",
           discovery_params->automatic_discovery_range);
         /* Intentionally fall through to the LOCALHOST / DEFAULT case */
+        [[fallthrough]];
       case RMW_AUTOMATIC_DISCOVERY_RANGE_LOCALHOST:
       case RMW_AUTOMATIC_DISCOVERY_RANGE_DEFAULT:
         /* Automatic discovery on localhost only */
         add_localhost_as_static_peer = true;
-        /* Intentionally fall through to the OFF case */
+        [[fallthrough]];
       case RMW_AUTOMATIC_DISCOVERY_RANGE_OFF:
         /* Automatic discovery off: disable multicast entirely. */
+        multicast_off = true;
         config +=
           "<General>"
             "<AllowMulticast>"
@@ -1100,19 +1104,37 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_params_t * dis
           "auto"
         "</ParticipantIndex>";
 
-    if (discovery_params->static_peers_count > 0 || add_localhost_as_static_peer) {
-      config += "<Peers>";
+    const bool discovery_off = multicast_off && !add_localhost_as_static_peer;
 
-      if (add_localhost_as_static_peer) {
-        config += "<Peer address=\"127.0.0.1\"/>";
-      }
+    if (discovery_off) {
+      /* This means we have an OFF range, so we should use the domain tag to
+         block all attemtps at automatic discovery. Another participant would
+         need to use this exact same domain tag, down to the PID, to discover
+         the endpoints of this node. */
+      config += "<Tag>ros_discovery_off_" + std::to_string(rcutils_get_pid()) + "</Tag>";
+    }
 
-      for (size_t ii = 0; ii < discovery_params->static_peers_count; ++ii) {
-        config += "<Peer address=\"";
-        config += discovery_params->static_peers[ii];
-        config += "\"/>";
+    if (!discovery_off) {
+      if (discovery_params->static_peers_count > 0 || add_localhost_as_static_peer) {
+        config += "<Peers>";
+
+        if (add_localhost_as_static_peer) {
+          config += "<Peer address=\"127.0.0.1\"/>";
+        }
+
+        for (size_t ii = 0; ii < discovery_params->static_peers_count; ++ii) {
+          config += "<Peer address=\"";
+          config += discovery_params->static_peers[ii];
+          config += "\"/>";
+        }
+        config += "</Peers>";
       }
-      config += "</Peers>";
+    } else if (discovery_params->static_peers_count > 0) {
+      RCUTILS_LOG_WARN_NAMED(
+        "rmw_cyclonedds_cpp",
+        "check_create_domain: %i static peers were specified, but discovery is "
+        "turned off, so these static peers will be ignored.",
+        discovery_params->static_peers_count);
     }
 
     /* NOTE: Empty configuration fragments are ignored, so it is safe to
