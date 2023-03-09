@@ -41,7 +41,7 @@
 
 #include "rmw/allocators.h"
 #include "rmw/convert_rcutils_ret_to_rmw_ret.h"
-#include "rmw/discovery_params.h"
+#include "rmw/discovery_options.h"
 #include "rmw/error_handling.h"
 #include "rmw/event.h"
 #include "rmw/features.h"
@@ -257,7 +257,7 @@ struct CddsDomain
      There are a few issues with the current support for creating domains explicitly in
      Cyclone, fixing those might relax alter or relax some of the above. */
 
-  rmw_discovery_params_t discovery_params;
+  rmw_discovery_options_t discovery_options;
   uint32_t refcount;
 
   /* handle of the domain entity */
@@ -267,7 +267,7 @@ struct CddsDomain
   CddsDomain()
   : refcount(0), domain_handle(0)
   {
-    discovery_params = rmw_get_zero_initialized_discovery_params();
+    discovery_options = rmw_get_zero_initialized_discovery_options();
   }
 
   ~CddsDomain()
@@ -743,8 +743,8 @@ extern "C" rmw_ret_t rmw_init_options_init(
   init_options->allocator = allocator;
   init_options->impl = nullptr;
   init_options->localhost_only = RMW_LOCALHOST_ONLY_DEFAULT;
-  init_options->discovery_params.automatic_discovery_range = RMW_AUTOMATIC_DISCOVERY_RANGE_DEFAULT;
-  init_options->discovery_params.static_peers_count = 0;
+  init_options->discovery_options.automatic_discovery_range = RMW_AUTOMATIC_DISCOVERY_RANGE_DEFAULT;
+  init_options->discovery_options.static_peers_count = 0;
   init_options->domain_id = RMW_DEFAULT_DOMAIN_ID;
   init_options->enclave = NULL;
   init_options->security_options = rmw_get_zero_initialized_security_options();
@@ -1036,7 +1036,7 @@ static rmw_ret_t discovery_thread_stop(rmw_dds_common::Context & common_context)
   return RMW_RET_OK;
 }
 
-static bool check_create_domain(dds_domainid_t did, rmw_discovery_params_t * discovery_params)
+static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * discovery_options)
 {
   std::lock_guard<std::mutex> lock(gcdds().domains_lock);
   /* return true: n_nodes incremented, discovery params set correctly, domain exists
@@ -1044,7 +1044,16 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_params_t * dis
   CddsDomain & dom = gcdds().domains[did];
   if (dom.refcount != 0) {
     /* Discovery parameters must match */
-    if (rmw_discovery_params_equal(discovery_params, &dom.discovery_params)) {
+    bool options_equal = false;
+    const auto rc = rmw_discovery_options_equal(discovery_options, &dom.discovery_options, &options_equal);
+    if (RMW_RET_OK != rc) {
+      RCUTILS_LOG_ERROR_NAMED(
+        "rmw_cyclonedds_cpp",
+        "check_create_domain: unable to check if discovery options are equal: %i",
+        rc);
+      return false;
+    }
+    if (options_equal) {
       dom.refcount++;
       return true;
     } else {
@@ -1056,13 +1065,13 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_params_t * dis
     }
   } else {
     dom.refcount = 1;
-    dom.discovery_params = *discovery_params;
+    dom.discovery_options = *discovery_options;
 
     std::string config = "<CycloneDDS><Domain>";
     bool add_localhost_as_static_peer = false;
     bool multicast_off = false;
 
-    switch (discovery_params->automatic_discovery_range) {
+    switch (discovery_options->automatic_discovery_range) {
       case RMW_AUTOMATIC_DISCOVERY_RANGE_SUBNET:
         /* This is the default behavior of DDS and does not require a special
            configuration. */
@@ -1078,14 +1087,16 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_params_t * dis
         RCUTILS_LOG_WARN_NAMED(
           "rmw_cyclonedds_cpp",
           "check_create_domain: unsupported value for automatic_discovery_range: %i",
-          discovery_params->automatic_discovery_range);
+          discovery_options->automatic_discovery_range);
         /* Intentionally fall through to the LOCALHOST / DEFAULT case */
-        [[fallthrough]];
+        [[clang::fallthrough]];
+        // [[fallthrough]]; /* Uncomment this back when migrating to C++17 */
       case RMW_AUTOMATIC_DISCOVERY_RANGE_LOCALHOST:
       case RMW_AUTOMATIC_DISCOVERY_RANGE_DEFAULT:
         /* Automatic discovery on localhost only */
         add_localhost_as_static_peer = true;
-        [[fallthrough]];
+        [[clang::fallthrough]];
+        // [[fallthrough]]; /* Uncomment this back when migrating to C++17 */
       case RMW_AUTOMATIC_DISCOVERY_RANGE_OFF:
         /* Automatic discovery off: disable multicast entirely. */
         multicast_off = true;
@@ -1115,26 +1126,26 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_params_t * dis
     }
 
     if (!discovery_off) {
-      if (discovery_params->static_peers_count > 0 || add_localhost_as_static_peer) {
+      if (discovery_options->static_peers_count > 0 || add_localhost_as_static_peer) {
         config += "<Peers>";
 
         if (add_localhost_as_static_peer) {
           config += "<Peer address=\"127.0.0.1\"/>";
         }
 
-        for (size_t ii = 0; ii < discovery_params->static_peers_count; ++ii) {
+        for (size_t ii = 0; ii < discovery_options->static_peers_count; ++ii) {
           config += "<Peer address=\"";
-          config += discovery_params->static_peers[ii];
+          config += discovery_options->static_peers[ii].peer_address;
           config += "\"/>";
         }
         config += "</Peers>";
       }
-    } else if (discovery_params->static_peers_count > 0) {
+    } else if (discovery_options->static_peers_count > 0) {
       RCUTILS_LOG_WARN_NAMED(
         "rmw_cyclonedds_cpp",
-        "check_create_domain: %i static peers were specified, but discovery is "
+        "check_create_domain: %lu static peers were specified, but discovery is "
         "turned off, so these static peers will be ignored.",
-        discovery_params->static_peers_count);
+        discovery_options->static_peers_count);
     }
 
     /* NOTE: Empty configuration fragments are ignored, so it is safe to
@@ -1256,7 +1267,7 @@ rmw_context_impl_s::init(rmw_init_options_t * options, size_t domain_id)
     version of dds_create_domain that doesn't return a handle.  */
   this->domain_id = static_cast<dds_domainid_t>(domain_id);
 
-  if (!check_create_domain(this->domain_id, &options->discovery_params)) {
+  if (!check_create_domain(this->domain_id, &options->discovery_options)) {
     return RMW_RET_ERROR;
   }
 
