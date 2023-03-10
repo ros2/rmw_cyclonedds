@@ -53,6 +53,8 @@ struct sertype_rmw : ddsi_sertype
   std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRWriter> cdr_writer;
   bool is_fixed;
   std::mutex serialize_lock;
+  struct dds_type_meta_ser type_information;
+  struct dds_type_meta_ser type_mapping;
 };
 
 class serdata_rmw : public ddsi_serdata
@@ -97,10 +99,22 @@ struct sertype_rmw * create_sertype(
   void * type_support, bool is_request_header,
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type_support,
   const uint32_t sample_size = 0U,
-  const bool is_fixed_type = false);
+  const bool is_fixed_type = false
+);
 
 struct ddsi_serdata * serdata_rmw_from_serialized_message(
   const struct ddsi_sertype * typecmn,
   const void * raw, size_t size);
 
+void create_msg_dds_dynamic_type(
+  const char* type_support_identifier,
+  const void * untyped_members, dds_entity_t dds_ppant, struct sertype_rmw * st);
+
+void create_req_dds_dynamic_type(
+  const char* type_support_identifier,
+  const void * untyped_members, dds_entity_t dds_ppant, struct sertype_rmw * st);
+
+void create_res_dds_dynamic_type(
+  const char* type_support_identifier,
+  const void * untyped_members, dds_entity_t dds_ppant, struct sertype_rmw * st);
 #endif  // SERDATA_HPP_
