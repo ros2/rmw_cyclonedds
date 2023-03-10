@@ -24,7 +24,7 @@
 #include "Serialization.hpp"
 #include "TypeSupport2.hpp"
 #include "bytewise.hpp"
-#include "dds/ddsi/q_radmin.h"
+#include "dds/ddsi/ddsi_radmin.h"
 #include "rmw/error_handling.h"
 #include "MessageTypeSupport.hpp"
 #include "ServiceTypeSupport.hpp"
@@ -185,7 +185,7 @@ static void serdata_rmw_free(struct ddsi_serdata * dcmn)
 static struct ddsi_serdata * serdata_rmw_from_ser(
   const struct ddsi_sertype * type,
   enum ddsi_serdata_kind kind,
-  const struct nn_rdata * fragchain, size_t size)
+  const struct ddsi_rdata * fragchain, size_t size)
 {
   try {
     auto d = std::make_unique<serdata_rmw>(type, kind);
@@ -199,7 +199,7 @@ static struct ddsi_serdata * serdata_rmw_from_ser(
       if (fragchain->maxp1 > off) {
         /* only copy if this fragment adds data */
         const unsigned char * payload =
-          NN_RMSG_PAYLOADOFF(fragchain->rmsg, NN_RDATA_PAYLOAD_OFF(fragchain));
+          DDSI_RMSG_PAYLOADOFF(fragchain->rmsg, DDSI_RDATA_PAYLOAD_OFF(fragchain));
         auto src = payload + off - fragchain->min;
         auto n_bytes = fragchain->maxp1 - off;
         memcpy(cursor, src, n_bytes);
