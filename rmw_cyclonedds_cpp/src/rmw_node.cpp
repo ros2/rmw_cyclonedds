@@ -1216,7 +1216,6 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * di
         }
         config += "</Peers>";
       }
-
       /* NOTE: Empty configuration fragments are ignored, so it is safe to
         unconditionally append a comma. */
       config += "</Discovery></Domain></CycloneDDS>,";
@@ -2278,6 +2277,7 @@ static rmw_qos_policy_kind_t dds_qos_policy_to_rmw_qos_policy(dds_qos_policy_id_
     case DDS_LIFESPAN_QOS_POLICY_ID:
       return RMW_QOS_POLICY_LIFESPAN;
     default:
+      RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp", "%d", policy_id);
       return RMW_QOS_POLICY_INVALID;
   }
 }
@@ -2444,10 +2444,14 @@ static CddsPublisher * create_cdds_publisher(
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
   bool is_fixed_type = is_type_self_contained(type_support);
   uint32_t sample_size = static_cast<uint32_t>(rmw_cyclonedds_cpp::get_message_size(type_support));
+
   auto sertype = create_sertype(
     type_support->typesupport_identifier,
-    create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
-    rmw_cyclonedds_cpp::make_message_value_type(type_supports), sample_size, is_fixed_type);
+    create_message_type_support(type_support->data, type_support->typesupport_identifier), 
+    false,
+    rmw_cyclonedds_cpp::make_message_value_type(type_supports), 
+    sample_size, is_fixed_type);
+  create_msg_dds_dynamic_type(type_support->typesupport_identifier, type_support->data, dds_ppant, sertype);
   struct ddsi_sertype * stact = nullptr;
   topic = create_topic(dds_ppant, fqtopic_name.c_str(), sertype, &stact);
 
@@ -2472,6 +2476,7 @@ static CddsPublisher * create_cdds_publisher(
     RMW_SET_ERROR_MSG("failed to get instance handle for writer");
     goto fail_instance_handle;
   }
+
   get_entity_gid(pub->enth, pub->gid);
   pub->sertype = stact;
   dds_delete_listener(listener);
@@ -2480,6 +2485,7 @@ static CddsPublisher * create_cdds_publisher(
   pub->sample_size = sample_size;
   dds_delete_qos(qos);
   dds_delete(topic);
+
   return pub;
 
 fail_instance_handle:
@@ -2948,10 +2954,14 @@ static CddsSubscription * create_cdds_subscription(
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
   bool is_fixed_type = is_type_self_contained(type_support);
   uint32_t sample_size = static_cast<uint32_t>(rmw_cyclonedds_cpp::get_message_size(type_support));
+
   auto sertype = create_sertype(
     type_support->typesupport_identifier,
-    create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
-    rmw_cyclonedds_cpp::make_message_value_type(type_supports), sample_size, is_fixed_type);
+    create_message_type_support(type_support->data, type_support->typesupport_identifier), 
+    false,
+    rmw_cyclonedds_cpp::make_message_value_type(type_supports), 
+    sample_size, is_fixed_type);
+  create_msg_dds_dynamic_type(type_support->typesupport_identifier, type_support->data, dds_ppant, sertype);
   topic = create_topic(dds_ppant, fqtopic_name.c_str(), sertype);
 
   dds_listener_t * listener = dds_create_listener(&sub->user_callback_data);
@@ -2984,6 +2994,7 @@ static CddsSubscription * create_cdds_subscription(
   sub->is_loaning_available = is_fixed_type && dds_is_loan_available(sub->enth);
   dds_delete_qos(qos);
   dds_delete(topic);
+
   return sub;
 fail_readcond:
   if (dds_delete(sub->enth) < 0) {
@@ -4957,6 +4968,9 @@ static rmw_ret_t rmw_init_cs(
 
   dds_listener_t * listener = dds_create_listener(cb_data);
   dds_lset_data_available_arg(listener, dds_listener_callback, cb_data, false);
+  
+
+  struct sertype_rmw * pub_st, * sub_st;
 
   if (is_service) {
     std::tie(sub_msg_ts, pub_msg_ts) =
@@ -4973,6 +4987,18 @@ static rmw_ret_t rmw_init_cs(
     subtopic_name =
       make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", qos_policies);
     pubtopic_name = make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", qos_policies);
+
+    pub_st = create_sertype(
+      type_support->typesupport_identifier, pub_type_support, true,
+      std::move(pub_msg_ts), 0U, false
+    );
+    create_res_dds_dynamic_type(type_support->typesupport_identifier, type_support->data, node->context->impl->ppant, pub_st);
+    sub_st = create_sertype(
+      type_support->typesupport_identifier, sub_type_support, true,
+      std::move(sub_msg_ts), 0U, false
+    );
+    create_req_dds_dynamic_type(type_support->typesupport_identifier, type_support->data, node->context->impl->ppant, sub_st);
+  
   } else {
     std::tie(pub_msg_ts, sub_msg_ts) =
       rmw_cyclonedds_cpp::make_request_response_value_types(type_supports);
@@ -4988,6 +5014,18 @@ static rmw_ret_t rmw_init_cs(
     pubtopic_name =
       make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", qos_policies);
     subtopic_name = make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", qos_policies);
+    
+    pub_st = create_sertype(
+      type_support->typesupport_identifier, pub_type_support, true,
+      std::move(pub_msg_ts), 0U, false
+    );
+    create_req_dds_dynamic_type(type_support->typesupport_identifier, type_support->data, node->context->impl->ppant, pub_st);
+    sub_st = create_sertype(
+      type_support->typesupport_identifier, sub_type_support, true,
+      std::move(sub_msg_ts), 0U, false
+    );
+    create_res_dds_dynamic_type(type_support->typesupport_identifier, type_support->data, node->context->impl->ppant, sub_st);
+
   }
 
   RCUTILS_LOG_DEBUG_NAMED(
@@ -4998,21 +5036,14 @@ static rmw_ret_t rmw_init_cs(
   RCUTILS_LOG_DEBUG_NAMED("rmw_cyclonedds_cpp", "***********");
 
   dds_entity_t pubtopic, subtopic;
-  struct sertype_rmw * pub_st, * sub_st;
-
-  pub_st = create_sertype(
-    type_support->typesupport_identifier, pub_type_support, true,
-    std::move(pub_msg_ts));
+  
   struct ddsi_sertype * pub_stact;
   pubtopic = create_topic(node->context->impl->ppant, pubtopic_name.c_str(), pub_st, &pub_stact);
   if (pubtopic < 0) {
     set_error_message_from_create_topic(pubtopic, pubtopic_name);
     goto fail_pubtopic;
   }
-
-  sub_st = create_sertype(
-    type_support->typesupport_identifier, sub_type_support, true,
-    std::move(sub_msg_ts));
+  
   subtopic = create_topic(node->context->impl->ppant, subtopic_name.c_str(), sub_st);
   if (subtopic < 0) {
     set_error_message_from_create_topic(subtopic, subtopic_name);
@@ -5059,8 +5090,8 @@ static rmw_ret_t rmw_init_cs(
   dds_delete_listener(listener);
   dds_delete_qos(pub_qos);
   dds_delete_qos(sub_qos);
-  dds_delete(subtopic);
   dds_delete(pubtopic);
+  dds_delete(subtopic);
 
   cs->pub = std::move(pub);
   cs->sub = std::move(sub);
