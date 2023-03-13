@@ -2068,11 +2068,12 @@ static rmw_time_t dds_duration_to_rmw(dds_duration_t duration)
 
 static rosidl_type_hash_t get_type_hash(const rosidl_message_type_support_t * type_support)
 {
-  if (type_support->typesupport_identifier == rosidl_typesupport_introspection_c__identifier) {
+  const auto * id = type_support->typesupport_identifier;
+  if (id == rosidl_typesupport_introspection_c__identifier) {
     auto members = static_cast<
       const rosidl_typesupport_introspection_c__MessageMembers *>(type_support->data);
     return members->type_hash_;
-  } else if (type_support->typesupport_identifier == rosidl_typesupport_introspection_cpp::typesupport_identifier) {
+  } else if (id == rosidl_typesupport_introspection_cpp::typesupport_identifier) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(type_support->data);
     return members->type_hash_;
@@ -2086,11 +2087,12 @@ static rosidl_type_hash_t get_service_request_type_hash(
   const rosidl_service_type_support_t * type_support
 )
 {
-  if (type_support->typesupport_identifier == rosidl_typesupport_introspection_c__identifier) {
+  const auto * id = type_support->typesupport_identifier;
+  if (id == rosidl_typesupport_introspection_c__identifier) {
     auto members = static_cast<
       const rosidl_typesupport_introspection_c__ServiceMembers *>(type_support->data);
     return members->request_members_->type_hash_;
-  } else if (type_support->typesupport_identifier == rosidl_typesupport_introspection_cpp::typesupport_identifier) {
+  } else if (id == rosidl_typesupport_introspection_cpp::typesupport_identifier) {
     auto members = static_cast<
       const rosidl_typesupport_introspection_cpp::ServiceMembers *>(type_support->data);
     return members->request_members_->type_hash_;
@@ -2103,11 +2105,12 @@ static rosidl_type_hash_t get_service_response_type_hash(
   const rosidl_service_type_support_t * type_support
 )
 {
-  if (type_support->typesupport_identifier == rosidl_typesupport_introspection_c__identifier) {
+  const auto * id = type_support->typesupport_identifier;
+  if (id == rosidl_typesupport_introspection_c__identifier) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_c__ServiceMembers *>(type_support->data);
     return members->response_members_->type_hash_;
-  } else if (type_support->typesupport_identifier == rosidl_typesupport_introspection_cpp::typesupport_identifier) {
+  } else if (id == rosidl_typesupport_introspection_cpp::typesupport_identifier) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_cpp::ServiceMembers *>(type_support->data);
     return members->response_members_->type_hash_;
@@ -2951,7 +2954,7 @@ static CddsSubscription * create_cdds_subscription(
   }
   type_hash = get_type_hash(type_support);
   if ((qos = create_readwrite_qos(
-    qos_policies, type_hash, ignore_local_publications, "")) == nullptr)
+      qos_policies, type_hash, ignore_local_publications, "")) == nullptr)
   {
     goto fail_qos;
   }
@@ -4897,13 +4900,17 @@ static rmw_ret_t rmw_init_cs(
     goto fail_sub_qos;
   }
 
-  if ((pub->enth = dds_create_writer(node->context->impl->dds_pub, pubtopic, pub_qos, nullptr)) < 0) {
+  if ((pub->enth =
+    dds_create_writer(node->context->impl->dds_pub, pubtopic, pub_qos, nullptr)) < 0)
+  {
     RMW_SET_ERROR_MSG("failed to create writer");
     goto fail_writer;
   }
   get_entity_gid(pub->enth, pub->gid);
   pub->sertype = pub_stact;
-  if ((sub->enth = dds_create_reader(node->context->impl->dds_sub, subtopic, sub_qos, listener)) < 0) {
+  if ((sub->enth =
+    dds_create_reader(node->context->impl->dds_sub, subtopic, sub_qos, listener)) < 0)
+  {
     RMW_SET_ERROR_MSG("failed to create reader");
     goto fail_reader;
   }
