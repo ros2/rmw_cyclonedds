@@ -515,6 +515,7 @@ MAKE_DDS_EVENT_CALLBACK_FN(requested_incompatible_qos, REQUESTED_INCOMPATIBLE_QO
 MAKE_DDS_EVENT_CALLBACK_FN(sample_lost, SAMPLE_LOST)
 MAKE_DDS_EVENT_CALLBACK_FN(offered_incompatible_qos, OFFERED_INCOMPATIBLE_QOS)
 MAKE_DDS_EVENT_CALLBACK_FN(liveliness_changed, LIVELINESS_CHANGED)
+MAKE_DDS_EVENT_CALLBACK_FN(inconsistent_topic, INCONSISTENT_TOPIC)
 
 static void listener_set_event_callbacks(dds_listener_t * l, void * arg)
 {
@@ -525,6 +526,7 @@ static void listener_set_event_callbacks(dds_listener_t * l, void * arg)
   dds_lset_offered_deadline_missed_arg(l, on_offered_deadline_missed_fn, arg, false);
   dds_lset_offered_incompatible_qos_arg(l, on_offered_incompatible_qos_fn, arg, false);
   dds_lset_liveliness_changed_arg(l, on_liveliness_changed_fn, arg, false);
+  dds_lset_inconsistent_topic_arg(l, on_inconsistent_topic_fn, arg, false);
 }
 
 static bool get_readwrite_qos(dds_entity_t handle, rmw_qos_profile_t * rmw_qos_policies)
@@ -712,6 +714,24 @@ extern "C" rmw_ret_t rmw_event_set_callback(
         auto pub_event = static_cast<CddsPublisher *>(rmw_event->data);
         event_set_callback(
           pub_event, DDS_OFFERED_INCOMPATIBLE_QOS_STATUS_ID,
+          callback, user_data);
+        break;
+      }
+
+    case RMW_EVENT_PUBLISHER_INCOMPATIBLE_TYPE:
+      {
+        auto pub_event = static_cast<CddsPublisher *>(rmw_event->data);
+        event_set_callback(
+          pub_event, DDS_INCONSISTENT_TOPIC_STATUS_ID,
+          callback, user_data);
+        break;
+      }
+
+    case RMW_EVENT_SUBSCRIPTION_INCOMPATIBLE_TYPE:
+      {
+        auto sub_event = static_cast<CddsSubscription *>(rmw_event->data);
+        event_set_callback(
+          sub_event, DDS_INCONSISTENT_TOPIC_STATUS_ID,
           callback, user_data);
         break;
       }
@@ -3627,6 +3647,8 @@ static const std::unordered_map<rmw_event_type_t, uint32_t> mask_map{
   {RMW_EVENT_REQUESTED_QOS_INCOMPATIBLE, DDS_REQUESTED_INCOMPATIBLE_QOS_STATUS},
   {RMW_EVENT_OFFERED_QOS_INCOMPATIBLE, DDS_OFFERED_INCOMPATIBLE_QOS_STATUS},
   {RMW_EVENT_MESSAGE_LOST, DDS_SAMPLE_LOST_STATUS},
+  {RMW_EVENT_PUBLISHER_INCOMPATIBLE_TYPE, DDS_INCONSISTENT_TOPIC_STATUS},
+  {RMW_EVENT_SUBSCRIPTION_INCOMPATIBLE_TYPE, DDS_INCONSISTENT_TOPIC_STATUS},
 };
 
 static bool is_event_supported(const rmw_event_type_t event_t)
@@ -3794,6 +3816,40 @@ extern "C" rmw_ret_t rmw_take_event(
           ei->total_count_change = st.total_count_change;
           ei->last_policy_kind = dds_qos_policy_to_rmw_qos_policy(
             static_cast<dds_qos_policy_id_t>(st.last_policy_id));
+          *taken = true;
+          return RMW_RET_OK;
+        }
+      }
+
+    case RMW_EVENT_PUBLISHER_INCOMPATIBLE_TYPE: {
+        auto it = static_cast<rmw_incompatible_type_status_t *>(event_info);
+        auto pub = static_cast<CddsPublisher *>(event_handle->data);
+
+        const dds_entity_t topic = dds_get_topic(pub->enth);
+        dds_inconsistent_topic_status_t st;
+        if (dds_get_inconsistent_topic_status(topic, &st) < 0) {
+          *taken = false;
+          return RMW_RET_ERROR;
+        } else {
+          it->total_count = static_cast<int32_t>(st.total_count);
+          it->total_count_change = st.total_count_change;
+          *taken = true;
+          return RMW_RET_OK;
+        }
+      }
+
+    case RMW_EVENT_SUBSCRIPTION_INCOMPATIBLE_TYPE: {
+        auto it = static_cast<rmw_incompatible_type_status_t *>(event_info);
+        auto sub = static_cast<CddsSubscription *>(event_handle->data);
+
+        const dds_entity_t topic = dds_get_topic(sub->enth);
+        dds_inconsistent_topic_status_t st;
+        if (dds_get_inconsistent_topic_status(topic, &st) < 0) {
+          *taken = false;
+          return RMW_RET_ERROR;
+        } else {
+          it->total_count = static_cast<int32_t>(st.total_count);
+          it->total_count_change = st.total_count_change;
           *taken = true;
           return RMW_RET_OK;
         }
