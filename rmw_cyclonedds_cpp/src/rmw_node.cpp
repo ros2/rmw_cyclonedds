@@ -2216,8 +2216,12 @@ static dds_qos_t * create_readwrite_qos(
     dds_qset_ignorelocal(qos, DDS_IGNORELOCAL_PARTICIPANT);
   }
 
-  std::string user_data = extra_user_data +
-    rmw_dds_common::encode_type_hash_for_user_data_qos(type_hash);
+  std::string typehash_user_data;
+  rmw_ret_t ret = rmw_dds_common::encode_type_hash_for_user_data_qos(type_hash, typehash_user_data);
+  if (ret != RMW_RET_OK) {
+    typehash_user_data = "";
+  }
+  std::string user_data = extra_user_data + typehash_user_data;
   dds_qset_userdata(qos, user_data.data(), user_data.size());
 
   return qos;
