@@ -944,12 +944,18 @@ static void handle_builtintopic_endpoint(
       rmw_gid_t ppgid;
       dds_qos_to_rmw_qos(s->qos, &qos_profile);
       convert_guid_to_gid(s->participant_key, ppgid);
-      std::string type_hash_str;
+
       rosidl_type_hash_t type_hash = rosidl_get_zero_initialized_type_hash();
-      if (get_user_data_key(s->qos, "typehash", type_hash_str)) {
-        rosidl_parse_type_hash_string(
-          type_hash_str.c_str(), &type_hash);
+      void * userdata;
+      size_t userdata_size;
+      if (dds_qget_userdata(s->qos, &userdata, &userdata_size)) {
+        if (RMW_RET_OK != rmw_dds_common::parse_type_hash_from_user_data(
+            reinterpret_cast<const uint8_t *>(userdata), userdata_size, type_hash))
+        {
+          type_hash = rosidl_get_zero_initialized_type_hash();
+        }
       }
+
       impl->common.graph_cache.add_entity(
         gid,
         std::string(s->topic_name),
@@ -2068,7 +2074,7 @@ static rmw_time_t dds_duration_to_rmw(dds_duration_t duration)
 
 static rosidl_type_hash_t get_type_hash(const rosidl_message_type_support_t * type_support)
 {
-  const auto * id = type_support->typesupport_identifier;
+  const char * id = type_support->typesupport_identifier;
   if (id == rosidl_typesupport_introspection_c__identifier) {
     auto members = static_cast<
       const rosidl_typesupport_introspection_c__MessageMembers *>(type_support->data);
@@ -2087,7 +2093,7 @@ static rosidl_type_hash_t get_service_request_type_hash(
   const rosidl_service_type_support_t * type_support
 )
 {
-  const auto * id = type_support->typesupport_identifier;
+  const char * id = type_support->typesupport_identifier;
   if (id == rosidl_typesupport_introspection_c__identifier) {
     auto members = static_cast<
       const rosidl_typesupport_introspection_c__ServiceMembers *>(type_support->data);
@@ -2105,7 +2111,7 @@ static rosidl_type_hash_t get_service_response_type_hash(
   const rosidl_service_type_support_t * type_support
 )
 {
-  const auto * id = type_support->typesupport_identifier;
+  const char * id = type_support->typesupport_identifier;
   if (id == rosidl_typesupport_introspection_c__identifier) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_c__ServiceMembers *>(type_support->data);
@@ -2401,7 +2407,7 @@ static CddsPublisher * create_cdds_publisher(
   CddsPublisher * pub = new CddsPublisher();
   dds_entity_t topic;
   dds_qos_t * qos;
-  rosidl_type_hash_t type_hash;
+  rosidl_type_hash_t type_hash = get_type_hash(type_support);
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
   bool is_fixed_type = is_type_self_contained(type_support);
@@ -2421,8 +2427,6 @@ static CddsPublisher * create_cdds_publisher(
     set_error_message_from_create_topic(topic, fqtopic_name);
     goto fail_topic;
   }
-
-  type_hash = get_type_hash(type_support);
   if ((qos = create_readwrite_qos(qos_policies, type_hash, false, "")) == nullptr) {
     goto fail_qos;
   }
@@ -2935,7 +2939,7 @@ static CddsSubscription * create_cdds_subscription(
   CddsSubscription * sub = new CddsSubscription();
   dds_entity_t topic;
   dds_qos_t * qos;
-  rosidl_type_hash_t type_hash;
+  rosidl_type_hash_t type_hash = get_type_hash(type_support);
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
   bool is_fixed_type = is_type_self_contained(type_support);
@@ -2945,6 +2949,7 @@ static CddsSubscription * create_cdds_subscription(
     create_message_type_support(type_support->data, type_support->typesupport_identifier), false,
     rmw_cyclonedds_cpp::make_message_value_type(type_supports), sample_size, is_fixed_type);
   topic = create_topic(dds_ppant, fqtopic_name.c_str(), sertype);
+
 
   dds_listener_t * listener = dds_create_listener(&sub->user_callback_data);
   // Set the callback to listen for new messages
@@ -2956,7 +2961,6 @@ static CddsSubscription * create_cdds_subscription(
     set_error_message_from_create_topic(topic, fqtopic_name);
     goto fail_topic;
   }
-  type_hash = get_type_hash(type_support);
   if ((qos = create_readwrite_qos(
       qos_policies, type_hash, ignore_local_publications, "")) == nullptr)
   {
