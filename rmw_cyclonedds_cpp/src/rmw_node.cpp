@@ -75,6 +75,8 @@
 #include "rmw_dds_common/qos.hpp"
 #include "rmw_dds_common/security.hpp"
 
+#include "rosidl_runtime_c/type_hash.h"
+
 #include "rosidl_typesupport_cpp/message_type_support.hpp"
 
 #include "rosidl_typesupport_introspection_cpp/message_introspection.hpp"
@@ -2080,8 +2082,8 @@ static rosidl_type_hash_t get_type_hash(const rosidl_message_type_support_t * ty
       const rosidl_typesupport_introspection_c__MessageMembers *>(type_support->data);
     return members->type_hash_;
   } else if (id == rosidl_typesupport_introspection_cpp::typesupport_identifier) {
-    auto members =
-      static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(type_support->data);
+    auto members = static_cast<
+      const rosidl_typesupport_introspection_cpp::MessageMembers *>(type_support->data);
     return members->type_hash_;
   } else {
     RMW_SET_ERROR_MSG("Unknown typesupport identifier");
@@ -2090,8 +2092,7 @@ static rosidl_type_hash_t get_type_hash(const rosidl_message_type_support_t * ty
 }
 
 static rosidl_type_hash_t get_service_request_type_hash(
-  const rosidl_service_type_support_t * type_support
-)
+  const rosidl_service_type_support_t * type_support)
 {
   const char * id = type_support->typesupport_identifier;
   if (id == rosidl_typesupport_introspection_c__identifier) {
@@ -2108,17 +2109,16 @@ static rosidl_type_hash_t get_service_request_type_hash(
 }
 
 static rosidl_type_hash_t get_service_response_type_hash(
-  const rosidl_service_type_support_t * type_support
-)
+  const rosidl_service_type_support_t * type_support)
 {
   const char * id = type_support->typesupport_identifier;
   if (id == rosidl_typesupport_introspection_c__identifier) {
-    auto members =
-      static_cast<const rosidl_typesupport_introspection_c__ServiceMembers *>(type_support->data);
+    auto members = static_cast<
+      const rosidl_typesupport_introspection_c__ServiceMembers *>(type_support->data);
     return members->response_members_->type_hash_;
   } else if (id == rosidl_typesupport_introspection_cpp::typesupport_identifier) {
-    auto members =
-      static_cast<const rosidl_typesupport_introspection_cpp::ServiceMembers *>(type_support->data);
+    auto members = static_cast<
+      const rosidl_typesupport_introspection_cpp::ServiceMembers *>(type_support->data);
     return members->response_members_->type_hash_;
   }
   RMW_SET_ERROR_MSG("Unknown typesupport identifier");
@@ -2222,12 +2222,11 @@ static dds_qos_t * create_readwrite_qos(
     dds_qset_ignorelocal(qos, DDS_IGNORELOCAL_PARTICIPANT);
   }
 
-  std::string typehash_user_data;
-  rmw_ret_t ret = rmw_dds_common::encode_type_hash_for_user_data_qos(type_hash, typehash_user_data);
-  if (ret != RMW_RET_OK) {
-    typehash_user_data = "";
+  std::string typehash_str;
+  if (RMW_RET_OK != rmw_dds_common::encode_type_hash_for_user_data_qos(type_hash, typehash_str)) {
+    typehash_str.clear();
   }
-  std::string user_data = extra_user_data + typehash_user_data;
+  std::string user_data = extra_user_data + typehash_str;
   dds_qset_userdata(qos, user_data.data(), user_data.size());
 
   return qos;
