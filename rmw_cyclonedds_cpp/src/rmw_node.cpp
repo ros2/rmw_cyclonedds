@@ -954,6 +954,11 @@ static void handle_builtintopic_endpoint(
         if (RMW_RET_OK != rmw_dds_common::parse_type_hash_from_user_data(
             reinterpret_cast<const uint8_t *>(userdata), userdata_size, type_hash))
         {
+          RCUTILS_LOG_WARN_NAMED(
+            "rmw_cyclonedds_cpp",
+            "Failed to parse type hash for topic '%s' with type '%s' from USER_DATA '%*s'.",
+            s->topic_name, s->type_name,
+            static_cast<int>(userdata_size), reinterpret_cast<char *>(userdata));
           type_hash = rosidl_get_zero_initialized_type_hash();
         }
       }
@@ -2224,6 +2229,9 @@ static dds_qos_t * create_readwrite_qos(
 
   std::string typehash_str;
   if (RMW_RET_OK != rmw_dds_common::encode_type_hash_for_user_data_qos(type_hash, typehash_str)) {
+    RCUTILS_LOG_WARN_NAMED(
+      "rmw_cyclonedds_cpp",
+      "Failed to encode type hash for topic, will not distribute it in USER_DATA.");
     typehash_str.clear();
   }
   std::string user_data = extra_user_data + typehash_str;
