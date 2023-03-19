@@ -3810,7 +3810,7 @@ extern "C" rmw_ret_t rmw_take_event(
         ei->total_count = static_cast<size_t>(st.total_count);
         ei->total_count_change = static_cast<size_t>(st.total_count_change);
         ei->current_count = static_cast<size_t>(st.current_count);
-        ei->current_count_change = static_cast<size_t>(st.current_count_change);
+        ei->current_count_change = st.current_count_change;
         *taken = true;
         return RMW_RET_OK;
       }
@@ -3908,7 +3908,7 @@ extern "C" rmw_ret_t rmw_take_event(
         ei->total_count = static_cast<size_t>(st.total_count);
         ei->total_count_change = static_cast<size_t>(st.total_count_change);
         ei->current_count = static_cast<size_t>(st.current_count);
-        ei->current_count_change = static_cast<size_t>(st.current_count_change);
+        ei->current_count_change = st.current_count_change;
         *taken = true;
         return RMW_RET_OK;
       }
