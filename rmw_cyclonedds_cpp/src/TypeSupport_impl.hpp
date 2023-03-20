@@ -501,6 +501,12 @@ std::string TypeSupport<MembersType>::getName()
 }
 
 template<typename MembersType>
+const MembersType * TypeSupport<MembersType>::get_members()
+{
+  return members_;
+}
+
+template<typename MembersType>
 bool TypeSupport<MembersType>::is_type_self_contained(const MembersType * members)
 {
   for (uint32_t idx = 0; idx < members->member_count_; ++idx) {

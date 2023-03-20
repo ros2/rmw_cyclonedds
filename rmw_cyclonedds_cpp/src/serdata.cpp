@@ -685,6 +685,51 @@ static std::string get_type_name(const char * type_support_identifier, void * ty
   }
 }
 
+template<typename MembersType>
+static dds_dynamic_type_t * create_dds_dynamic_type(
+  dds_entity_t dds_ppant, const std::string type_name, const MembersType * members)
+{
+  assert(members);
+
+  dds_dynamic_type_t dstruct = dds_dynamic_type_create(
+      dds_ppant, (dds_dynamic_type_descriptor_t) {
+        .kind = DDS_DYNAMIC_STRUCTURE,
+        .name = type_name.c_str()
+      });
+
+  for (uint32_t i  = 0; i < members->member_count_; ++i)
+  {
+    const auto * member = members->members_ + i;
+    switch(member->type_id_) 
+    {
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_BOOL:
+        dds_dynamic_type_add_member(&dstruct, DDS_DYNAMIC_MEMBER_PRIM(DDS_DYNAMIC_BOOLEAN, member->name_));
+    }
+  }
+
+  return nullptr;
+}
+
+static dds_dynamic_type_t * get_dds_dynamic_type(const char * type_support_identifier, void * type_support, dds_entity_t dds_ppant)
+{
+  if (using_introspection_c_typesupport(type_support_identifier)) 
+  {
+    auto typed_typesupport = static_cast<MessageTypeSupport_c *>(type_support);
+    return create_dds_dynamic_type(
+      dds_ppant, typed_typesupport->getName(), typed_typesupport->get_members());
+  } 
+  else if (using_introspection_cpp_typesupport(type_support_identifier)) 
+  {
+    auto typed_typesupport = static_cast<MessageTypeSupport_cpp *>(type_support);
+   return create_dds_dynamic_type(
+      dds_ppant, typed_typesupport->getName(), typed_typesupport->get_members()); 
+  } 
+  else 
+  {
+    return nullptr;
+  }
+}
+
 struct sertype_rmw * create_sertype(
   const char * type_support_identifier,
   void * type_support, bool is_request_header,
@@ -713,6 +758,23 @@ struct sertype_rmw * create_sertype(
   st->cdr_writer = rmw_cyclonedds_cpp::make_cdr_writer(std::move(message_type));
 
   return st;
+}
+
+struct ddsi_sertype * create_ddsi_sertype(
+  dds_entity_t dds_ppant, const char * type_support_identifier,
+  void * type_support, bool is_request_header,
+  const uint32_t sample_size, const bool is_fixed_type)
+{
+  std::string type_name = get_type_name(type_support_identifier, type_support);
+  /* TODO: implement funciton dds_dynamic_type_t reconstruction from type_support
+   * */ 
+  
+  /*dds_dynamic_type_t dstruct = dds_dynamic_type_create(
+      dds_ppant, (dds_dynamic_type_descriptor_t) {
+        .kind = DDS_DYNAMIC_STRUCTURE, 
+        .name = type_name.c_str()
+      });*/
+
 }
 
 void serdata_rmw::resize(size_t requested_size)
