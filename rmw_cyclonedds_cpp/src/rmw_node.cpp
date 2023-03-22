@@ -516,6 +516,8 @@ MAKE_DDS_EVENT_CALLBACK_FN(sample_lost, SAMPLE_LOST)
 MAKE_DDS_EVENT_CALLBACK_FN(offered_incompatible_qos, OFFERED_INCOMPATIBLE_QOS)
 MAKE_DDS_EVENT_CALLBACK_FN(liveliness_changed, LIVELINESS_CHANGED)
 MAKE_DDS_EVENT_CALLBACK_FN(inconsistent_topic, INCONSISTENT_TOPIC)
+MAKE_DDS_EVENT_CALLBACK_FN(subscription_matched, SUBSCRIPTION_MATCHED)
+MAKE_DDS_EVENT_CALLBACK_FN(publication_matched, PUBLICATION_MATCHED)
 
 static void listener_set_event_callbacks(dds_listener_t * l, void * arg)
 {
@@ -527,6 +529,8 @@ static void listener_set_event_callbacks(dds_listener_t * l, void * arg)
   dds_lset_offered_incompatible_qos_arg(l, on_offered_incompatible_qos_fn, arg, false);
   dds_lset_liveliness_changed_arg(l, on_liveliness_changed_fn, arg, false);
   dds_lset_inconsistent_topic_arg(l, on_inconsistent_topic_fn, arg, false);
+  dds_lset_subscription_matched_arg(l, on_subscription_matched_fn, arg, false);
+  dds_lset_publication_matched_arg(l, on_publication_matched_fn, arg, false);
 }
 
 static bool get_readwrite_qos(dds_entity_t handle, rmw_qos_profile_t * rmw_qos_policies)
@@ -691,6 +695,15 @@ extern "C" rmw_ret_t rmw_event_set_callback(
         break;
       }
 
+    case RMW_EVENT_SUBSCRIPTION_MATCHED:
+      {
+        auto sub_event = static_cast<CddsSubscription *>(rmw_event->data);
+        event_set_callback(
+          sub_event, DDS_SUBSCRIPTION_MATCHED_STATUS_ID,
+          callback, user_data);
+        break;
+      }
+
     case RMW_EVENT_LIVELINESS_LOST:
       {
         auto pub_event = static_cast<CddsPublisher *>(rmw_event->data);
@@ -732,6 +745,15 @@ extern "C" rmw_ret_t rmw_event_set_callback(
         auto sub_event = static_cast<CddsSubscription *>(rmw_event->data);
         event_set_callback(
           sub_event, DDS_INCONSISTENT_TOPIC_STATUS_ID,
+          callback, user_data);
+        break;
+      }
+
+    case RMW_EVENT_PUBLICATION_MATCHED:
+      {
+        auto pub_event = static_cast<CddsPublisher *>(rmw_event->data);
+        event_set_callback(
+          pub_event, DDS_PUBLICATION_MATCHED_STATUS_ID,
           callback, user_data);
         break;
       }
@@ -3649,6 +3671,8 @@ static const std::unordered_map<rmw_event_type_t, uint32_t> mask_map{
   {RMW_EVENT_MESSAGE_LOST, DDS_SAMPLE_LOST_STATUS},
   {RMW_EVENT_PUBLISHER_INCOMPATIBLE_TYPE, DDS_INCONSISTENT_TOPIC_STATUS},
   {RMW_EVENT_SUBSCRIPTION_INCOMPATIBLE_TYPE, DDS_INCONSISTENT_TOPIC_STATUS},
+  {RMW_EVENT_SUBSCRIPTION_MATCHED, DDS_SUBSCRIPTION_MATCHED_STATUS},
+  {RMW_EVENT_PUBLICATION_MATCHED, DDS_PUBLICATION_MATCHED_STATUS}
 };
 
 static bool is_event_supported(const rmw_event_type_t event_t)
@@ -3774,6 +3798,23 @@ extern "C" rmw_ret_t rmw_take_event(
         return RMW_RET_OK;
       }
 
+    case RMW_EVENT_SUBSCRIPTION_MATCHED: {
+        auto ei = static_cast<rmw_matched_status_t *>(event_info);
+        auto sub = static_cast<CddsSubscription *>(event_handle->data);
+
+        dds_subscription_matched_status_t st;
+        if (dds_get_subscription_matched_status(sub->enth, &st) < 0) {
+          *taken = false;
+          return RMW_RET_ERROR;
+        }
+        ei->total_count = static_cast<size_t>(st.total_count);
+        ei->total_count_change = static_cast<size_t>(st.total_count_change);
+        ei->current_count = static_cast<size_t>(st.current_count);
+        ei->current_count_change = st.current_count_change;
+        *taken = true;
+        return RMW_RET_OK;
+      }
+
     case RMW_EVENT_LIVELINESS_LOST: {
         auto ei = static_cast<rmw_liveliness_lost_status_t *>(event_info);
         auto pub = static_cast<CddsPublisher *>(event_handle->data);
@@ -3853,6 +3894,23 @@ extern "C" rmw_ret_t rmw_take_event(
           *taken = true;
           return RMW_RET_OK;
         }
+      }
+
+    case RMW_EVENT_PUBLICATION_MATCHED: {
+        auto ei = static_cast<rmw_matched_status_t *>(event_info);
+        auto pub = static_cast<CddsPublisher *>(event_handle->data);
+
+        dds_publication_matched_status st;
+        if (dds_get_publication_matched_status(pub->enth, &st) < 0) {
+          *taken = false;
+          return RMW_RET_ERROR;
+        }
+        ei->total_count = static_cast<size_t>(st.total_count);
+        ei->total_count_change = static_cast<size_t>(st.total_count_change);
+        ei->current_count = static_cast<size_t>(st.current_count);
+        ei->current_count_change = st.current_count_change;
+        *taken = true;
+        return RMW_RET_OK;
       }
 
     case RMW_EVENT_INVALID: {
