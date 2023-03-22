@@ -4153,12 +4153,22 @@ static rmw_ret_t gather_event_entities(
       if (status_mask_map.find(dds_entity) == status_mask_map.end()) {
         status_mask_map[dds_entity] = 0;
       }
-      status_mask_map[dds_entity] |= get_status_kind_from_rmw(current_event->event_type);
+
+      uint32_t status_kind = get_status_kind_from_rmw(current_event->event_type);
+      // TODO(clalancette): This should be reenabled when Cyclone supports reporting inconsistent
+      // topic as an event
+      if (status_kind != DDS_INCONSISTENT_TOPIC_STATUS) {
+        status_mask_map[dds_entity] |= get_status_kind_from_rmw(current_event->event_type);
+      }
     }
   }
   for (auto & pair : status_mask_map) {
     // set the status condition's mask with the supported type
-    dds_set_status_mask(pair.first, pair.second);
+    dds_return_t ret = dds_set_status_mask(pair.first, pair.second);
+    if (ret != DDS_RETCODE_OK) {
+      RMW_SET_ERROR_MSG("Failed setting the status mask");
+      return RMW_RET_ERROR;
+    }
     entities.insert(pair.first);
   }
 
