@@ -386,6 +386,7 @@ static bool serdata_rmw_to_sample(
   } catch (std::runtime_error & e) {
     RMW_SET_ERROR_MSG(e.what());
     return false;
+#include "dds/ddsc/dds_public_dynamic_type.h"
   }
 
   return false;
@@ -687,47 +688,127 @@ static std::string get_type_name(const char * type_support_identifier, void * ty
 
 template<typename MembersType>
 static dds_dynamic_type_t * create_dds_dynamic_type(
-  dds_entity_t dds_ppant, const std::string type_name, const MembersType * members)
+  dds_entity_t dds_ppant, const char * type_name, const MembersType * members)
 {
   assert(members);
+  assert(dds_ppant);
 
-  dds_dynamic_type_t dstruct = dds_dynamic_type_create(
+  dds_dynamic_type_t * dstruct = new dds_dynamic_type_t;
+  *dstruct = dds_dynamic_type_create(
       dds_ppant, (dds_dynamic_type_descriptor_t) {
-        .kind = DDS_DYNAMIC_STRUCTURE,
-        .name = type_name.c_str()
+        .kind=DDS_DYNAMIC_STRUCTURE, 
+        .name=type_name
       });
 
-  for (uint32_t i  = 0; i < members->member_count_; ++i)
+  dds_dynamic_type_set_extensibility(dstruct, DDS_DYNAMIC_TYPE_EXT_APPENDABLE);
+  dds_dynamic_type_set_autoid(dstruct, DDS_DYNAMIC_TYPE_AUTOID_HASH);
+
+  for (uint32_t i = 0; i < members->member_count_; ++i)
   {
-    const auto * member = members->members_ + i;
-    switch(member->type_id_) 
+    const auto * member = members->members_ + i; 
+    switch (member->type_id_) 
     {
       case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_BOOL:
-        dds_dynamic_type_add_member(&dstruct, DDS_DYNAMIC_MEMBER_PRIM(DDS_DYNAMIC_BOOLEAN, member->name_));
+        dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER_PRIM(DDS_DYNAMIC_BOOLEAN, member->name_));
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_BYTE:
+        dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER_PRIM(DDS_DYNAMIC_BYTE, member->name_));
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT8:
+        dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER_PRIM(DDS_DYNAMIC_UINT8, member->name_));
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_CHAR:
+        dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER_PRIM(DDS_DYNAMIC_CHAR8, member->name_));
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT8:
+        dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER_PRIM(DDS_DYNAMIC_INT8, member->name_));
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT32:
+        dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER_PRIM(DDS_DYNAMIC_FLOAT32, member->name_));
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT64:
+        dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER_PRIM(DDS_DYNAMIC_FLOAT64, member->name_));
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT16:
+        dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER_PRIM(DDS_DYNAMIC_INT16, member->name_));
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT16:
+        dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER_PRIM(DDS_DYNAMIC_UINT16, member->name_));
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT32:
+        dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER_PRIM(DDS_DYNAMIC_INT32, member->name_));
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT32:
+        dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER_PRIM(DDS_DYNAMIC_UINT32, member->name_));
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT64:
+        dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER_PRIM(DDS_DYNAMIC_INT64, member->name_));
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT64:
+        dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER_PRIM(DDS_DYNAMIC_UINT64, member->name_));
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING:
+        dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER_PRIM(DDS_DYNAMIC_STRING8, member->name_));
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE:
+        {
+          auto sub_members = (const MembersType *)member->members_->data;
+          if (!member->is_array_)
+          {
+            dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER(create_dds_dynamic_type(dds_ppant, member->name_, sub_members), member->name_)); 
+          } else {
+            dds_dynamic_type_t darray = dds_dynamic_type_create(
+                dds_ppant, (dds_dynamic_type_descriptor_t){
+                  .kind = DDS_DYNAMIC_ARRAY,
+                  .name = member->name_,
+                  .element_type = DDS_DYNAMIC_TYPE_SPEC(create_dds_dynamic_type(dds_ppant, member->name_, sub_members))
+                });  
+            dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER(darray, member->name_));
+          }
+          break;
+        }
+      default:
+        RMW_SET_ERROR_MSG((std::string("unknown type id ") + std::to_string(member->type_id_)).c_str());
+
     }
   }
 
-  return nullptr;
+  return dstruct;
 }
 
-static dds_dynamic_type_t * get_dds_dynamic_type(const char * type_support_identifier, void * type_support, dds_entity_t dds_ppant)
+dds_dynamic_type_t * create_dds_dynamic_type(const char * type_support_identifier, void * type_support, dds_entity_t dds_ppant)
 {
   if (using_introspection_c_typesupport(type_support_identifier)) 
   {
     auto typed_typesupport = static_cast<MessageTypeSupport_c *>(type_support);
     return create_dds_dynamic_type(
-      dds_ppant, typed_typesupport->getName(), typed_typesupport->get_members());
+      dds_ppant, typed_typesupport->getName().c_str(), typed_typesupport->get_members());
   } 
   else if (using_introspection_cpp_typesupport(type_support_identifier)) 
   {
     auto typed_typesupport = static_cast<MessageTypeSupport_cpp *>(type_support);
    return create_dds_dynamic_type(
-      dds_ppant, typed_typesupport->getName(), typed_typesupport->get_members()); 
+      dds_ppant, typed_typesupport->getName().c_str(), typed_typesupport->get_members()); 
   } 
   else 
   {
     return nullptr;
   }
+}
+
+ddsi_sertype * create_ddsi_sertype(const char * type_support_identifier, void * type_support, dds_entity_t dds_ppant)
+{
+  dds_return_t rc;
+  dds_dynamic_type_t * ddt = create_dds_dynamic_type(type_support_identifier, type_support, dds_ppant);
+  dds_typeinfo_t * type_info;  
+
+  rc = dds_dynamic_type_register(ddt, &type_info);
+  //if (rc)
+  dds_topic_descriptor_t * descriptor;
+  rc = dds_create_topic_descriptor(DDS_FIND_SCOPE_LOCAL_DOMAIN, dds_ppant, type_info, 0, &descriptor);
+  //if (rc)
+  
+  //TODO: turn descriptor && type_info into ddsi_sertype
 }
 
 struct sertype_rmw * create_sertype(
@@ -758,23 +839,6 @@ struct sertype_rmw * create_sertype(
   st->cdr_writer = rmw_cyclonedds_cpp::make_cdr_writer(std::move(message_type));
 
   return st;
-}
-
-struct ddsi_sertype * create_ddsi_sertype(
-  dds_entity_t dds_ppant, const char * type_support_identifier,
-  void * type_support, bool is_request_header,
-  const uint32_t sample_size, const bool is_fixed_type)
-{
-  std::string type_name = get_type_name(type_support_identifier, type_support);
-  /* TODO: implement funciton dds_dynamic_type_t reconstruction from type_support
-   * */ 
-  
-  /*dds_dynamic_type_t dstruct = dds_dynamic_type_create(
-      dds_ppant, (dds_dynamic_type_descriptor_t) {
-        .kind = DDS_DYNAMIC_STRUCTURE, 
-        .name = type_name.c_str()
-      });*/
-
 }
 
 void serdata_rmw::resize(size_t requested_size)
