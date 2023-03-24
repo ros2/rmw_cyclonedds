@@ -519,6 +519,9 @@ MAKE_DDS_EVENT_CALLBACK_FN(requested_incompatible_qos, REQUESTED_INCOMPATIBLE_QO
 MAKE_DDS_EVENT_CALLBACK_FN(sample_lost, SAMPLE_LOST)
 MAKE_DDS_EVENT_CALLBACK_FN(offered_incompatible_qos, OFFERED_INCOMPATIBLE_QOS)
 MAKE_DDS_EVENT_CALLBACK_FN(liveliness_changed, LIVELINESS_CHANGED)
+MAKE_DDS_EVENT_CALLBACK_FN(inconsistent_topic, INCONSISTENT_TOPIC)
+MAKE_DDS_EVENT_CALLBACK_FN(subscription_matched, SUBSCRIPTION_MATCHED)
+MAKE_DDS_EVENT_CALLBACK_FN(publication_matched, PUBLICATION_MATCHED)
 
 static void listener_set_event_callbacks(dds_listener_t * l, void * arg)
 {
@@ -529,6 +532,9 @@ static void listener_set_event_callbacks(dds_listener_t * l, void * arg)
   dds_lset_offered_deadline_missed_arg(l, on_offered_deadline_missed_fn, arg, false);
   dds_lset_offered_incompatible_qos_arg(l, on_offered_incompatible_qos_fn, arg, false);
   dds_lset_liveliness_changed_arg(l, on_liveliness_changed_fn, arg, false);
+  dds_lset_inconsistent_topic_arg(l, on_inconsistent_topic_fn, arg, false);
+  dds_lset_subscription_matched_arg(l, on_subscription_matched_fn, arg, false);
+  dds_lset_publication_matched_arg(l, on_publication_matched_fn, arg, false);
 }
 
 static bool get_readwrite_qos(dds_entity_t handle, rmw_qos_profile_t * rmw_qos_policies)
@@ -693,6 +699,15 @@ extern "C" rmw_ret_t rmw_event_set_callback(
         break;
       }
 
+    case RMW_EVENT_SUBSCRIPTION_MATCHED:
+      {
+        auto sub_event = static_cast<CddsSubscription *>(rmw_event->data);
+        event_set_callback(
+          sub_event, DDS_SUBSCRIPTION_MATCHED_STATUS_ID,
+          callback, user_data);
+        break;
+      }
+
     case RMW_EVENT_LIVELINESS_LOST:
       {
         auto pub_event = static_cast<CddsPublisher *>(rmw_event->data);
@@ -716,6 +731,33 @@ extern "C" rmw_ret_t rmw_event_set_callback(
         auto pub_event = static_cast<CddsPublisher *>(rmw_event->data);
         event_set_callback(
           pub_event, DDS_OFFERED_INCOMPATIBLE_QOS_STATUS_ID,
+          callback, user_data);
+        break;
+      }
+
+    case RMW_EVENT_PUBLISHER_INCOMPATIBLE_TYPE:
+      {
+        auto pub_event = static_cast<CddsPublisher *>(rmw_event->data);
+        event_set_callback(
+          pub_event, DDS_INCONSISTENT_TOPIC_STATUS_ID,
+          callback, user_data);
+        break;
+      }
+
+    case RMW_EVENT_SUBSCRIPTION_INCOMPATIBLE_TYPE:
+      {
+        auto sub_event = static_cast<CddsSubscription *>(rmw_event->data);
+        event_set_callback(
+          sub_event, DDS_INCONSISTENT_TOPIC_STATUS_ID,
+          callback, user_data);
+        break;
+      }
+
+    case RMW_EVENT_PUBLICATION_MATCHED:
+      {
+        auto pub_event = static_cast<CddsPublisher *>(rmw_event->data);
+        event_set_callback(
+          pub_event, DDS_PUBLICATION_MATCHED_STATUS_ID,
           callback, user_data);
         break;
       }
@@ -3417,7 +3459,7 @@ static rmw_ret_t rmw_take_ser_int(
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
     subscription handle,
     subscription->implementation_identifier, eclipse_cyclonedds_identifier,
-    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION)
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   CddsSubscription * sub = static_cast<CddsSubscription *>(subscription->data);
   RET_NULL(sub);
   dds_sample_info_t info;
@@ -3717,6 +3759,10 @@ static const std::unordered_map<rmw_event_type_t, uint32_t> mask_map{
   {RMW_EVENT_REQUESTED_QOS_INCOMPATIBLE, DDS_REQUESTED_INCOMPATIBLE_QOS_STATUS},
   {RMW_EVENT_OFFERED_QOS_INCOMPATIBLE, DDS_OFFERED_INCOMPATIBLE_QOS_STATUS},
   {RMW_EVENT_MESSAGE_LOST, DDS_SAMPLE_LOST_STATUS},
+  {RMW_EVENT_PUBLISHER_INCOMPATIBLE_TYPE, DDS_INCONSISTENT_TOPIC_STATUS},
+  {RMW_EVENT_SUBSCRIPTION_INCOMPATIBLE_TYPE, DDS_INCONSISTENT_TOPIC_STATUS},
+  {RMW_EVENT_SUBSCRIPTION_MATCHED, DDS_SUBSCRIPTION_MATCHED_STATUS},
+  {RMW_EVENT_PUBLICATION_MATCHED, DDS_PUBLICATION_MATCHED_STATUS}
 };
 
 static bool is_event_supported(const rmw_event_type_t event_t)
@@ -3842,6 +3888,23 @@ extern "C" rmw_ret_t rmw_take_event(
         return RMW_RET_OK;
       }
 
+    case RMW_EVENT_SUBSCRIPTION_MATCHED: {
+        auto ei = static_cast<rmw_matched_status_t *>(event_info);
+        auto sub = static_cast<CddsSubscription *>(event_handle->data);
+
+        dds_subscription_matched_status_t st;
+        if (dds_get_subscription_matched_status(sub->enth, &st) < 0) {
+          *taken = false;
+          return RMW_RET_ERROR;
+        }
+        ei->total_count = static_cast<size_t>(st.total_count);
+        ei->total_count_change = static_cast<size_t>(st.total_count_change);
+        ei->current_count = static_cast<size_t>(st.current_count);
+        ei->current_count_change = st.current_count_change;
+        *taken = true;
+        return RMW_RET_OK;
+      }
+
     case RMW_EVENT_LIVELINESS_LOST: {
         auto ei = static_cast<rmw_liveliness_lost_status_t *>(event_info);
         auto pub = static_cast<CddsPublisher *>(event_handle->data);
@@ -3887,6 +3950,57 @@ extern "C" rmw_ret_t rmw_take_event(
           *taken = true;
           return RMW_RET_OK;
         }
+      }
+
+    case RMW_EVENT_PUBLISHER_INCOMPATIBLE_TYPE: {
+        auto it = static_cast<rmw_incompatible_type_status_t *>(event_info);
+        auto pub = static_cast<CddsPublisher *>(event_handle->data);
+
+        const dds_entity_t topic = dds_get_topic(pub->enth);
+        dds_inconsistent_topic_status_t st;
+        if (dds_get_inconsistent_topic_status(topic, &st) < 0) {
+          *taken = false;
+          return RMW_RET_ERROR;
+        } else {
+          it->total_count = static_cast<int32_t>(st.total_count);
+          it->total_count_change = st.total_count_change;
+          *taken = true;
+          return RMW_RET_OK;
+        }
+      }
+
+    case RMW_EVENT_SUBSCRIPTION_INCOMPATIBLE_TYPE: {
+        auto it = static_cast<rmw_incompatible_type_status_t *>(event_info);
+        auto sub = static_cast<CddsSubscription *>(event_handle->data);
+
+        const dds_entity_t topic = dds_get_topic(sub->enth);
+        dds_inconsistent_topic_status_t st;
+        if (dds_get_inconsistent_topic_status(topic, &st) < 0) {
+          *taken = false;
+          return RMW_RET_ERROR;
+        } else {
+          it->total_count = static_cast<int32_t>(st.total_count);
+          it->total_count_change = st.total_count_change;
+          *taken = true;
+          return RMW_RET_OK;
+        }
+      }
+
+    case RMW_EVENT_PUBLICATION_MATCHED: {
+        auto ei = static_cast<rmw_matched_status_t *>(event_info);
+        auto pub = static_cast<CddsPublisher *>(event_handle->data);
+
+        dds_publication_matched_status st;
+        if (dds_get_publication_matched_status(pub->enth, &st) < 0) {
+          *taken = false;
+          return RMW_RET_ERROR;
+        }
+        ei->total_count = static_cast<size_t>(st.total_count);
+        ei->total_count_change = static_cast<size_t>(st.total_count_change);
+        ei->current_count = static_cast<size_t>(st.current_count);
+        ei->current_count_change = st.current_count_change;
+        *taken = true;
+        return RMW_RET_OK;
       }
 
     case RMW_EVENT_INVALID: {
@@ -4129,12 +4243,22 @@ static rmw_ret_t gather_event_entities(
       if (status_mask_map.find(dds_entity) == status_mask_map.end()) {
         status_mask_map[dds_entity] = 0;
       }
-      status_mask_map[dds_entity] |= get_status_kind_from_rmw(current_event->event_type);
+
+      uint32_t status_kind = get_status_kind_from_rmw(current_event->event_type);
+      // TODO(clalancette): This should be reenabled when Cyclone supports reporting inconsistent
+      // topic as an event
+      if (status_kind != DDS_INCONSISTENT_TOPIC_STATUS) {
+        status_mask_map[dds_entity] |= get_status_kind_from_rmw(current_event->event_type);
+      }
     }
   }
   for (auto & pair : status_mask_map) {
     // set the status condition's mask with the supported type
-    dds_set_status_mask(pair.first, pair.second);
+    dds_return_t ret = dds_set_status_mask(pair.first, pair.second);
+    if (ret != DDS_RETCODE_OK) {
+      RMW_SET_ERROR_MSG("Failed setting the status mask");
+      return RMW_RET_ERROR;
+    }
     entities.insert(pair.first);
   }
 
