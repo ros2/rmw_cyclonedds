@@ -945,6 +945,7 @@ static void handle_builtintopic_endpoint(
       void * userdata;
       size_t userdata_size;
       if (dds_qget_userdata(s->qos, &userdata, &userdata_size)) {
+        RCPPUTILS_SCOPE_EXIT(dds_free(userdata));
         if (RMW_RET_OK != rmw_dds_common::parse_type_hash_from_user_data(
             reinterpret_cast<const uint8_t *>(userdata), userdata_size, type_hash))
         {
