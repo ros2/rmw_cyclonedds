@@ -30,7 +30,6 @@ class MessageTypeSupport : public TypeSupport<MembersType>
 {
 public:
   explicit MessageTypeSupport(const MembersType * members);
-  const MembersType * get_members();
 };
 
 }  // namespace rmw_cyclonedds_cpp

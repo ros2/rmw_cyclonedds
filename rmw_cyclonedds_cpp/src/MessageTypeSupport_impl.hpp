@@ -45,12 +45,6 @@ MessageTypeSupport<MembersType>::MessageTypeSupport(const MembersType * members)
   this->setName(ss.str().c_str());
 }
 
-template<typename MembersType>
-const MembersType * MessageTypeSupport<MembersType>::get_members()
-{
-  return this->members_;
-}
-
 }  // namespace rmw_cyclonedds_cpp
 
 #endif  // MESSAGETYPESUPPORT_IMPL_HPP_
