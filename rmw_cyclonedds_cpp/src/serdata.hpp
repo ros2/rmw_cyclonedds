@@ -105,6 +105,6 @@ struct ddsi_serdata * serdata_rmw_from_serialized_message(
 
 dds_dynamic_type_t create_dds_dynamic_type(
   const char* type_support_identifier,
-  void * type_support, dds_entity_t dds_ppant);
+  const void * type_support, dds_entity_t dds_ppant);
 
 #endif  // SERDATA_HPP_

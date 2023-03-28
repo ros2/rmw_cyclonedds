@@ -710,7 +710,7 @@ static void dynamic_type_add_member(
           .kind = DDS_DYNAMIC_ARRAY,
           .name = member->name_,
           .num_bounds = 1,
-          .bounds = { new uint32_t[] {(uint32_t)member->array_size_}},
+          .bounds = { new uint32_t[] {static_cast<uint32_t>(member->array_size_)}},
           .element_type = DDS_DYNAMIC_TYPE_SPEC_PRIM(type),
         });
     } else {
@@ -719,7 +719,7 @@ static void dynamic_type_add_member(
           .kind = DDS_DYNAMIC_SEQUENCE,
           .name = member->name_,
           .num_bounds = 1,
-          .bounds = { new uint32_t[] {(uint32_t)member->array_size_}},
+          .bounds = { new uint32_t[] {static_cast<uint32_t>(member->array_size_)}},
           .element_type = DDS_DYNAMIC_TYPE_SPEC_PRIM(type),
         });
     }
@@ -798,7 +798,7 @@ static bool construct_dds_dynamic_type(
               (dds_dynamic_type_descriptor_t){
                 .kind = DDS_DYNAMIC_STRING8,
                 .num_bounds = 1,
-                .bounds = { new uint32_t[] {(uint32_t)member->string_upper_bound_}}
+                .bounds = { new uint32_t[] {static_cast<uint32_t>(member->array_size_)}}
               });
           } else {
             ddt = dds_dynamic_type_create(dds_ppant, 
@@ -848,7 +848,7 @@ static bool construct_dds_dynamic_type(
                   .kind=DDS_DYNAMIC_ARRAY,
                   .name=member->name_,
                   .num_bounds=1,
-                  .bounds={new uint32_t[]{(uint32_t)member->array_size_}},
+                  .bounds={new uint32_t[]{static_cast<uint32_t>(member->array_size_)}},
                   .element_type=DDS_DYNAMIC_TYPE_SPEC(ddt),
               });
             } else {
@@ -857,7 +857,7 @@ static bool construct_dds_dynamic_type(
                   .kind=DDS_DYNAMIC_SEQUENCE,
                   .name=member->name_,
                   .num_bounds=1,
-                  .bounds={new uint32_t[]{(uint32_t)member->array_size_}},
+                  .bounds={new uint32_t[]{static_cast<uint32_t>(member->array_size_)}},
                   .element_type=DDS_DYNAMIC_TYPE_SPEC(ddt),
                 });
             }
@@ -884,40 +884,44 @@ static bool construct_dds_dynamic_type(
   return true;
 }
 
-dds_dynamic_type_t create_dds_dynamic_type(const char * type_support_identifier, void * type_support, dds_entity_t dds_ppant)
+dds_dynamic_type_t create_dds_dynamic_type(const char * type_support_identifier, const void * untyped_members, dds_entity_t dds_ppant)
 {
   if (using_introspection_c_typesupport(type_support_identifier)) 
   {
-    auto typed_typesupport = static_cast<MessageTypeSupport_c *>(type_support);
+    auto typed_support = static_cast<MessageTypeSupport_c *>(
+          create_message_type_support(untyped_members, type_support_identifier));
+    auto members = static_cast<const rosidl_typesupport_introspection_c__MessageMembers_s *>(untyped_members);
     RCUTILS_LOG_DEBUG("c type support");
     auto dstruct = dds_dynamic_type_create(
       dds_ppant, (dds_dynamic_type_descriptor_t) {
         .kind=DDS_DYNAMIC_STRUCTURE, 
-        .name=typed_typesupport->getName().c_str()
+        .name=typed_support->getName().c_str()
       });
     
     dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_APPENDABLE);
     dds_dynamic_type_set_autoid(&dstruct, DDS_DYNAMIC_TYPE_AUTOID_HASH);
 
-    if (construct_dds_dynamic_type(&dstruct, dds_ppant, typed_typesupport->get_members()))
+    if (construct_dds_dynamic_type(&dstruct, dds_ppant, members))
       return dstruct;
     else
      throw std::runtime_error("construct_dds_dynamic_type failed");
   } 
   else if (using_introspection_cpp_typesupport(type_support_identifier)) 
   {
-    auto typed_typesupport = static_cast<MessageTypeSupport_cpp *>(type_support);
+    auto typed_support = static_cast<MessageTypeSupport_cpp *>(
+          create_message_type_support(untyped_members, type_support_identifier));
+    auto members = static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers_s *>(untyped_members);
     RCUTILS_LOG_DEBUG("cpp type support");
     auto dstruct = dds_dynamic_type_create(
       dds_ppant, (dds_dynamic_type_descriptor_t) {
         .kind=DDS_DYNAMIC_STRUCTURE, 
-        .name=typed_typesupport->getName().c_str()      
+        .name=typed_support->getName().c_str()
       });
 
     dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_APPENDABLE);
     dds_dynamic_type_set_autoid(&dstruct, DDS_DYNAMIC_TYPE_AUTOID_HASH);
 
-    if (construct_dds_dynamic_type(&dstruct, dds_ppant, typed_typesupport->get_members()))
+    if (construct_dds_dynamic_type(&dstruct, dds_ppant, members))
       return dstruct;
     else
      throw std::runtime_error("construct_dds_dynamic_type failed");
