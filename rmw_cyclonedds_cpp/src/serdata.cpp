@@ -742,12 +742,9 @@ static bool construct_dds_dynamic_type(
   assert(members);
   assert(dds_ppant);
  
-  RCUTILS_LOG_DEBUG("members->member_count_: %d", members->member_count_);
   for (uint32_t i = 0; i < members->member_count_; ++i)
   {
     const auto * member = members->members_ + i; 
-    RCUTILS_LOG_DEBUG("%d, %s", member->type_id_, member->name_);
-    RCUTILS_LOG_DEBUG("is it array: %d", member->is_array_);
     switch (member->type_id_) 
     {
       case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_BOOL:
@@ -877,8 +874,6 @@ static bool construct_dds_dynamic_type(
         RMW_SET_ERROR_MSG((std::string("unknown type id ") + std::to_string(member->type_id_)).c_str());
         return false;
     }
-    
-    RCUTILS_LOG_DEBUG("%s", dds_strretcode(-dstruct->ret));
   }
 
   return true;
@@ -891,7 +886,6 @@ dds_dynamic_type_t create_dds_dynamic_type(const char * type_support_identifier,
     auto typed_support = static_cast<MessageTypeSupport_c *>(
           create_message_type_support(untyped_members, type_support_identifier));
     auto members = static_cast<const rosidl_typesupport_introspection_c__MessageMembers_s *>(untyped_members);
-    RCUTILS_LOG_DEBUG("c type support");
     auto dstruct = dds_dynamic_type_create(
       dds_ppant, (dds_dynamic_type_descriptor_t) {
         .kind=DDS_DYNAMIC_STRUCTURE, 
@@ -911,7 +905,6 @@ dds_dynamic_type_t create_dds_dynamic_type(const char * type_support_identifier,
     auto typed_support = static_cast<MessageTypeSupport_cpp *>(
           create_message_type_support(untyped_members, type_support_identifier));
     auto members = static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers_s *>(untyped_members);
-    RCUTILS_LOG_DEBUG("cpp type support");
     auto dstruct = dds_dynamic_type_create(
       dds_ppant, (dds_dynamic_type_descriptor_t) {
         .kind=DDS_DYNAMIC_STRUCTURE, 
