@@ -107,7 +107,6 @@ template<typename MembersType>
 class TypeSupport
 {
 public:
-  const MembersType * get_members(); 
   bool deserializeROSmessage(
     cycdeser & deser, void * ros_message,
     std::function<void(cycdeser &)> prefix = nullptr);
