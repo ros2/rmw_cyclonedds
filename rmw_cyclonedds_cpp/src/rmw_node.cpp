@@ -1140,10 +1140,6 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * di
         /* This situation would happen if a new option is introduced for the
            ROS_AUTOMATIC_DISCOVERY_RANGE but rmw_cyclonedds_cpp is not updated
            to handle it. */
-        /* TODO(MXG): Displaying an integer is not very informative for users.
-           It would be better if rmw knows how to translate the integer values
-           into their associated option strings. However the knowledge of the
-           string values is currently located in rcl instead of rmw. */
         RCUTILS_LOG_WARN_NAMED(
           "rmw_cyclonedds_cpp",
           "check_create_domain: unsupported value for automatic_discovery_range: %i",
