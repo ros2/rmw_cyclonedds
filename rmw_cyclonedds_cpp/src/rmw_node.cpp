@@ -1087,7 +1087,8 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * di
   if (dom.refcount != 0) {
     /* Discovery parameters must match */
     bool options_equal = false;
-    const auto rc = rmw_discovery_options_equal(discovery_options, &dom.discovery_options, &options_equal);
+    const auto rc =
+      rmw_discovery_options_equal(discovery_options, &dom.discovery_options, &options_equal);
     if (RMW_RET_OK != rc) {
       RCUTILS_LOG_ERROR_NAMED(
         "rmw_cyclonedds_cpp",
@@ -1131,31 +1132,29 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * di
           "check_create_domain: unsupported value for automatic_discovery_range: %i",
           discovery_options->automatic_discovery_range);
         /* Intentionally fall through to the LOCALHOST / DEFAULT case */
-        [[clang::fallthrough]];
-        // [[fallthrough]]; /* Uncomment this back when migrating to C++17 */
+        [[fallthrough]];
       case RMW_AUTOMATIC_DISCOVERY_RANGE_LOCALHOST:
       case RMW_AUTOMATIC_DISCOVERY_RANGE_DEFAULT:
         /* Automatic discovery on localhost only */
         add_localhost_as_static_peer = true;
-        [[clang::fallthrough]];
-        // [[fallthrough]]; /* Uncomment this back when migrating to C++17 */
+        [[fallthrough]];
       case RMW_AUTOMATIC_DISCOVERY_RANGE_OFF:
         /* Automatic discovery off: disable multicast entirely. */
         multicast_off = true;
         config +=
           "<General>"
-            "<AllowMulticast>"
-              "false"
-            "</AllowMulticast>"
+          "  <AllowMulticast>"
+          "  false"
+          "  </AllowMulticast>"
           "</General>";
         break;
     }
 
     config +=
       "<Discovery>"
-        "<ParticipantIndex>"
-          "auto"
-        "</ParticipantIndex>";
+      "  <ParticipantIndex>"
+      "  auto"
+      "  </ParticipantIndex>";
 
     const bool discovery_off = multicast_off && !add_localhost_as_static_peer;
 
@@ -1208,7 +1207,7 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * di
       return false;
     }
 
-    RCUTILS_LOG_INFO_NAMED("rmw_cyclonedds_cpp", "Config XML is %s", config.c_str());
+    RCUTILS_LOG_DEBUG_NAMED("rmw_cyclonedds_cpp", "Config XML is %s", config.c_str());
 
     if ((dom.domain_handle = dds_create_domain(did, config.c_str())) < 0) {
       RCUTILS_LOG_ERROR_NAMED(
