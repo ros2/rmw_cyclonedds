@@ -785,8 +785,7 @@ extern "C" rmw_ret_t rmw_init_options_init(
   init_options->allocator = allocator;
   init_options->impl = nullptr;
   init_options->localhost_only = RMW_LOCALHOST_ONLY_DEFAULT;
-  init_options->discovery_options.automatic_discovery_range = RMW_AUTOMATIC_DISCOVERY_RANGE_DEFAULT;
-  init_options->discovery_options.static_peers_count = 0;
+  init_options->discovery_options = rmw_get_zero_initialized_discovery_options(),
   init_options->domain_id = RMW_DEFAULT_DOMAIN_ID;
   init_options->enclave = NULL;
   init_options->security_options = rmw_get_zero_initialized_security_options();
@@ -1110,14 +1109,32 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * di
     dom.refcount = 1;
     dom.discovery_options = *discovery_options;
 
-    std::string config = "<CycloneDDS><Domain>";
-    bool add_localhost_as_static_peer = false;
-    bool multicast_off = false;
+    bool add_localhost_as_static_peer;
+    bool add_static_peers;
+    bool disable_multicast;
 
     switch (discovery_options->automatic_discovery_range) {
+      case RMW_AUTOMATIC_DISCOVERY_RANGE_NOT_SET:
+        RMW_SET_ERROR_MSG("automatic discovery range must be set");
+        return false;
+        break;
       case RMW_AUTOMATIC_DISCOVERY_RANGE_SUBNET:
-        /* This is the default behavior of DDS and does not require a special
-           configuration. */
+        add_localhost_as_static_peer = false;
+        add_static_peers = true;
+        disable_multicast = false;
+        break;
+      case RMW_AUTOMATIC_DISCOVERY_RANGE_SYSTEM_DEFAULT:
+        /* Avoid changing DDS discovery options*/
+        add_localhost_as_static_peer = false;
+        add_static_peers = false;
+        disable_multicast = false;
+        if (discovery_options->static_peers_count > 0) {
+          RCUTILS_LOG_WARN_NAMED(
+            "rmw_cyclonedds_cpp",
+            "check_create_domain: %lu static peers were specified, but discovery is "
+            "set to use the RMW implementation default, so these static peers will be ignored.",
+            discovery_options->static_peers_count);
+        }
         break;
       default:
         /* This situation would happen if a new option is introduced for the
@@ -1134,64 +1151,70 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * di
         /* Intentionally fall through to the LOCALHOST / DEFAULT case */
         [[fallthrough]];
       case RMW_AUTOMATIC_DISCOVERY_RANGE_LOCALHOST:
-      case RMW_AUTOMATIC_DISCOVERY_RANGE_DEFAULT:
         /* Automatic discovery on localhost only */
         add_localhost_as_static_peer = true;
-        [[fallthrough]];
+        add_static_peers = true;
+        disable_multicast = true;
+        break;
       case RMW_AUTOMATIC_DISCOVERY_RANGE_OFF:
         /* Automatic discovery off: disable multicast entirely. */
-        multicast_off = true;
-        config +=
-          "<General>"
-          "  <AllowMulticast>"
-          "  false"
-          "  </AllowMulticast>"
-          "</General>";
+        add_localhost_as_static_peer = false;
+        add_static_peers = false;
+        disable_multicast = true;
+        if (discovery_options->static_peers_count > 0) {
+          RCUTILS_LOG_WARN_NAMED(
+            "rmw_cyclonedds_cpp",
+            "check_create_domain: %lu static peers were specified, but discovery is "
+            "turned off, so these static peers will be ignored.",
+            discovery_options->static_peers_count);
+        }
         break;
     }
 
-    config +=
-      "<Discovery>"
-      "  <ParticipantIndex>"
-      "  auto"
-      "  </ParticipantIndex>";
+    std::string config;
+    if (
+      add_localhost_as_static_peer ||
+      add_static_peers ||
+      disable_multicast)
+    {
+      config = "<CycloneDDS><Domain>";
 
-    const bool discovery_off = multicast_off && !add_localhost_as_static_peer;
-
-    if (discovery_off) {
-      /* This means we have an OFF range, so we should use the domain tag to
-         block all attemtps at automatic discovery. Another participant would
-         need to use this exact same domain tag, down to the PID, to discover
-         the endpoints of this node. */
-      config += "<Tag>ros_discovery_off_" + std::to_string(rcutils_get_pid()) + "</Tag>";
-    }
-
-    if (!discovery_off) {
-      if (discovery_options->static_peers_count > 0 || add_localhost_as_static_peer) {
-        config += "<Peers>";
-
-        if (add_localhost_as_static_peer) {
-          config += "<Peer address=\"127.0.0.1\"/>";
-        }
-
-        for (size_t ii = 0; ii < discovery_options->static_peers_count; ++ii) {
-          config += "<Peer address=\"";
-          config += discovery_options->static_peers[ii].peer_address;
-          config += "\"/>";
-        }
-        config += "</Peers>";
+      if (disable_multicast) {
+        config += "<General><AllowMulticast>false</AllowMulticast></General>";
       }
-    } else if (discovery_options->static_peers_count > 0) {
-      RCUTILS_LOG_WARN_NAMED(
-        "rmw_cyclonedds_cpp",
-        "check_create_domain: %lu static peers were specified, but discovery is "
-        "turned off, so these static peers will be ignored.",
-        discovery_options->static_peers_count);
-    }
 
-    /* NOTE: Empty configuration fragments are ignored, so it is safe to
-       unconditionally append a comma. */
-    config += "</Discovery></Domain></CycloneDDS>,";
+      config += "<Discovery><ParticipantIndex>auto</ParticipantIndex>";
+
+      const bool discovery_off =
+        disable_multicast && !add_localhost_as_static_peer && !add_static_peers;
+      if (discovery_off) {
+        /* This means we have an OFF range, so we should use the domain tag to
+          block all attemtps at automatic discovery. Another participant would
+          need to use this exact same domain tag, down to the PID, to discover
+          the endpoints of this node. */
+        config += "<Tag>ros_discovery_off_" + std::to_string(rcutils_get_pid()) + "</Tag>";
+      } else if (
+        (add_static_peers && discovery_options->static_peers_count > 0) ||
+        add_localhost_as_static_peer)
+      {
+          config += "<Peers>";
+
+          if (add_localhost_as_static_peer) {
+            config += "<Peer address=\"127.0.0.1\"/>";
+          }
+
+          for (size_t ii = 0; ii < discovery_options->static_peers_count; ++ii) {
+            config += "<Peer address=\"";
+            config += discovery_options->static_peers[ii].peer_address;
+            config += "\"/>";
+          }
+          config += "</Peers>";
+      }
+
+      /* NOTE: Empty configuration fragments are ignored, so it is safe to
+        unconditionally append a comma. */
+      config += "</Discovery></Domain></CycloneDDS>,";
+    }
 
     /* Emulate default behaviour of Cyclone of reading CYCLONEDDS_URI */
     const char * get_env_error;
