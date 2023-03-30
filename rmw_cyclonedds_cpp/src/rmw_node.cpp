@@ -1179,18 +1179,25 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * di
         config += "<General><AllowMulticast>false</AllowMulticast></General>";
       }
 
-      config += "<Discovery><ParticipantIndex>auto</ParticipantIndex>";
-      config += "<MaxAutoParticipantIndex>119</MaxAutoParticipantIndex>";
-
       const bool discovery_off =
         disable_multicast && !add_localhost_as_static_peer && !add_static_peers;
       if (discovery_off) {
         /* This means we have an OFF range, so we should use the domain tag to
           block all attemtps at automatic discovery. Another participant would
           need to use this exact same domain tag, down to the PID, to discover
-          the endpoints of this node. */
+          the endpoints of this node.
+
+          Setting ParticipantIndex to none eliminates the 119 limit on the number
+          of participants on a machine.
+          */
+        config += "<Discovery><ParticipantIndex>none</ParticipantIndex>";
         config += "<Tag>ros_discovery_off_" + std::to_string(rcutils_get_pid()) + "</Tag>";
-      } else if (  // NOLINT
+      } else {
+        config += "<Discovery><ParticipantIndex>auto</ParticipantIndex>";
+        config += "<MaxAutoParticipantIndex>119</MaxAutoParticipantIndex>";
+      }
+
+      if (  // NOLINT
         (add_static_peers && discovery_options->static_peers_count > 0) ||
         add_localhost_as_static_peer)
       {
