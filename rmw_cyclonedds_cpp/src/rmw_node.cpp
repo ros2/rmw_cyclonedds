@@ -1180,6 +1180,7 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * di
       }
 
       config += "<Discovery><ParticipantIndex>auto</ParticipantIndex>";
+      config += "<MaxAutoParticipantIndex>119</MaxAutoParticipantIndex>";
 
       const bool discovery_off =
         disable_multicast && !add_localhost_as_static_peer && !add_static_peers;
