@@ -1189,22 +1189,22 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * di
           need to use this exact same domain tag, down to the PID, to discover
           the endpoints of this node. */
         config += "<Tag>ros_discovery_off_" + std::to_string(rcutils_get_pid()) + "</Tag>";
-      } else if (
+      } else if (  // NOLINT
         (add_static_peers && discovery_options->static_peers_count > 0) ||
         add_localhost_as_static_peer)
       {
-          config += "<Peers>";
+        config += "<Peers>";
 
-          if (add_localhost_as_static_peer) {
-            config += "<Peer address=\"127.0.0.1\"/>";
-          }
+        if (add_localhost_as_static_peer) {
+          config += "<Peer address=\"127.0.0.1\"/>";
+        }
 
-          for (size_t ii = 0; ii < discovery_options->static_peers_count; ++ii) {
-            config += "<Peer address=\"";
-            config += discovery_options->static_peers[ii].peer_address;
-            config += "\"/>";
-          }
-          config += "</Peers>";
+        for (size_t ii = 0; ii < discovery_options->static_peers_count; ++ii) {
+          config += "<Peer address=\"";
+          config += discovery_options->static_peers[ii].peer_address;
+          config += "\"/>";
+        }
+        config += "</Peers>";
       }
 
       /* NOTE: Empty configuration fragments are ignored, so it is safe to
