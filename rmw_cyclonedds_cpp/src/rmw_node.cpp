@@ -1219,7 +1219,7 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * di
         config += "<Peers>";
 
         if (add_localhost_as_static_peer) {
-          config += "<Peer address=\"127.0.0.1\"/>";
+          config += "<Peer address=\"localhost\"/>";
         }
 
         for (size_t ii = 0; ii < discovery_options->static_peers_count; ++ii) {
