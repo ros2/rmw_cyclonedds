@@ -1157,16 +1157,6 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * di
             discovery_options->static_peers_count);
         }
         break;
-      default:
-        /* This situation would happen if a new option is introduced for the
-           ROS_AUTOMATIC_DISCOVERY_RANGE but rmw_cyclonedds_cpp is not updated
-           to handle it. */
-        RCUTILS_LOG_WARN_NAMED(
-          "rmw_cyclonedds_cpp",
-          "check_create_domain: unsupported value for automatic_discovery_range: %i",
-          discovery_options->automatic_discovery_range);
-        /* Intentionally fall through to the LOCALHOST / DEFAULT case */
-        [[fallthrough]];
       case RMW_AUTOMATIC_DISCOVERY_RANGE_LOCALHOST:
         /* Automatic discovery on localhost only */
         add_localhost_as_static_peer = true;
@@ -1185,6 +1175,10 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * di
             "turned off, so these static peers will be ignored.",
             discovery_options->static_peers_count);
         }
+        break;
+      default:
+        RMW_SET_ERROR_MSG("automatic_discovery_range is an unknown value");
+        return false;
         break;
     }
 
