@@ -40,6 +40,13 @@ namespace rmw_cyclonedds_cpp
 class BaseCDRWriter;
 }
 
+struct CddsDynamicTypeSupport
+{
+  dds_dynamic_type_t * dynamic_type;
+  dds_typeinfo_t * type_info;
+  dds_topic_descriptor_t * descriptor;
+};
+
 struct CddsTypeSupport
 {
   void * type_support_;
@@ -49,6 +56,7 @@ struct CddsTypeSupport
 struct sertype_rmw : ddsi_sertype
 {
   CddsTypeSupport type_support;
+  CddsDynamicTypeSupport dyn_type_support;
   bool is_request_header;
   std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRWriter> cdr_writer;
   bool is_fixed;
@@ -97,14 +105,23 @@ struct sertype_rmw * create_sertype(
   void * type_support, bool is_request_header,
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type_support,
   const uint32_t sample_size = 0U,
-  const bool is_fixed_type = false);
+  const bool is_fixed_type = false,
+  dds_topic_descriptor_t *desc = NULL
+);
 
 struct ddsi_serdata * serdata_rmw_from_serialized_message(
   const struct ddsi_sertype * typecmn,
   const void * raw, size_t size);
 
-dds_dynamic_type_t create_dds_dynamic_type(
+dds_dynamic_type_t create_msg_dds_dynamic_type(
   const char* type_support_identifier,
-  const void * type_support, dds_entity_t dds_ppant);
+  const void * untyped_members, dds_entity_t dds_ppant);
 
+dds_dynamic_type_t create_req_dds_dynamic_type(
+  const char* type_support_identifier,
+  const void * untyped_members, dds_entity_t dds_ppant);
+
+dds_dynamic_type_t create_res_dds_dynamic_type(
+  const char* type_support_identifier,
+  const void * untyped_members, dds_entity_t dds_ppant);
 #endif  // SERDATA_HPP_
