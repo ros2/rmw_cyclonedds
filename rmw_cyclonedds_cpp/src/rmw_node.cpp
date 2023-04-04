@@ -1209,7 +1209,12 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * di
         config += "<Tag>ros_discovery_off_" + std::to_string(rcutils_get_pid()) + "</Tag>";
       } else {
         config += "<Discovery><ParticipantIndex>auto</ParticipantIndex>";
-        config += "<MaxAutoParticipantIndex>119</MaxAutoParticipantIndex>";
+        // This controls the number of participants that can be discovered on a single host,
+        // which is roughly equivalent to the number of ROS 2 processes.
+        // If it's too small then we won't connect to all participants.
+        // If it's too large then we will send a lot of announcement traffic.
+        // The default number here is picked arbitrarily.
+        config += "<MaxAutoParticipantIndex>32</MaxAutoParticipantIndex>";
       }
 
       if (  // NOLINT
