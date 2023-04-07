@@ -2492,7 +2492,9 @@ static CddsPublisher * create_cdds_publisher(
     set_error_message_from_create_topic(topic, fqtopic_name);
     goto fail_topic;
   }
-  if ((qos = create_readwrite_qos(qos_policies, *type_support->type_hash, false, "")) == nullptr) {
+  qos = create_readwrite_qos(
+    qos_policies, *type_support->get_type_hash_func(type_support), false, "");
+  if (qos == nullptr) {
     goto fail_qos;
   }
   if ((pub->enth = dds_create_writer(dds_pub, topic, qos, listener)) < 0) {
@@ -3025,7 +3027,8 @@ static CddsSubscription * create_cdds_subscription(
     goto fail_topic;
   }
   if ((qos = create_readwrite_qos(
-      qos_policies, *type_support->type_hash, ignore_local_publications, "")) == nullptr)
+      qos_policies, *type_support->get_type_hash_func(type_support), ignore_local_publications, ""
+    )) == nullptr)
   {
     goto fail_qos;
   }
@@ -4907,10 +4910,12 @@ static rmw_ret_t rmw_init_cs(
 
     sub_type_support = create_request_type_support(
       type_support->data, type_support->typesupport_identifier);
-    sub_type_hash = type_supports->request_typesupport->type_hash;
+    sub_type_hash = type_supports->request_typesupport->get_type_hash_func(
+      type_supports->request_typesupport);
     pub_type_support = create_response_type_support(
       type_support->data, type_support->typesupport_identifier);
-    pub_type_hash = type_supports->response_typesupport->type_hash;
+    pub_type_hash = type_supports->response_typesupport->get_type_hash_func(
+      type_supports->response_typesupport);
     subtopic_name =
       make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", qos_policies);
     pubtopic_name = make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", qos_policies);
@@ -4920,10 +4925,12 @@ static rmw_ret_t rmw_init_cs(
 
     pub_type_support = create_request_type_support(
       type_support->data, type_support->typesupport_identifier);
-    pub_type_hash = type_supports->request_typesupport->type_hash;
+    pub_type_hash = type_supports->request_typesupport->get_type_hash_func(
+      type_supports->request_typesupport);
     sub_type_support = create_response_type_support(
       type_support->data, type_support->typesupport_identifier);
-    sub_type_hash = type_supports->response_typesupport->type_hash;
+    sub_type_hash = type_supports->response_typesupport->get_type_hash_func(
+      type_supports->response_typesupport);
     pubtopic_name =
       make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", qos_policies);
     subtopic_name = make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", qos_policies);
