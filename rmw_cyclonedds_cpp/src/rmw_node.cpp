@@ -3808,6 +3808,58 @@ extern "C" rmw_ret_t rmw_return_loaned_message_from_subscription(
 {
   return return_loaned_message_from_subscription_int(subscription, loaned_message);
 }
+
+
+/////////////////////////////////////////////////////////////////////////////////////////
+///////////                                                                   ///////////
+///////////    DYNAMIC MESSAGE TYPESUPPORT                                    ///////////
+///////////                                                                   ///////////
+/////////////////////////////////////////////////////////////////////////////////////////
+
+extern "C" rmw_ret_t rmw_take_dynamic_message(
+  const rmw_subscription_t * subscription,
+  rosidl_dynamic_typesupport_dynamic_data_t * dynamic_message,
+  bool * taken,
+  rmw_subscription_allocation_t * allocation)
+{
+  static_cast<void>(subscription);
+  static_cast<void>(dynamic_message);
+  static_cast<void>(taken);
+  static_cast<void>(allocation);
+
+  RMW_SET_ERROR_MSG("rmw_take_dynamic_message: unimplemented");
+  return RMW_RET_UNSUPPORTED;
+}
+
+extern "C" rmw_ret_t rmw_take_dynamic_message_with_info(
+  const rmw_subscription_t * subscription,
+  rosidl_dynamic_typesupport_dynamic_data_t * dynamic_message,
+  bool * taken,
+  rmw_message_info_t * message_info,
+  rmw_subscription_allocation_t * allocation)
+{
+  static_cast<void>(subscription);
+  static_cast<void>(dynamic_message);
+  static_cast<void>(taken);
+  static_cast<void>(message_info);
+  static_cast<void>(allocation);
+
+  RMW_SET_ERROR_MSG("rmw_take_dynamic_message_with_info: unimplemented");
+  return RMW_RET_UNSUPPORTED;
+}
+
+extern "C" rmw_ret_t rmw_get_serialization_support(
+  const char * serialization_lib_name,
+  rosidl_dynamic_typesupport_serialization_support_t ** serialization_support)
+{
+  static_cast<void>(serialization_lib_name);
+  static_cast<void>(serialization_support);
+
+  RMW_SET_ERROR_MSG("rmw_get_serialization_support: unimplemented");
+  return RMW_RET_UNSUPPORTED;
+}
+
+
 /////////////////////////////////////////////////////////////////////////////////////////
 ///////////                                                                   ///////////
 ///////////    EVENTS                                                         ///////////
