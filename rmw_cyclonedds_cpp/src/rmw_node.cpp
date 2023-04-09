@@ -2013,7 +2013,7 @@ extern "C" rmw_ret_t rmw_publish(
     return RMW_RET_INVALID_ARGUMENT);
   auto pub = static_cast<CddsPublisher *>(publisher->data);
   assert(pub);
-  TRACEPOINT(rmw_publish, ros_message);
+  TRACETOOLS_TRACEPOINT(rmw_publish, ros_message);
   if (dds_write(pub->enth, ros_message) >= 0) {
     return RMW_RET_OK;
   } else {
@@ -2671,7 +2671,7 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
   }
 
   cleanup_publisher.cancel();
-  TRACEPOINT(rmw_publisher_init, static_cast<const void *>(pub), cddspub->gid.data);
+  TRACETOOLS_TRACEPOINT(rmw_publisher_init, static_cast<const void *>(pub), cddspub->gid.data);
   return pub;
 }
 
@@ -3213,7 +3213,7 @@ extern "C" rmw_subscription_t * rmw_create_subscription(
   }
 
   cleanup_subscription.cancel();
-  TRACEPOINT(rmw_subscription_init, static_cast<const void *>(sub), cddssub->gid.data);
+  TRACETOOLS_TRACEPOINT(rmw_subscription_init, static_cast<const void *>(sub), cddssub->gid.data);
   return sub;
 }
 
@@ -3406,7 +3406,7 @@ static rmw_ret_t rmw_take_int(
   }
   *taken = false;
 take_done:
-  TRACEPOINT(
+  TRACETOOLS_TRACEPOINT(
     rmw_take,
     static_cast<const void *>(subscription),
     static_cast<const void *>(ros_message),
