@@ -32,6 +32,7 @@
 #include <regex>
 #include <limits>
 
+#include "rcutils/allocator.h"
 #include "rcutils/env.h"
 #include "rcutils/filesystem.h"
 #include "rcutils/format_string.h"
@@ -3848,14 +3849,16 @@ extern "C" rmw_ret_t rmw_take_dynamic_message_with_info(
   return RMW_RET_UNSUPPORTED;
 }
 
-extern "C" rmw_ret_t rmw_get_serialization_support(
+extern "C" rmw_ret_t rmw_init_serialization_support(
   const char * serialization_lib_name,
-  rosidl_dynamic_typesupport_serialization_support_t ** serialization_support)
+  rcutils_allocator_t * allocator,
+  rosidl_dynamic_typesupport_serialization_support_t * serialization_support)
 {
   static_cast<void>(serialization_lib_name);
+  static_cast<void>(allocator);
   static_cast<void>(serialization_support);
 
-  RMW_SET_ERROR_MSG("rmw_get_serialization_support: unimplemented");
+  RMW_SET_ERROR_MSG("rmw_init_serialization_support: unimplemented");
   return RMW_RET_UNSUPPORTED;
 }
 
