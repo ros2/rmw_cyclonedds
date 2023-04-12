@@ -45,6 +45,7 @@ struct CddsTypeSupport
   void * type_support_;
   const char * typesupport_identifier_;
   dds_topic_descriptor_t * descriptor_;
+  dds_typeinfo_t * type_info_;
 };
 
 struct sertype_rmw : ddsi_sertype
@@ -99,7 +100,8 @@ struct sertype_rmw * create_sertype(
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type_support,
   const uint32_t sample_size = 0U,
   const bool is_fixed_type = false,
-  dds_topic_descriptor_t *desc = NULL
+  dds_dynamic_type_t dstruct = {},
+  dds_entity_t dds_ppant = {}
 );
 
 struct ddsi_serdata * serdata_rmw_from_serialized_message(

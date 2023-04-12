@@ -1064,7 +1064,7 @@ struct sertype_rmw * create_sertype(
   const char * type_support_identifier,
   void * type_support, bool is_request_header,
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type,
-  const uint32_t sample_size, const bool is_fixed_type, dds_topic_descriptor_t *desc)
+  const uint32_t sample_size, const bool is_fixed_type, dds_dynamic_type dstruct, dds_entity_t dds_ppant)
 {
   struct sertype_rmw * st = new struct sertype_rmw;
   std::string type_name = get_type_name(type_support_identifier, type_support);
@@ -1082,9 +1082,14 @@ struct sertype_rmw * create_sertype(
 #else
   static_cast<void>(sample_size);
 #endif  // DDS_HAS_SHM
+  dds_return_t rc;
+  
+  rc = dds_dynamic_type_register(&dstruct, &st->type_support.type_info_);
+  rc = dds_create_topic_descriptor(
+    DDS_FIND_SCOPE_LOCAL_DOMAIN, dds_ppant, st->type_support.type_info_, 0, &st->type_support.descriptor_);
+  
   st->type_support.typesupport_identifier_ = type_support_identifier;
   st->type_support.type_support_ = type_support;
-  st->type_support.descriptor_ = std::move(desc);
   st->is_request_header = is_request_header;
   st->cdr_writer = rmw_cyclonedds_cpp::make_cdr_writer(std::move(message_type));
 
