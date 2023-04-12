@@ -2363,15 +2363,14 @@ static CddsPublisher * create_cdds_publisher(
   bool is_fixed_type = is_type_self_contained(type_support);
   uint32_t sample_size = static_cast<uint32_t>(rmw_cyclonedds_cpp::get_message_size(type_support));
  
-  auto dstruct = create_msg_dds_dynamic_type(
+  auto dstructt = create_msg_dds_dynamic_type(
       type_support->typesupport_identifier, type_support->data, dds_ppant);
+  auto xt = static_cast<struct xt_type*>(dstructt.x);
   dds_typeinfo_t * type_info;
-  dds_return_t rc = dds_dynamic_type_register(&dstruct, &type_info);
-  RCUTILS_LOG_DEBUG("dds_dynamic_type_register: %s", dds_strretcode(-rc));
+  dds_return_t rc = dds_dynamic_type_register(&dstructt, &type_info);
   dds_topic_descriptor_t * desc;
   rc = dds_create_topic_descriptor(
     DDS_FIND_SCOPE_LOCAL_DOMAIN, dds_ppant, type_info, 0, &desc);
-  RCUTILS_LOG_DEBUG("dds_create_topic_descriptor: %s", dds_strretcode(-rc));
 
   auto sertype = create_sertype(
     type_support->typesupport_identifier,
@@ -2400,8 +2399,6 @@ static CddsPublisher * create_cdds_publisher(
     goto fail_instance_handle;
   }
 
-  //sleep(10000);
-
   get_entity_gid(pub->enth, pub->gid);
   pub->sertype = stact;
   dds_delete_listener(listener);
@@ -2411,6 +2408,8 @@ static CddsPublisher * create_cdds_publisher(
   dds_delete_qos(qos);
   dds_delete(topic);
   dds_free_typeinfo(type_info);
+  //dds_delete_topic_descriptor(desc);
+  dds_dynamic_type_unref(&dstructt);
 
   return pub;
 
@@ -2914,11 +2913,9 @@ static CddsSubscription * create_cdds_subscription(
       type_support->typesupport_identifier, type_support->data, dds_ppant);
   dds_typeinfo_t * type_info;
   dds_return_t rc = dds_dynamic_type_register(&dstruct, &type_info);
-  RCUTILS_LOG_DEBUG("dds_dynamic_type_register: %s", dds_strretcode(-rc));
   dds_topic_descriptor_t * desc;
   rc = dds_create_topic_descriptor(
     DDS_FIND_SCOPE_LOCAL_DOMAIN, dds_ppant, type_info, 0, &desc);
-  RCUTILS_LOG_DEBUG("dds_create_topic_descriptor: %s", dds_strretcode(-rc));
 
   auto sertype = create_sertype(
     type_support->typesupport_identifier,
@@ -2956,6 +2953,9 @@ static CddsSubscription * create_cdds_subscription(
   dds_delete_qos(qos);
   dds_delete(topic);
   dds_free_typeinfo(type_info);
+  //dds_delete_topic_descriptor(desc);
+  dds_dynamic_type_unref(&dstruct);
+
   return sub;
 fail_readcond:
   if (dds_delete(sub->enth) < 0) {
@@ -4938,11 +4938,15 @@ static rmw_ret_t rmw_init_cs(
   dds_delete_listener(listener);
   dds_delete_qos(pub_qos);
   dds_delete_qos(sub_qos);
-  dds_delete(subtopic);
   dds_delete(pubtopic);
+  dds_delete(subtopic);
 
   dds_free_typeinfo(pub_type_info);
   dds_free_typeinfo(sub_type_info);
+  //dds_delete_topic_descriptor(pub_desc);
+  //dds_delete_topic_descriptor(sub_desc);
+  dds_dynamic_type_unref(&pub_type);
+  dds_dynamic_type_unref(&sub_type);
 
   cs->pub = std::move(pub);
   cs->sub = std::move(sub);

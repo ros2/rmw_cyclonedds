@@ -40,23 +40,16 @@ namespace rmw_cyclonedds_cpp
 class BaseCDRWriter;
 }
 
-struct CddsDynamicTypeSupport
-{
-  dds_dynamic_type_t * dynamic_type;
-  dds_typeinfo_t * type_info;
-  dds_topic_descriptor_t * descriptor;
-};
-
 struct CddsTypeSupport
 {
   void * type_support_;
   const char * typesupport_identifier_;
+  dds_topic_descriptor_t * descriptor_;
 };
 
 struct sertype_rmw : ddsi_sertype
 {
   CddsTypeSupport type_support;
-  CddsDynamicTypeSupport dyn_type_support;
   bool is_request_header;
   std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRWriter> cdr_writer;
   bool is_fixed;
