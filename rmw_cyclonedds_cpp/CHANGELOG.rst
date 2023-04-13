@@ -2,6 +2,18 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.6.0 (2023-04-12)
+------------------
+* Dynamic Subscription (BONUS: Allocators): rmw_cyclonedds (`#451 <https://github.com/ros2/rmw_cyclonedds/issues/451>`_)
+* Add stubs for new rmw interfaces (`#447 <https://github.com/ros2/rmw_cyclonedds/issues/447>`_)
+* [rmw_cyclonedds] Improve handling of dynamic discovery (`#429 <https://github.com/ros2/rmw_cyclonedds/issues/429>`_)
+* Call get_type_hash_func (`#448 <https://github.com/ros2/rmw_cyclonedds/issues/448>`_)
+* Type hash distribution in discovery (rep2011) (`#437 <https://github.com/ros2/rmw_cyclonedds/issues/437>`_)
+* Disable inconsistent topic events. (`#444 <https://github.com/ros2/rmw_cyclonedds/issues/444>`_)
+* Implement matched event (`#435 <https://github.com/ros2/rmw_cyclonedds/issues/435>`_)
+* Implement inconsistent topic. (`#431 <https://github.com/ros2/rmw_cyclonedds/issues/431>`_)
+* Contributors: Barry Xu, Chris Lalancette, Emerson Knapp, Geoffrey Biggs, methylDragon
+
 1.5.1 (2023-02-14)
 ------------------
 * Make sure to add semicolons to the CHECK_TYPE_IDENTIFIER_MATCH. (`#432 <https://github.com/ros2/rmw_cyclonedds/issues/432>`_)

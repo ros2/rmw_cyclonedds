@@ -32,14 +32,17 @@
 #include <regex>
 #include <limits>
 
+#include "rcutils/allocator.h"
 #include "rcutils/env.h"
 #include "rcutils/filesystem.h"
 #include "rcutils/format_string.h"
 #include "rcutils/logging_macros.h"
+#include "rcutils/process.h"
 #include "rcutils/strdup.h"
 
 #include "rmw/allocators.h"
 #include "rmw/convert_rcutils_ret_to_rmw_ret.h"
+#include "rmw/discovery_options.h"
 #include "rmw/error_handling.h"
 #include "rmw/event.h"
 #include "rmw/features.h"
@@ -257,7 +260,7 @@ struct CddsDomain
      There are a few issues with the current support for creating domains explicitly in
      Cyclone, fixing those might relax alter or relax some of the above. */
 
-  bool localhost_only;
+  rmw_discovery_options_t discovery_options;
   uint32_t refcount;
 
   /* handle of the domain entity */
@@ -265,8 +268,10 @@ struct CddsDomain
 
   /* Default constructor so operator[] can be safely be used to look one up */
   CddsDomain()
-  : localhost_only(false), refcount(0), domain_handle(0)
-  {}
+  : refcount(0), domain_handle(0)
+  {
+    discovery_options = rmw_get_zero_initialized_discovery_options();
+  }
 
   ~CddsDomain()
   {}
@@ -783,10 +788,11 @@ extern "C" rmw_ret_t rmw_init_options_init(
   init_options->allocator = allocator;
   init_options->impl = nullptr;
   init_options->localhost_only = RMW_LOCALHOST_ONLY_DEFAULT;
+  init_options->discovery_options = rmw_get_zero_initialized_discovery_options(),
   init_options->domain_id = RMW_DEFAULT_DOMAIN_ID;
   init_options->enclave = NULL;
   init_options->security_options = rmw_get_zero_initialized_security_options();
-  return RMW_RET_OK;
+  return rmw_discovery_options_init(&(init_options->discovery_options), 0, &allocator);
 }
 
 extern "C" rmw_ret_t rmw_init_options_copy(const rmw_init_options_t * src, rmw_init_options_t * dst)
@@ -1093,39 +1099,147 @@ static rmw_ret_t discovery_thread_stop(rmw_dds_common::Context & common_context)
   return RMW_RET_OK;
 }
 
-static bool check_create_domain(dds_domainid_t did, rmw_localhost_only_t localhost_only_option)
+static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * discovery_options)
 {
-  const bool localhost_only = (localhost_only_option == RMW_LOCALHOST_ONLY_ENABLED);
   std::lock_guard<std::mutex> lock(gcdds().domains_lock);
-  /* return true: n_nodes incremented, localhost_only set correctly, domain exists
+  /* return true: n_nodes incremented, discovery params set correctly, domain exists
      "      false: n_nodes unchanged, domain left intact if it already existed */
   CddsDomain & dom = gcdds().domains[did];
   if (dom.refcount != 0) {
-    /* Localhost setting must match */
-    if (localhost_only == dom.localhost_only) {
+    /* Discovery parameters must match */
+    bool options_equal = false;
+    const auto rc =
+      rmw_discovery_options_equal(discovery_options, &dom.discovery_options, &options_equal);
+    if (RMW_RET_OK != rc) {
+      RCUTILS_LOG_ERROR_NAMED(
+        "rmw_cyclonedds_cpp",
+        "check_create_domain: unable to check if discovery options are equal: %i",
+        rc);
+      return false;
+    }
+    if (options_equal) {
       dom.refcount++;
       return true;
     } else {
       RCUTILS_LOG_ERROR_NAMED(
         "rmw_cyclonedds_cpp",
-        "rmw_create_node: attempt at creating localhost-only and non-localhost-only nodes "
-        "in the same domain");
+        "check_create_domain: attempt at creating nodes in the same domain with different "
+        "discovery parameters");
       return false;
     }
   } else {
     dom.refcount = 1;
-    dom.localhost_only = localhost_only;
+    dom.discovery_options = *discovery_options;
 
-    /* Localhost-only: set network interface address (shortened form of config would be
-       possible, too, but I think it is clearer to spell it out completely).  Empty
-       configuration fragments are ignored, so it is safe to unconditionally append a
-       comma. */
-    std::string config =
-      localhost_only ?
-      "<CycloneDDS><Domain><General><Interfaces><NetworkInterface address=\"127.0.0.1\"/>"
-      "</Interfaces></General></Domain></CycloneDDS>,"
-      :
-      "";
+    bool add_localhost_as_static_peer;
+    bool add_static_peers;
+    bool disable_multicast;
+
+    switch (discovery_options->automatic_discovery_range) {
+      case RMW_AUTOMATIC_DISCOVERY_RANGE_NOT_SET:
+        RMW_SET_ERROR_MSG("automatic discovery range must be set");
+        return false;
+        break;
+      case RMW_AUTOMATIC_DISCOVERY_RANGE_SUBNET:
+        add_localhost_as_static_peer = false;
+        add_static_peers = true;
+        disable_multicast = false;
+        break;
+      case RMW_AUTOMATIC_DISCOVERY_RANGE_SYSTEM_DEFAULT:
+        /* Avoid changing DDS discovery options*/
+        add_localhost_as_static_peer = false;
+        add_static_peers = false;
+        disable_multicast = false;
+        if (discovery_options->static_peers_count > 0) {
+          RCUTILS_LOG_WARN_NAMED(
+            "rmw_cyclonedds_cpp",
+            "check_create_domain: %lu static peers were specified, but discovery is "
+            "set to use the RMW implementation default, so these static peers will be ignored.",
+            discovery_options->static_peers_count);
+        }
+        break;
+      case RMW_AUTOMATIC_DISCOVERY_RANGE_LOCALHOST:
+        /* Automatic discovery on localhost only */
+        add_localhost_as_static_peer = true;
+        add_static_peers = true;
+        disable_multicast = true;
+        break;
+      case RMW_AUTOMATIC_DISCOVERY_RANGE_OFF:
+        /* Automatic discovery off: disable multicast entirely. */
+        add_localhost_as_static_peer = false;
+        add_static_peers = false;
+        disable_multicast = true;
+        if (discovery_options->static_peers_count > 0) {
+          RCUTILS_LOG_WARN_NAMED(
+            "rmw_cyclonedds_cpp",
+            "check_create_domain: %lu static peers were specified, but discovery is "
+            "turned off, so these static peers will be ignored.",
+            discovery_options->static_peers_count);
+        }
+        break;
+      default:
+        RMW_SET_ERROR_MSG("automatic_discovery_range is an unknown value");
+        return false;
+        break;
+    }
+
+    std::string config;
+    if (
+      add_localhost_as_static_peer ||
+      add_static_peers ||
+      disable_multicast)
+    {
+      config = "<CycloneDDS><Domain>";
+
+      if (disable_multicast) {
+        config += "<General><AllowMulticast>false</AllowMulticast></General>";
+      }
+
+      const bool discovery_off =
+        disable_multicast && !add_localhost_as_static_peer && !add_static_peers;
+      if (discovery_off) {
+        /* This means we have an OFF range, so we should use the domain tag to
+          block all attemtps at automatic discovery. Another participant would
+          need to use this exact same domain tag, down to the PID, to discover
+          the endpoints of this node.
+
+          Setting ParticipantIndex to none eliminates the 119 limit on the number
+          of participants on a machine.
+          */
+        config += "<Discovery><ParticipantIndex>none</ParticipantIndex>";
+        config += "<Tag>ros_discovery_off_" + std::to_string(rcutils_get_pid()) + "</Tag>";
+      } else {
+        config += "<Discovery><ParticipantIndex>auto</ParticipantIndex>";
+        // This controls the number of participants that can be discovered on a single host,
+        // which is roughly equivalent to the number of ROS 2 processes.
+        // If it's too small then we won't connect to all participants.
+        // If it's too large then we will send a lot of announcement traffic.
+        // The default number here is picked arbitrarily.
+        config += "<MaxAutoParticipantIndex>32</MaxAutoParticipantIndex>";
+      }
+
+      if (  // NOLINT
+        (add_static_peers && discovery_options->static_peers_count > 0) ||
+        add_localhost_as_static_peer)
+      {
+        config += "<Peers>";
+
+        if (add_localhost_as_static_peer) {
+          config += "<Peer address=\"localhost\"/>";
+        }
+
+        for (size_t ii = 0; ii < discovery_options->static_peers_count; ++ii) {
+          config += "<Peer address=\"";
+          config += discovery_options->static_peers[ii].peer_address;
+          config += "\"/>";
+        }
+        config += "</Peers>";
+      }
+
+      /* NOTE: Empty configuration fragments are ignored, so it is safe to
+        unconditionally append a comma. */
+      config += "</Discovery></Domain></CycloneDDS>,";
+    }
 
     /* Emulate default behaviour of Cyclone of reading CYCLONEDDS_URI */
     const char * get_env_error;
@@ -1140,6 +1254,8 @@ static bool check_create_domain(dds_domainid_t did, rmw_localhost_only_t localho
       gcdds().domains.erase(did);
       return false;
     }
+
+    RCUTILS_LOG_DEBUG_NAMED("rmw_cyclonedds_cpp", "Config XML is %s", config.c_str());
 
     if ((dom.domain_handle = dds_create_domain(did, config.c_str())) < 0) {
       RCUTILS_LOG_ERROR_NAMED(
@@ -1240,7 +1356,7 @@ rmw_context_impl_s::init(rmw_init_options_t * options, size_t domain_id)
     version of dds_create_domain that doesn't return a handle.  */
   this->domain_id = static_cast<dds_domainid_t>(domain_id);
 
-  if (!check_create_domain(this->domain_id, options->localhost_only)) {
+  if (!check_create_domain(this->domain_id, &options->discovery_options)) {
     return RMW_RET_ERROR;
   }
 
@@ -1498,7 +1614,7 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
 
   if (options->domain_id >= UINT32_MAX && options->domain_id != RMW_DEFAULT_DOMAIN_ID) {
     RCUTILS_LOG_ERROR_NAMED(
-      "rmw_cyclonedds_cpp", "rmw_create_node: domain id out of range");
+      "rmw_cyclonedds_cpp", "rmw_init: domain id out of range");
     return RMW_RET_INVALID_ARGUMENT;
   }
 
@@ -2382,7 +2498,9 @@ static CddsPublisher * create_cdds_publisher(
     set_error_message_from_create_topic(topic, fqtopic_name);
     goto fail_topic;
   }
-  if ((qos = create_readwrite_qos(qos_policies, *type_support->type_hash, false, "")) == nullptr) {
+  qos = create_readwrite_qos(
+    qos_policies, *type_support->get_type_hash_func(type_support), false, "");
+  if (qos == nullptr) {
     goto fail_qos;
   }
   if ((pub->enth = dds_create_writer(dds_pub, topic, qos, listener)) < 0) {
@@ -2922,7 +3040,8 @@ static CddsSubscription * create_cdds_subscription(
     goto fail_topic;
   }
   if ((qos = create_readwrite_qos(
-      qos_policies, *type_support->type_hash, ignore_local_publications, "")) == nullptr)
+      qos_policies, *type_support->get_type_hash_func(type_support), ignore_local_publications, ""
+    )) == nullptr)
   {
     goto fail_qos;
   }
@@ -3703,6 +3822,60 @@ extern "C" rmw_ret_t rmw_return_loaned_message_from_subscription(
 {
   return return_loaned_message_from_subscription_int(subscription, loaned_message);
 }
+
+
+/////////////////////////////////////////////////////////////////////////////////////////
+///////////                                                                   ///////////
+///////////    DYNAMIC MESSAGE TYPESUPPORT                                    ///////////
+///////////                                                                   ///////////
+/////////////////////////////////////////////////////////////////////////////////////////
+
+extern "C" rmw_ret_t rmw_take_dynamic_message(
+  const rmw_subscription_t * subscription,
+  rosidl_dynamic_typesupport_dynamic_data_t * dynamic_message,
+  bool * taken,
+  rmw_subscription_allocation_t * allocation)
+{
+  static_cast<void>(subscription);
+  static_cast<void>(dynamic_message);
+  static_cast<void>(taken);
+  static_cast<void>(allocation);
+
+  RMW_SET_ERROR_MSG("rmw_take_dynamic_message: unimplemented");
+  return RMW_RET_UNSUPPORTED;
+}
+
+extern "C" rmw_ret_t rmw_take_dynamic_message_with_info(
+  const rmw_subscription_t * subscription,
+  rosidl_dynamic_typesupport_dynamic_data_t * dynamic_message,
+  bool * taken,
+  rmw_message_info_t * message_info,
+  rmw_subscription_allocation_t * allocation)
+{
+  static_cast<void>(subscription);
+  static_cast<void>(dynamic_message);
+  static_cast<void>(taken);
+  static_cast<void>(message_info);
+  static_cast<void>(allocation);
+
+  RMW_SET_ERROR_MSG("rmw_take_dynamic_message_with_info: unimplemented");
+  return RMW_RET_UNSUPPORTED;
+}
+
+extern "C" rmw_ret_t rmw_serialization_support_init(
+  const char * serialization_lib_name,
+  rcutils_allocator_t * allocator,
+  rosidl_dynamic_typesupport_serialization_support_t * serialization_support)
+{
+  static_cast<void>(serialization_lib_name);
+  static_cast<void>(allocator);
+  static_cast<void>(serialization_support);
+
+  RMW_SET_ERROR_MSG("rmw_serialization_support_init: unimplemented");
+  return RMW_RET_UNSUPPORTED;
+}
+
+
 /////////////////////////////////////////////////////////////////////////////////////////
 ///////////                                                                   ///////////
 ///////////    EVENTS                                                         ///////////
@@ -4807,10 +4980,12 @@ static rmw_ret_t rmw_init_cs(
 
     sub_type_support = create_request_type_support(
       type_support->data, type_support->typesupport_identifier);
-    sub_type_hash = type_supports->request_typesupport->type_hash;
+    sub_type_hash = type_supports->request_typesupport->get_type_hash_func(
+      type_supports->request_typesupport);
     pub_type_support = create_response_type_support(
       type_support->data, type_support->typesupport_identifier);
-    pub_type_hash = type_supports->response_typesupport->type_hash;
+    pub_type_hash = type_supports->response_typesupport->get_type_hash_func(
+      type_supports->response_typesupport);
     subtopic_name =
       make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", qos_policies);
     pubtopic_name = make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", qos_policies);
@@ -4834,10 +5009,12 @@ static rmw_ret_t rmw_init_cs(
 
     pub_type_support = create_request_type_support(
       type_support->data, type_support->typesupport_identifier);
-    pub_type_hash = type_supports->request_typesupport->type_hash;
+    pub_type_hash = type_supports->request_typesupport->get_type_hash_func(
+      type_supports->request_typesupport);
     sub_type_support = create_response_type_support(
       type_support->data, type_support->typesupport_identifier);
-    sub_type_hash = type_supports->response_typesupport->type_hash;
+    sub_type_hash = type_supports->response_typesupport->get_type_hash_func(
+      type_supports->response_typesupport);
     pubtopic_name =
       make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", qos_policies);
     subtopic_name = make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", qos_policies);
