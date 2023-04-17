@@ -55,6 +55,8 @@ struct sertype_rmw : ddsi_sertype
   std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRWriter> cdr_writer;
   bool is_fixed;
   std::mutex serialize_lock;
+  struct dds_type_meta_ser type_information;
+  struct dds_type_meta_ser type_mapping;
 };
 
 class serdata_rmw : public ddsi_serdata

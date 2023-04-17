@@ -2296,6 +2296,7 @@ static dds_qos_t * create_readwrite_qos(
   }
   std::string user_data = extra_user_data + typehash_str;
   dds_qset_userdata(qos, user_data.data(), user_data.size());
+  dds_qset_type_consistency(qos, DDS_TYPE_CONSISTENCY_DISALLOW_TYPE_COERCION, true, true, true, true, true);
 
   return qos;
 }

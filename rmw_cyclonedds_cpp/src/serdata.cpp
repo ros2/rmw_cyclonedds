@@ -630,37 +630,32 @@ bool sertype_serialize_into(
 
 static ddsi_typeid_t * sertype_rmw_typeid (const struct ddsi_sertype * d, ddsi_typeid_kind_t kind)
 {
+  assert(d);
+  assert(kind == DDSI_TYPEID_KIND_MINIMAL || kind == DDSI_TYPEID_KIND_COMPLETE);
   const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(d);
-  if (tp->type_support.descriptor_ == NULL)
-    return NULL;
-
   ddsi_typeinfo_t *type_info = ddsi_typeinfo_deser(
-      tp->type_support.descriptor_->type_information.data, tp->type_support.descriptor_->type_information.sz);
-  
+      tp->type_information.data, tp->type_information.sz);
   if (type_info == NULL)
     return NULL;
-
   ddsi_typeid_t *type_id = ddsi_typeinfo_typeid(type_info, kind);
 
-  ddsi_typeinfo_fini(type_info);
+  dds_free_typeinfo(type_info);
 
   return type_id;
 }
 
 static ddsi_typemap_t * sertype_rmw_typemap (const struct ddsi_sertype * d)
 {
+  assert(d);
   const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(d); 
-  if (tp->type_support.descriptor_ == NULL)
-    return NULL;
-  return ddsi_typemap_deser (tp->type_support.descriptor_->type_mapping.data, tp->type_support.descriptor_->type_mapping.sz);
+  return ddsi_typemap_deser (tp->type_mapping.data, tp->type_mapping.sz);
 }
 
 static ddsi_typeinfo_t *sertype_rmw_typeinfo (const struct ddsi_sertype * d)
 {
+  assert(d);
   const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(d);  
-  if (tp->type_support.descriptor_ == NULL)
-    return NULL;
-  return ddsi_typeinfo_deser (tp->type_support.descriptor_->type_information.data, tp->type_support.descriptor_->type_information.sz);
+  return ddsi_typeinfo_deser (tp->type_information.data, tp->type_information.sz);
 }
 
 static struct ddsi_sertype * sertype_rmw_derive_sertype (
@@ -668,8 +663,13 @@ static struct ddsi_sertype * sertype_rmw_derive_sertype (
   dds_data_representation_id_t data_representation, 
   dds_type_consistency_enforcement_qospolicy_t tce_qos)
 {
+  if (data_representation != DDS_DATA_REPRESENTATION_XCDR2)
+    return NULL;
+
   const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(base_sertype);
   struct sertype_rmw *derived_sertype = NULL;
+ 
+  assert(base_sertype);
 
   (void) tce_qos;
 
@@ -695,7 +695,7 @@ static const struct ddsi_sertype_ops sertype_rmw_ops = {
   sertype_rmw_typeid,
   sertype_rmw_typemap,
   sertype_rmw_typeinfo,
-  nullptr//sertype_rmw_derive_sertype
+  sertype_rmw_derive_sertype
   ,
   sertype_get_serialized_size,
   sertype_serialize_into
@@ -1060,6 +1060,31 @@ dds_dynamic_type_t create_res_dds_dynamic_type(const char * type_support_identif
   }
 }
 
+#include "dds/ddsrt/string.h"
+
+static void dynamic_type_register(struct sertype_rmw * st, dds_dynamic_type dt, dds_entity_t dds_ppant)
+{
+  dds_typeinfo_t *type_info;
+  auto rc = dds_dynamic_type_register(&dt, &type_info);
+  if (rc != DDS_RETCODE_OK)
+    RCUTILS_LOG_ERROR("rmw_cyclonedds_cpp", "dds_dynamic_type_register fail: %s", dds_strretcode(-rc));
+  
+  dds_topic_descriptor_t *desc;
+  rc = dds_create_topic_descriptor(
+    DDS_FIND_SCOPE_LOCAL_DOMAIN, dds_ppant, type_info, 0, &desc);
+  if (rc != DDS_RETCODE_OK)
+    RCUTILS_LOG_ERROR("rmw_cyclonedds_cpp", "dds_create_topic_descriptor fail: %s", dds_strretcode(-rc));
+ 
+  st->type_information.data = static_cast<const unsigned char *>(ddsrt_memdup(desc->type_information.data, desc->type_information.sz));
+  st->type_information.sz = desc->type_information.sz;
+  st->type_mapping.data = static_cast<const unsigned char *>(ddsrt_memdup(desc->type_mapping.data, desc->type_mapping.sz));
+  st->type_mapping.sz = desc->type_mapping.sz;
+
+  dds_free_typeinfo(type_info);
+  dds_delete_topic_descriptor(desc);
+  dds_dynamic_type_unref(&dt);
+}
+
 struct sertype_rmw * create_sertype(
   const char * type_support_identifier,
   void * type_support, bool is_request_header,
@@ -1082,12 +1107,7 @@ struct sertype_rmw * create_sertype(
 #else
   static_cast<void>(sample_size);
 #endif  // DDS_HAS_SHM
-  dds_return_t rc;
-  
-  rc = dds_dynamic_type_register(&dstruct, &st->type_support.type_info_);
-  rc = dds_create_topic_descriptor(
-    DDS_FIND_SCOPE_LOCAL_DOMAIN, dds_ppant, st->type_support.type_info_, 0, &st->type_support.descriptor_);
-  
+  dynamic_type_register(st, dstruct, dds_ppant);
   st->type_support.typesupport_identifier_ = type_support_identifier;
   st->type_support.type_support_ = type_support;
   st->is_request_header = is_request_header;
