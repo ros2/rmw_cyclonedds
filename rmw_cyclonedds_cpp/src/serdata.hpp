@@ -44,8 +44,6 @@ struct CddsTypeSupport
 {
   void * type_support_;
   const char * typesupport_identifier_;
-  dds_topic_descriptor_t * descriptor_;
-  dds_typeinfo_t * type_info_;
 };
 
 struct sertype_rmw : ddsi_sertype
