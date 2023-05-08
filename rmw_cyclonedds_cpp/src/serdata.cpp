@@ -25,6 +25,8 @@
 #include "TypeSupport2.hpp"
 #include "bytewise.hpp"
 #include "dds/ddsi/ddsi_radmin.h"
+#include "dds/ddsrt/string.h"
+#include "dds/ddsc/dds_data_allocator.h"
 #include "rmw/error_handling.h"
 #include "MessageTypeSupport.hpp"
 #include "ServiceTypeSupport.hpp"
@@ -514,6 +516,9 @@ static void sertype_rmw_free(struct ddsi_sertype * tpcmn)
     tp->type_support.type_support_ = NULL;
   }
 
+  free((void*)tp->type_information.data);
+  free((void*)tp->type_mapping.data);
+
   delete tp;
 }
 
@@ -631,7 +636,7 @@ bool sertype_serialize_into(
 static ddsi_typeid_t * sertype_rmw_typeid (const struct ddsi_sertype * d, ddsi_typeid_kind_t kind)
 {
   assert(d);
-  assert(kind == DDSI_TYPEID_KIND_MINIMAL || kind == DDSI_TYPEID_KIND_COMPLETE);
+  //assert(kind == DDSI_TYPEID_KIND_MINIMAL || kind == DDSI_TYPEID_KIND_COMPLETE);
   const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(d);
   ddsi_typeinfo_t *type_info = ddsi_typeinfo_deser(
       tp->type_information.data, tp->type_information.sz);
@@ -663,9 +668,6 @@ static struct ddsi_sertype * sertype_rmw_derive_sertype (
   dds_data_representation_id_t data_representation, 
   dds_type_consistency_enforcement_qospolicy_t tce_qos)
 {
-  if (data_representation != DDS_DATA_REPRESENTATION_XCDR2)
-    return NULL;
-
   const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(base_sertype);
   struct sertype_rmw *derived_sertype = NULL;
  
@@ -673,7 +675,18 @@ static struct ddsi_sertype * sertype_rmw_derive_sertype (
 
   (void) tce_qos;
 
-  derived_sertype = (struct sertype_rmw *) tp;
+  if (base_sertype->serdata_ops == &serdata_rmw_ops)
+    derived_sertype = (struct sertype_rmw *) base_sertype;
+  else
+  {
+    derived_sertype = static_cast<sertype_rmw*>(ddsrt_memdup (tp, sizeof (*derived_sertype)));
+    //uint32_t refc = ddsrt_atomic_ld32 (&derived_sertype->flags_refc);
+    //ddsrt_atomic_st32 (&derived_sertype->flags_refc, refc & ~DDSI_SERTYPE_REFC_MASK);
+    ddsrt_atomic_st32 (&derived_sertype->flags_refc, 1);
+    derived_sertype->base_sertype = ddsi_sertype_ref (base_sertype);
+    derived_sertype->serdata_ops = &serdata_rmw_ops;
+    derived_sertype->allowed_data_representation = data_representation;
+  }
 
   return (struct ddsi_sertype *) derived_sertype;
 }
@@ -740,19 +753,9 @@ static std::string get_type_name(const char * type_support_identifier, void * ty
 }
 
 template<typename MemberType>
-static void dynamic_type_add_member(
-    dds_dynamic_type_t * dstruct, dds_entity_t dds_ppant, const MemberType * member, const dds_dynamic_type_kind_t type)
+static void dynamic_type_add_array(
+  dds_dynamic_type_t * dstruct, dds_entity_t dds_ppant, const MemberType * member, const dds_dynamic_type_kind_t type)
 {
-  if (type == rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING ||
-      type == rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE)
-    return;
-
-  if (!member->is_array_)
-  {
-    dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER_PRIM(type, member->name_));
-    return;
-  }
-
   dds_dynamic_type_t ddt;
 
   if (member->array_size_) 
@@ -764,7 +767,7 @@ static void dynamic_type_add_member(
           .kind = DDS_DYNAMIC_ARRAY,
           .name = member->name_,
           .num_bounds = 1,
-          .bounds = { new uint32_t[] {static_cast<uint32_t>(member->array_size_)}},
+          .bounds = (uint32_t*)(&member->array_size_),
           .element_type = DDS_DYNAMIC_TYPE_SPEC_PRIM(type),
         });
     } else {
@@ -773,20 +776,83 @@ static void dynamic_type_add_member(
           .kind = DDS_DYNAMIC_SEQUENCE,
           .name = member->name_,
           .num_bounds = 1,
-          .bounds = { new uint32_t[] {static_cast<uint32_t>(member->array_size_)}},
+          .bounds = (uint32_t*)(&member->array_size_),
           .element_type = DDS_DYNAMIC_TYPE_SPEC_PRIM(type),
         });
     }
   } else {
     ddt = dds_dynamic_type_create(dds_ppant,
       (dds_dynamic_type_descriptor_t){
-        .kind=DDS_DYNAMIC_SEQUENCE,
-        .name=member->name_,
-        .element_type=DDS_DYNAMIC_TYPE_SPEC_PRIM(type)
+        .kind = DDS_DYNAMIC_SEQUENCE,
+        .name = member->name_,
+        .element_type = DDS_DYNAMIC_TYPE_SPEC_PRIM(type)
       });
   }
 
-  dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER(ddt, member->name_));
+  dds_return_t ret = dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER(ddt, member->name_));
+  if (ret != DDS_RETCODE_OK)
+      RCUTILS_LOG_ERROR("failed to add type member sequence/array with prim type");
+}
+
+template<typename MemberType>
+static void dynamic_type_add_array(
+  dds_dynamic_type * dstruct, dds_entity_t dds_ppant, const MemberType * member, const dds_dynamic_type_t ddt)
+{
+  dds_dynamic_type_t dseq;
+
+  if (member->array_size_) 
+  { 
+    if (!member->is_upper_bound_)
+    {
+      dseq = dds_dynamic_type_create(dds_ppant, 
+        (dds_dynamic_type_descriptor_t){
+          .kind = DDS_DYNAMIC_ARRAY,
+          .name = member->name_,
+          .num_bounds = 1,
+          .bounds = (uint32_t*)(&member->array_size_),
+         .element_type=DDS_DYNAMIC_TYPE_SPEC(ddt), 
+        });
+    } else {
+      dseq = dds_dynamic_type_create(dds_ppant, 
+        (dds_dynamic_type_descriptor_t){
+          .kind = DDS_DYNAMIC_SEQUENCE,
+          .name = member->name_,
+          .num_bounds = 1,
+          .bounds = (uint32_t*)(&member->array_size_),
+         .element_type=DDS_DYNAMIC_TYPE_SPEC(ddt), 
+        });
+    }
+  } else {
+    dseq = dds_dynamic_type_create(dds_ppant,
+      (dds_dynamic_type_descriptor_t){
+        .kind = DDS_DYNAMIC_SEQUENCE,
+        .name = member->name_,
+        .element_type = DDS_DYNAMIC_TYPE_SPEC(ddt),
+      });
+  }
+
+  dds_return_t ret = dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER(dseq, member->name_));
+  if (ret != DDS_RETCODE_OK)
+    RCUTILS_LOG_ERROR("failed to add type member sequence/array with dynamic type");
+}
+
+template<typename MemberType>
+static void dynamic_type_add_member(
+    dds_dynamic_type_t * dstruct, dds_entity_t dds_ppant, const MemberType * member, const dds_dynamic_type_kind_t type)
+{
+  dds_return_t ret;
+  if (type == rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING ||
+      type == rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE)
+    return;
+
+  if (!member->is_array_)
+  {
+    ret = dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER_PRIM(type, member->name_));
+    if (ret != DDS_RETCODE_OK)
+      RCUTILS_LOG_ERROR("failed to add type member: %d", type);
+  } else {
+    dynamic_type_add_array(dstruct, dds_ppant, member, type);
+  }
 }
 
 template<typename MembersType>
@@ -796,6 +862,8 @@ static bool construct_dds_dynamic_type(
   assert(members);
   assert(dds_ppant);
  
+  dds_return_t ret;
+
   for (uint32_t i = 0; i < members->member_count_; ++i)
   {
     const auto * member = members->members_ + i; 
@@ -849,7 +917,7 @@ static bool construct_dds_dynamic_type(
               (dds_dynamic_type_descriptor_t){
                 .kind = DDS_DYNAMIC_STRING8,
                 .num_bounds = 1,
-                .bounds = { new uint32_t[] {static_cast<uint32_t>(member->array_size_)}}
+                .bounds = (uint32_t*)(&member->array_size_)
               });
           } else {
             ddt = dds_dynamic_type_create(dds_ppant, 
@@ -857,8 +925,15 @@ static bool construct_dds_dynamic_type(
                 .kind=DDS_DYNAMIC_STRING8,
                 });
           }
+          if (!member->is_array_)
+          {
+            ret = dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER(dds_dynamic_type_ref(&ddt), member->name_));
+            if (ret != DDS_RETCODE_OK)
+              RCUTILS_LOG_ERROR("failed to add type member: %d", DDS_DYNAMIC_STRING8);
+          } else {
+            dynamic_type_add_array(dstruct, dds_ppant, member, ddt);
+          }
 
-          dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER(ddt, member->name_));
           break;
         }
       case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE:
@@ -869,60 +944,35 @@ static bool construct_dds_dynamic_type(
             return false;
           }
 
-          auto type_name = create_type_name<MembersType>(member->members_->data);
-          auto sub_members = (const MembersType *)member->members_->data;
-          dds_dynamic_type_t ddt = dds_dynamic_type_create(
+          auto sub_members = static_cast<const MembersType *>(member->members_->data);
+          dds_dynamic_type_t ddt;
+          ddt = dds_dynamic_type_create(
             dds_ppant, (dds_dynamic_type_descriptor_t) {
               .kind=DDS_DYNAMIC_STRUCTURE, 
-              .name=type_name.c_str()
+              .name=create_type_name<MembersType>(member->members_->data).c_str()
             });
 
-          bool construct_res = construct_dds_dynamic_type(&ddt, dds_ppant, sub_members);
-          if (!construct_res)
+          dds_dynamic_type_set_extensibility(&ddt, DDS_DYNAMIC_TYPE_EXT_FINAL);
+          if (!construct_dds_dynamic_type(&ddt, dds_ppant, sub_members))
           {
             RMW_SET_ERROR_MSG("construct_dds_dynamic_type error");
             return false;
           }
+          dds_typeinfo_t *type_info;
+          auto rc = dds_dynamic_type_register(&ddt, &type_info);
+          if (rc != DDS_RETCODE_OK)
+            RCUTILS_LOG_ERROR("rmw_cyclonedds_cpp", "dds_dynamic_type_register fail: %s", dds_strretcode(-rc));
 
           if (!member->is_array_)
           {
-            dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER(ddt, member->name_));
-            break;
-          } 
-          
-          dds_dynamic_type_t dseq;
-
-          if (member->array_size_) {
-            if (!member->is_upper_bound_)
-            {
-              dseq = dds_dynamic_type_create(dds_ppant, 
-                (dds_dynamic_type_descriptor_t){
-                  .kind=DDS_DYNAMIC_ARRAY,
-                  .name=type_name.c_str(),
-                  .num_bounds=1,
-                  .bounds={new uint32_t[]{static_cast<uint32_t>(member->array_size_)}},
-                  .element_type=DDS_DYNAMIC_TYPE_SPEC(ddt),
-              });
-            } else {
-              dseq = dds_dynamic_type_create(dds_ppant, 
-                (dds_dynamic_type_descriptor_t){
-                  .kind=DDS_DYNAMIC_SEQUENCE,
-                  .name=type_name.c_str(),
-                  .num_bounds=1,
-                  .bounds={new uint32_t[]{static_cast<uint32_t>(member->array_size_)}},
-                  .element_type=DDS_DYNAMIC_TYPE_SPEC(ddt),
-                });
-            }
+            ret = dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER(dds_dynamic_type_ref(&ddt), member->name_));
+            if (ret != DDS_RETCODE_OK)
+              RCUTILS_LOG_ERROR("failed to add dynamic type member");
           } else {
-            dseq = dds_dynamic_type_create(dds_ppant,
-              (dds_dynamic_type_descriptor_t){
-                .kind=DDS_DYNAMIC_SEQUENCE,
-                .name=type_name.c_str(),
-                .element_type=DDS_DYNAMIC_TYPE_SPEC(ddt),
-              });
+            dynamic_type_add_array(dstruct, dds_ppant, member, ddt);
           }
-
-          dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER(dseq, member->name_));
+          
+          ddsi_typeinfo_fini(type_info);
           break;
         }
       default:
@@ -946,7 +996,6 @@ dds_dynamic_type_t create_msg_dds_dynamic_type(const char * type_support_identif
       });
     
     dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
-    dds_dynamic_type_set_autoid(&dstruct, DDS_DYNAMIC_TYPE_AUTOID_HASH);
 
     if (construct_dds_dynamic_type(&dstruct, dds_ppant, members))
       return dstruct;
@@ -963,7 +1012,6 @@ dds_dynamic_type_t create_msg_dds_dynamic_type(const char * type_support_identif
       });
 
     dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
-    dds_dynamic_type_set_autoid(&dstruct, DDS_DYNAMIC_TYPE_AUTOID_HASH);
 
     if (construct_dds_dynamic_type(&dstruct, dds_ppant, members))
       return dstruct;
@@ -988,7 +1036,6 @@ dds_dynamic_type_t create_req_dds_dynamic_type(const char * type_support_identif
       });
     
     dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
-    dds_dynamic_type_set_autoid(&dstruct, DDS_DYNAMIC_TYPE_AUTOID_HASH);
 
     if (construct_dds_dynamic_type(&dstruct, dds_ppant, members->request_members_))
       return dstruct;
@@ -1005,7 +1052,6 @@ dds_dynamic_type_t create_req_dds_dynamic_type(const char * type_support_identif
       });
 
     dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
-    dds_dynamic_type_set_autoid(&dstruct, DDS_DYNAMIC_TYPE_AUTOID_HASH);
 
     if (construct_dds_dynamic_type(&dstruct, dds_ppant, members->request_members_))
       return dstruct;
@@ -1030,7 +1076,6 @@ dds_dynamic_type_t create_res_dds_dynamic_type(const char * type_support_identif
       });
     
     dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
-    dds_dynamic_type_set_autoid(&dstruct, DDS_DYNAMIC_TYPE_AUTOID_HASH);
 
     if (construct_dds_dynamic_type(&dstruct, dds_ppant, members->response_members_))
       return dstruct;
@@ -1047,7 +1092,6 @@ dds_dynamic_type_t create_res_dds_dynamic_type(const char * type_support_identif
       });
 
     dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
-    dds_dynamic_type_set_autoid(&dstruct, DDS_DYNAMIC_TYPE_AUTOID_HASH);
 
     if (construct_dds_dynamic_type(&dstruct, dds_ppant, members->response_members_))
       return dstruct;
@@ -1060,36 +1104,37 @@ dds_dynamic_type_t create_res_dds_dynamic_type(const char * type_support_identif
   }
 }
 
-#include "dds/ddsrt/string.h"
-
-static void dynamic_type_register(struct sertype_rmw * st, dds_dynamic_type dt, dds_entity_t dds_ppant)
+static void dynamic_type_register(struct sertype_rmw * st, dds_dynamic_type_t dt, dds_entity_t dds_ppant)
 {
   dds_typeinfo_t *type_info;
   auto rc = dds_dynamic_type_register(&dt, &type_info);
   if (rc != DDS_RETCODE_OK)
-    RCUTILS_LOG_ERROR("rmw_cyclonedds_cpp", "dds_dynamic_type_register fail: %s", dds_strretcode(-rc));
+    RMW_SET_ERROR_MSG("dds_dynamic_type_register failed to register type");
   
   dds_topic_descriptor_t *desc;
   rc = dds_create_topic_descriptor(
-    DDS_FIND_SCOPE_LOCAL_DOMAIN, dds_ppant, type_info, 0, &desc);
+    DDS_FIND_SCOPE_GLOBAL, dds_ppant, type_info, DDS_SECS(10), &desc);
   if (rc != DDS_RETCODE_OK)
-    RCUTILS_LOG_ERROR("rmw_cyclonedds_cpp", "dds_create_topic_descriptor fail: %s", dds_strretcode(-rc));
- 
+    RMW_SET_ERROR_MSG("dds_create_topic_descriptor failed to create descriptor");
+
+  //st->allowed_data_representation = desc->m_flagset & DDS_TOPIC_RESTRICT_DATA_REPRESENTATION ?
+  //    desc->restrict_data_representation : DDS_DATA_REPRESENTATION_RESTRICT_DEFAULT; 
+
   st->type_information.data = static_cast<const unsigned char *>(ddsrt_memdup(desc->type_information.data, desc->type_information.sz));
   st->type_information.sz = desc->type_information.sz;
   st->type_mapping.data = static_cast<const unsigned char *>(ddsrt_memdup(desc->type_mapping.data, desc->type_mapping.sz));
   st->type_mapping.sz = desc->type_mapping.sz;
 
-  dds_free_typeinfo(type_info);
+  ddsi_typeinfo_fini(type_info);
   dds_delete_topic_descriptor(desc);
-  dds_dynamic_type_unref(&dt);
+  //dds_dynamic_type_unref(&dt);
 }
 
 struct sertype_rmw * create_sertype(
   const char * type_support_identifier,
   void * type_support, bool is_request_header,
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type,
-  const uint32_t sample_size, const bool is_fixed_type, dds_dynamic_type dstruct, dds_entity_t dds_ppant)
+  const uint32_t sample_size, const bool is_fixed_type, dds_dynamic_type_t dstruct, dds_entity_t dds_ppant)
 {
   struct sertype_rmw * st = new struct sertype_rmw;
   std::string type_name = get_type_name(type_support_identifier, type_support);
@@ -1097,6 +1142,7 @@ struct sertype_rmw * create_sertype(
   if (is_fixed_type) {
     flags |= DDSI_SERTYPE_FLAG_FIXED_SIZE;
   }
+  dynamic_type_register(st, dstruct, dds_ppant);
   ddsi_sertype_init_flags(
     static_cast<struct ddsi_sertype *>(st),
     type_name.c_str(), &sertype_rmw_ops, &serdata_rmw_ops, flags);
@@ -1107,7 +1153,6 @@ struct sertype_rmw * create_sertype(
 #else
   static_cast<void>(sample_size);
 #endif  // DDS_HAS_SHM
-  dynamic_type_register(st, dstruct, dds_ppant);
   st->type_support.typesupport_identifier_ = type_support_identifier;
   st->type_support.type_support_ = type_support;
   st->is_request_header = is_request_header;
