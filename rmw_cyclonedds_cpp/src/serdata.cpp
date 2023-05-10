@@ -855,6 +855,31 @@ static void dynamic_type_add_member(
   }
 }
 
+static void dynamic_type_register(struct sertype_rmw * st, dds_dynamic_type_t dt, dds_entity_t dds_ppant)
+{
+  dds_typeinfo_t *type_info;
+  auto rc = dds_dynamic_type_register(&dt, &type_info);
+  if (rc != DDS_RETCODE_OK)
+    RMW_SET_ERROR_MSG("dds_dynamic_type_register failed to register type");
+  
+  dds_topic_descriptor_t *desc;
+  rc = dds_create_topic_descriptor(
+    DDS_FIND_SCOPE_GLOBAL, dds_ppant, type_info, 0, &desc);
+  if (rc != DDS_RETCODE_OK)
+    RMW_SET_ERROR_MSG("dds_create_topic_descriptor failed to create descriptor");
+
+  if (st)
+  {
+    st->type_information.data = static_cast<const unsigned char *>(ddsrt_memdup(desc->type_information.data, desc->type_information.sz));
+    st->type_information.sz = desc->type_information.sz;
+    st->type_mapping.data = static_cast<const unsigned char *>(ddsrt_memdup(desc->type_mapping.data, desc->type_mapping.sz));
+    st->type_mapping.sz = desc->type_mapping.sz;
+  }
+
+  ddsi_typeinfo_fini(type_info);
+  dds_delete_topic_descriptor(desc);
+}
+
 template<typename MembersType>
 static bool construct_dds_dynamic_type(
   dds_dynamic_type_t * dstruct, dds_entity_t dds_ppant, const MembersType * members)
@@ -927,7 +952,7 @@ static bool construct_dds_dynamic_type(
           }
           if (!member->is_array_)
           {
-            ret = dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER(dds_dynamic_type_ref(&ddt), member->name_));
+            ret = dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER(ddt, member->name_));
             if (ret != DDS_RETCODE_OK)
               RCUTILS_LOG_ERROR("failed to add type member: %d", DDS_DYNAMIC_STRING8);
           } else {
@@ -953,26 +978,22 @@ static bool construct_dds_dynamic_type(
             });
 
           dds_dynamic_type_set_extensibility(&ddt, DDS_DYNAMIC_TYPE_EXT_FINAL);
+
           if (!construct_dds_dynamic_type(&ddt, dds_ppant, sub_members))
           {
             RMW_SET_ERROR_MSG("construct_dds_dynamic_type error");
             return false;
           }
-          dds_typeinfo_t *type_info;
-          auto rc = dds_dynamic_type_register(&ddt, &type_info);
-          if (rc != DDS_RETCODE_OK)
-            RCUTILS_LOG_ERROR("rmw_cyclonedds_cpp", "dds_dynamic_type_register fail: %s", dds_strretcode(-rc));
 
           if (!member->is_array_)
           {
-            ret = dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER(dds_dynamic_type_ref(&ddt), member->name_));
+            ret = dds_dynamic_type_add_member(dstruct, DDS_DYNAMIC_MEMBER(ddt, member->name_));
             if (ret != DDS_RETCODE_OK)
               RCUTILS_LOG_ERROR("failed to add dynamic type member");
           } else {
             dynamic_type_add_array(dstruct, dds_ppant, member, ddt);
           }
           
-          ddsi_typeinfo_fini(type_info);
           break;
         }
       default:
@@ -1104,32 +1125,6 @@ dds_dynamic_type_t create_res_dds_dynamic_type(const char * type_support_identif
   }
 }
 
-static void dynamic_type_register(struct sertype_rmw * st, dds_dynamic_type_t dt, dds_entity_t dds_ppant)
-{
-  dds_typeinfo_t *type_info;
-  auto rc = dds_dynamic_type_register(&dt, &type_info);
-  if (rc != DDS_RETCODE_OK)
-    RMW_SET_ERROR_MSG("dds_dynamic_type_register failed to register type");
-  
-  dds_topic_descriptor_t *desc;
-  rc = dds_create_topic_descriptor(
-    DDS_FIND_SCOPE_GLOBAL, dds_ppant, type_info, DDS_SECS(10), &desc);
-  if (rc != DDS_RETCODE_OK)
-    RMW_SET_ERROR_MSG("dds_create_topic_descriptor failed to create descriptor");
-
-  //st->allowed_data_representation = desc->m_flagset & DDS_TOPIC_RESTRICT_DATA_REPRESENTATION ?
-  //    desc->restrict_data_representation : DDS_DATA_REPRESENTATION_RESTRICT_DEFAULT; 
-
-  st->type_information.data = static_cast<const unsigned char *>(ddsrt_memdup(desc->type_information.data, desc->type_information.sz));
-  st->type_information.sz = desc->type_information.sz;
-  st->type_mapping.data = static_cast<const unsigned char *>(ddsrt_memdup(desc->type_mapping.data, desc->type_mapping.sz));
-  st->type_mapping.sz = desc->type_mapping.sz;
-
-  ddsi_typeinfo_fini(type_info);
-  dds_delete_topic_descriptor(desc);
-  //dds_dynamic_type_unref(&dt);
-}
-
 struct sertype_rmw * create_sertype(
   const char * type_support_identifier,
   void * type_support, bool is_request_header,
@@ -1142,10 +1137,10 @@ struct sertype_rmw * create_sertype(
   if (is_fixed_type) {
     flags |= DDSI_SERTYPE_FLAG_FIXED_SIZE;
   }
-  dynamic_type_register(st, dstruct, dds_ppant);
   ddsi_sertype_init_flags(
     static_cast<struct ddsi_sertype *>(st),
     type_name.c_str(), &sertype_rmw_ops, &serdata_rmw_ops, flags);
+  dynamic_type_register(st, dstruct, dds_ppant);
   st->allowed_data_representation = DDS_DATA_REPRESENTATION_FLAG_XCDR1;
 #ifdef DDS_HAS_SHM
   // TODO(Sumanth) needs some API in cyclone to set this
