@@ -1235,7 +1235,6 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * di
         }
         config += "</Peers>";
       }
-      config += "<EnableTopicDiscoveryEndpoints>true</EnableTopicDiscoveryEndpoints>";
       /* NOTE: Empty configuration fragments are ignored, so it is safe to
         unconditionally append a comma. */
       config += "</Discovery></Domain></CycloneDDS>,";

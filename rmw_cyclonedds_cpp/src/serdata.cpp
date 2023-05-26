@@ -636,7 +636,6 @@ bool sertype_serialize_into(
 static ddsi_typeid_t * sertype_rmw_typeid (const struct ddsi_sertype * d, ddsi_typeid_kind_t kind)
 {
   assert(d);
-  //assert(kind == DDSI_TYPEID_KIND_MINIMAL || kind == DDSI_TYPEID_KIND_COMPLETE);
   const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(d);
   ddsi_typeinfo_t *type_info = ddsi_typeinfo_deser(
       tp->type_information.data, tp->type_information.sz);
@@ -680,8 +679,6 @@ static struct ddsi_sertype * sertype_rmw_derive_sertype (
   else
   {
     derived_sertype = static_cast<sertype_rmw*>(ddsrt_memdup (tp, sizeof (*derived_sertype)));
-    //uint32_t refc = ddsrt_atomic_ld32 (&derived_sertype->flags_refc);
-    //ddsrt_atomic_st32 (&derived_sertype->flags_refc, refc & ~DDSI_SERTYPE_REFC_MASK);
     ddsrt_atomic_st32 (&derived_sertype->flags_refc, 1);
     derived_sertype->base_sertype = ddsi_sertype_ref (base_sertype);
     derived_sertype->serdata_ops = &serdata_rmw_ops;
@@ -752,34 +749,31 @@ static std::string get_type_name(const char * type_support_identifier, void * ty
   }
 }
 
-extern "C"
-{
 
-dds_dynamic_type_descriptor_t get_dynamic_type_descriptor_prim(
+extern "C" dds_dynamic_type_descriptor_t get_dynamic_type_descriptor_prim(
   dds_dynamic_type_kind_t kind, const char *name, uint32_t num_bounds, const uint32_t *bounds, dds_dynamic_type_kind_t type)
 {
   return{kind,name,{},{},num_bounds,bounds,DDS_DYNAMIC_TYPE_SPEC_PRIM(type),{},};
 }
 
-dds_dynamic_type_descriptor_t get_dynamic_type_descriptor(
+extern "C" dds_dynamic_type_descriptor_t get_dynamic_type_descriptor(
   dds_dynamic_type_kind_t kind, const char *name, uint32_t num_bounds, const uint32_t *bounds, dds_dynamic_type_t type)
 {
   return{kind,name,{},{},num_bounds,bounds,DDS_DYNAMIC_TYPE_SPEC(type),{},};
 }
 
-dds_dynamic_member_descriptor_t get_dynamic_member_descriptor_prim(
+extern "C" dds_dynamic_member_descriptor_t get_dynamic_member_descriptor_prim(
   dds_dynamic_type_kind_t type, const char *name)
 {
   return DDS_DYNAMIC_MEMBER_PRIM(type, name);
 }
 
-dds_dynamic_member_descriptor_t get_dynamic_member_descriptor(
+extern "C" dds_dynamic_member_descriptor_t get_dynamic_member_descriptor(
   dds_dynamic_type_t ddt, const char *name)
 {
   return DDS_DYNAMIC_MEMBER(ddt, name);
 }
 
-}
 
 template<typename MemberType>
 static void dynamic_type_add_array(
