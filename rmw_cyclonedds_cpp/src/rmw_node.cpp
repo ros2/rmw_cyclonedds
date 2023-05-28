@@ -4973,9 +4973,9 @@ static rmw_ret_t rmw_init_cs(
 
   dds_listener_t * listener = dds_create_listener(cb_data);
   dds_lset_data_available_arg(listener, dds_listener_callback, cb_data, false);
-
-  dds_dynamic_type_t res = create_res_dds_dynamic_type(type_support->typesupport_identifier, type_support->data, node->context->impl->ppant);
-  dds_dynamic_type_t req = create_req_dds_dynamic_type(type_support->typesupport_identifier, type_support->data, node->context->impl->ppant);
+  auto res = create_res_dds_dynamic_type(type_support->typesupport_identifier, type_support->data, node->context->impl->ppant);
+  auto req = create_req_dds_dynamic_type(type_support->typesupport_identifier, type_support->data, node->context->impl->ppant);
+  
 
   struct sertype_rmw * pub_st, * sub_st;
 
