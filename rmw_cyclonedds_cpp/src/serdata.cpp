@@ -1043,7 +1043,7 @@ static bool construct_dds_dynamic_type(
   return true;
 }
 #endif
-bool create_msg_dds_dynamic_type(const char * type_support_identifier, const void * untyped_members, dds_entity_t dds_ppant, struct sertype_rmw * st)
+void create_msg_dds_dynamic_type(const char * type_support_identifier, const void * untyped_members, dds_entity_t dds_ppant, struct sertype_rmw * st)
 {
 #ifdef HAS_DYNAMIC_TYPE
   if (using_introspection_c_typesupport(type_support_identifier)) 
@@ -1076,17 +1076,15 @@ bool create_msg_dds_dynamic_type(const char * type_support_identifier, const voi
   {
     throw std::runtime_error("create_dds_dynamic_type, unsupported typesupport"); 
   }
-  return true;
 #else
   static_cast<void>(type_support_identifier);
   static_cast<void>(untyped_members);
   static_cast<void>(dds_ppant);
   static_cast<void>(st);
-  return true;
 #endif
 }
 
-bool create_req_dds_dynamic_type(const char * type_support_identifier, const void * untyped_members, dds_entity_t dds_ppant, struct sertype_rmw * st)
+void create_req_dds_dynamic_type(const char * type_support_identifier, const void * untyped_members, dds_entity_t dds_ppant, struct sertype_rmw * st)
 {
 #ifdef HAS_DYNAMIC_TYPE
   if (using_introspection_c_typesupport(type_support_identifier)) 
@@ -1119,18 +1117,15 @@ bool create_req_dds_dynamic_type(const char * type_support_identifier, const voi
   {
     throw std::runtime_error("create_dds_dynamic_type, unsupported typesupport"); 
   }
-
-  return true;
 #else
   static_cast<void>(type_support_identifier);
   static_cast<void>(untyped_members);
   static_cast<void>(dds_ppant);
   static_cast<void>(st);
-  return true;
 #endif
 }
 
-bool create_res_dds_dynamic_type(const char * type_support_identifier, const void * untyped_members, dds_entity_t dds_ppant, struct sertype_rmw * st)
+void create_res_dds_dynamic_type(const char * type_support_identifier, const void * untyped_members, dds_entity_t dds_ppant, struct sertype_rmw * st)
 {
 #ifdef HAS_DYNAMIC_TYPE
   if (using_introspection_c_typesupport(type_support_identifier)) 
@@ -1163,13 +1158,11 @@ bool create_res_dds_dynamic_type(const char * type_support_identifier, const voi
     throw std::runtime_error("create_dds_dynamic_type, unsupported typesupport"); 
   }
 
-  return true;
 #else
   static_cast<void>(type_support_identifier);
   static_cast<void>(untyped_members);
   static_cast<void>(dds_ppant);
   static_cast<void>(st);
-  return true;
 #endif
 }
 
