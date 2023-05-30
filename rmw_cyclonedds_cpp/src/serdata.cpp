@@ -646,6 +646,7 @@ bool sertype_serialize_into(
 #ifdef HAS_DYNAMIC_TYPE
 static ddsi_typeid_t * sertype_rmw_typeid (const struct ddsi_sertype * d, ddsi_typeid_kind_t kind)
 {
+  assert(d);
   const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(d);
   ddsi_typeinfo_t *type_info = ddsi_typeinfo_deser(
       tp->type_information.data, tp->type_information.sz);
@@ -662,6 +663,7 @@ static ddsi_typemap_t * sertype_rmw_typemap (const struct ddsi_sertype * d)
 {
   assert(d);
   const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(d); 
+  return ddsi_typemap_deser (tp->type_mapping.data, tp->type_mapping.sz);
 }
 
 static ddsi_typeinfo_t *sertype_rmw_typeinfo (const struct ddsi_sertype * d)
@@ -697,7 +699,6 @@ static struct ddsi_sertype * sertype_rmw_derive_sertype (
   return (struct ddsi_sertype *) derived_sertype;
 }
 #endif
-
 static const struct ddsi_sertype_ops sertype_rmw_ops = {
 #if DDS_HAS_DDSI_SERTYPE
   ddsi_sertype_v0,
