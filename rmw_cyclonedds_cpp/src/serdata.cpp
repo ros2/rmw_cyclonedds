@@ -643,10 +643,9 @@ bool sertype_serialize_into(
   return true;
 }
 
+#ifdef HAS_DYNAMIC_TYPE
 static ddsi_typeid_t * sertype_rmw_typeid (const struct ddsi_sertype * d, ddsi_typeid_kind_t kind)
 {
-  assert(d);
-#ifdef HAS_DYNAMIC_TYPE
   const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(d);
   ddsi_typeinfo_t *type_info = ddsi_typeinfo_deser(
       tp->type_information.data, tp->type_information.sz);
@@ -657,35 +656,19 @@ static ddsi_typeid_t * sertype_rmw_typeid (const struct ddsi_sertype * d, ddsi_t
   dds_free_typeinfo(type_info);
 
   return type_id;
-#else
-  static_cast<void>(d);
-  static_cast<void>(kind);
-  return nullptr;
-#endif
 }
 
 static ddsi_typemap_t * sertype_rmw_typemap (const struct ddsi_sertype * d)
 {
   assert(d);
-#ifdef HAS_DYNAMIC_TYPE
   const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(d); 
-  return ddsi_typemap_deser (tp->type_mapping.data, tp->type_mapping.sz);
-#else
-  static_cast<void>(d);
-  return nullptr;
-#endif
 }
 
 static ddsi_typeinfo_t *sertype_rmw_typeinfo (const struct ddsi_sertype * d)
 {
   assert(d);
-#ifdef HAS_DYNAMIC_TYPE
   const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(d);  
   return ddsi_typeinfo_deser (tp->type_information.data, tp->type_information.sz);
-#else
-  static_cast<void>(d);
-  return nullptr;
-#endif
 }
 
 static struct ddsi_sertype * sertype_rmw_derive_sertype (
@@ -693,7 +676,6 @@ static struct ddsi_sertype * sertype_rmw_derive_sertype (
   dds_data_representation_id_t data_representation, 
   dds_type_consistency_enforcement_qospolicy_t tce_qos)
 {
-#ifdef HAS_DYNAMIC_TYPE
   const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(base_sertype);
   struct sertype_rmw *derived_sertype = NULL;
  
@@ -713,13 +695,8 @@ static struct ddsi_sertype * sertype_rmw_derive_sertype (
   }
 
   return (struct ddsi_sertype *) derived_sertype;
-#else
-  static_cast<void>(base_sertype);
-  static_cast<void>(data_representation);
-  static_cast<void>(tce_qos);
-  return nullptr;
-#endif
 }
+#endif
 
 static const struct ddsi_sertype_ops sertype_rmw_ops = {
 #if DDS_HAS_DDSI_SERTYPE
