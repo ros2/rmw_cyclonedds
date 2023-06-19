@@ -2,6 +2,14 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.8.0 (2023-06-12)
+------------------
+* Use TRACETOOLS\_ prefix for tracepoint-related macros (`#450 <https://github.com/ros2/rmw_cyclonedds/issues/450>`_)
+* Contributors: Christophe Bedard
+
+1.7.0 (2023-04-27)
+------------------
+
 1.6.0 (2023-04-12)
 ------------------
 * Dynamic Subscription (BONUS: Allocators): rmw_cyclonedds (`#451 <https://github.com/ros2/rmw_cyclonedds/issues/451>`_)
