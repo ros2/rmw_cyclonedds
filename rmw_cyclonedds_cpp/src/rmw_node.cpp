@@ -2084,6 +2084,7 @@ static rmw_ret_t publish_loaned_int(
 
   // if the publisher allow loaning
   if (cdds_publisher->is_loaning_available) {
+    TRACETOOLS_TRACEPOINT(rmw_publish, ros_message);
     auto d = new serdata_rmw(cdds_publisher->sertype, ddsi_serdata_kind::SDK_DATA);
     d->iox_chunk = ros_message;
     // since we write the loaned chunk here, set the data state to raw
