@@ -2913,7 +2913,8 @@ static rmw_ret_t rmw_take_int(
         int64_t timestamp_diff = now_timestamp - info.source_timestamp;
 
         std::string log_message = "Topic: " + std::string(subscription->topic_name) +
-          ", rmw xmt time ns: " + std::to_string(timestamp_diff);
+          ", rmw xmt time ns: " + std::to_string(timestamp_diff) + ". RMWPUB TS: " +
+          std::to_string(info.source_timestamp) + ", RMWSUB TS: " + std::to_string(now_timestamp);
 
         std::vector<std::string> substrings;
         substrings.reserve(2);
