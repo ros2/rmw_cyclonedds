@@ -2904,7 +2904,7 @@ static rmw_ret_t rmw_take_int(
 
         ///////////////////////////////////////////////////////////////////////////////////////////
         //                                                                                       //
-        //                              Get timestamp difference                                 //
+        //                           Get timestamp difference for Fabric                         //
         //                                                                                       //
         ///////////////////////////////////////////////////////////////////////////////////////////
         auto now = std::chrono::system_clock::now();
