@@ -2901,6 +2901,30 @@ static rmw_ret_t rmw_take_int(
         message_info->source_timestamp = info.source_timestamp;
         // TODO(iluetkeb) add received timestamp, when implemented by Cyclone
         message_info->received_timestamp = 0;
+
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        //                                                                                       //
+        //                              Get timestamp difference                                 //
+        //                                                                                       //
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        auto now = std::chrono::system_clock::now();
+        int64_t now_timestamp =
+          std::chrono::time_point_cast<std::chrono::nanoseconds>(now).time_since_epoch().count();
+        int64_t timestamp_diff = now_timestamp - info.source_timestamp;
+
+        std::string log_message = "Topic: " + std::string(subscription->topic_name) +
+          ", rmw xmt time ns: " + std::to_string(timestamp_diff);
+
+        std::vector<std::string> substrings;
+        substrings.reserve(2);
+        std::istringstream iss(std::string(subscription->topic_name));
+        std::string token;
+        while (std::getline(iss, token, '/')) {
+          substrings.push_back(std::move(token));
+        }
+        auto nodename = substrings[1] + ".rmw";
+
+        RCUTILS_LOG_DEBUG_NAMED(nodename.c_str(), log_message.c_str());
       }
 #if REPORT_LATE_MESSAGES > 0
       dds_time_t tnow = dds_time();
