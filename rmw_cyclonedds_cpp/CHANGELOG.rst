@@ -2,6 +2,12 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Clear out errors once we have handled them. (`#464 <https://github.com/ros2/rmw_cyclonedds/issues/464>`_)
+* Instrument loaned message publication code path
+* Contributors: Chris Lalancette, Christophe Bedard
+
 1.8.0 (2023-06-12)
 ------------------
 * Use TRACETOOLS\_ prefix for tracepoint-related macros (`#450 <https://github.com/ros2/rmw_cyclonedds/issues/450>`_)
