@@ -16,9 +16,10 @@ cmake_minimum_required(VERSION 3.5)
 
 project(rmw_cyclonedds_cpp)
 
-# Default to C++14
+# Default to C++17
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -31,7 +32,6 @@ find_package(rcutils REQUIRED)
 find_package(rcpputils REQUIRED)
 find_package(tracetools REQUIRED)
 
-#find_package(cyclonedds_cmake_module REQUIRED)
 find_package(CycloneDDS QUIET CONFIG)
 if(CycloneDDS_FOUND)
   # Support for shared memory in RMW depends on support for shared memory being compiled in
@@ -80,23 +80,23 @@ add_library(rmw_cyclonedds_cpp
   src/TypeSupport2.cpp
   src/TypeSupport.cpp)
 
+target_link_libraries(rmw_cyclonedds_cpp PUBLIC
+  rmw::rmw)
+
 target_link_libraries(rmw_cyclonedds_cpp PRIVATE
-  CycloneDDS::ddsc)
+  CycloneDDS::ddsc
+  rcutils::rcutils
+  rcpputils::rcpputils
+  rmw_dds_common::rmw_dds_common_library
+  rosidl_typesupport_introspection_c::rosidl_typesupport_introspection_c
+  rosidl_typesupport_introspection_cpp::rosidl_typesupport_introspection_cpp
+  rosidl_runtime_c::rosidl_runtime_c
+  tracetools::tracetools
+)
 
 if(_cyclonedds_has_shm)
   target_link_libraries(rmw_cyclonedds_cpp PRIVATE iceoryx_binding_c::iceoryx_binding_c)
 endif()
-
-target_link_libraries(rmw_cyclonedds_cpp PUBLIC
-  rmw::rmw)
-target_link_libraries(rmw_cyclonedds_cpp PRIVATE
-  rcutils::rcutils
-  rcpputils::rcpputils
-  rosidl_typesupport_introspection_c::rosidl_typesupport_introspection_c
-  rosidl_typesupport_introspection_cpp::rosidl_typesupport_introspection_cpp
-  rmw_dds_common::rmw_dds_common_library
-  rosidl_runtime_c::rosidl_runtime_c
-  tracetools::tracetools)
 
 if(CMAKE_GENERATOR_PLATFORM)
   set(TARGET_ARCH "${CMAKE_GENERATOR_PLATFORM}")
