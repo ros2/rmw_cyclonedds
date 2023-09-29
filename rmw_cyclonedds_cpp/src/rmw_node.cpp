@@ -5590,6 +5590,62 @@ extern "C" rmw_ret_t rmw_count_subscribers(
   return common_context->graph_cache.get_reader_count(mangled_topic_name, count);
 }
 
+extern "C" rmw_ret_t rmw_count_clients(
+  const rmw_node_t * node, const char * service_name,
+  size_t * count)
+{
+  RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    node,
+    node->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_ARGUMENT_FOR_NULL(service_name, RMW_RET_INVALID_ARGUMENT);
+  int validation_result = RMW_TOPIC_VALID;
+  rmw_ret_t ret = rmw_validate_full_topic_name(service_name, &validation_result, nullptr);
+  if (RMW_RET_OK != ret) {
+    return ret;
+  }
+  if (RMW_TOPIC_VALID != validation_result) {
+    const char * reason = rmw_full_topic_name_validation_result_string(validation_result);
+    RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("service_name argument is invalid: %s", reason);
+    return RMW_RET_INVALID_ARGUMENT;
+  }
+  RMW_CHECK_ARGUMENT_FOR_NULL(count, RMW_RET_INVALID_ARGUMENT);
+  auto common_context = &node->context->impl->common;
+  const std::string mangled_rp_service_name =
+    make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", false);
+  return common_context->graph_cache.get_reader_count(mangled_rp_service_name, count);
+}
+
+extern "C" rmw_ret_t rmw_count_services(
+  const rmw_node_t * node, const char * service_name,
+  size_t * count)
+{
+  RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    node,
+    node->implementation_identifier,
+    eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RMW_CHECK_ARGUMENT_FOR_NULL(service_name, RMW_RET_INVALID_ARGUMENT);
+  int validation_result = RMW_TOPIC_VALID;
+  rmw_ret_t ret = rmw_validate_full_topic_name(service_name, &validation_result, nullptr);
+  if (RMW_RET_OK != ret) {
+    return ret;
+  }
+  if (RMW_TOPIC_VALID != validation_result) {
+    const char * reason = rmw_full_topic_name_validation_result_string(validation_result);
+    RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("service_name argument is invalid: %s", reason);
+    return RMW_RET_INVALID_ARGUMENT;
+  }
+  RMW_CHECK_ARGUMENT_FOR_NULL(count, RMW_RET_INVALID_ARGUMENT);
+  auto common_context = &node->context->impl->common;
+  const std::string mangled_rp_service_name =
+    make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", false);
+  return common_context->graph_cache.get_writer_count(mangled_rp_service_name, count);
+}
+
 using GetNamesAndTypesByNodeFunction = rmw_ret_t (*)(
   rmw_dds_common::Context *,
   const std::string &,
