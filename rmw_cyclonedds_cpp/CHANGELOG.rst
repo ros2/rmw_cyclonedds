@@ -2,6 +2,12 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Add rmw count clients,services impl (`#427 <https://github.com/ros2/rmw_cyclonedds/issues/427>`_)
+* Minor revamp of the CMakeLists.txt. (`#468 <https://github.com/ros2/rmw_cyclonedds/issues/468>`_)
+* Contributors: Chris Lalancette, Minju, Lee
+
 1.9.0 (2023-08-21)
 ------------------
 * Clear out errors once we have handled them. (`#464 <https://github.com/ros2/rmw_cyclonedds/issues/464>`_)
