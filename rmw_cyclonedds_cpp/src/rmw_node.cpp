@@ -1450,6 +1450,12 @@ rmw_context_impl_s::init(rmw_init_options_t * options, size_t domain_id)
     this->clean_up();
     return RMW_RET_ERROR;
   }
+  this->common.publish_callback = [](rmw_publisher_t * pub, void * msg) {
+      return rmw_publish(
+        pub,
+        msg,
+        nullptr);
+    };
 
   rmw_subscription_options_t subscription_options = rmw_get_default_subscription_options();
   subscription_options.ignore_local_publications = true;
@@ -1511,6 +1517,9 @@ rmw_context_impl_t::clean_up()
   if (common.pub) {
     destroy_publisher(common.pub);
     common.pub = nullptr;
+  }
+  if (common.publish_callback) {
+    common.publish_callback = nullptr;
   }
   if (common.sub) {
     destroy_subscription(common.sub);
@@ -1764,13 +1773,7 @@ extern "C" rmw_node_t * rmw_create_node(
   // In that case, the last message published is not accurate.
   auto common = &context->impl->common;
   rmw_ret_t rmw_ret = common->update_node_graph(
-    name, namespace_,
-    [](rmw_publisher_t * pub, void * msg) {
-      return rmw_publish(
-        pub,
-        msg,
-        nullptr);
-    });
+    name, namespace_);
   if (RMW_RET_OK != rmw_ret) {
     return nullptr;
   }
@@ -1801,13 +1804,7 @@ extern "C" rmw_ret_t rmw_destroy_node(rmw_node_t * node)
   // In that case, the last message published is not accurate.
   auto common = &node->context->impl->common;
   result_ret = common->destroy_node_graph(
-    node->name, node->namespace_,
-    [](rmw_publisher_t * pub, void * msg) {
-      return rmw_publish(
-        pub,
-        msg,
-        nullptr);
-    });
+    node->name, node->namespace_);
 
   rmw_context_t * context = node->context;
   rmw_free(const_cast<char *>(node->name));
@@ -2663,13 +2660,7 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
   const auto cddspub = static_cast<const CddsPublisher *>(pub->data);
   if (RMW_RET_OK != common->update_publisher_graph(
       cddspub->gid,
-      node->name, node->namespace_,
-      [](rmw_publisher_t * pub, void * msg) {
-        return rmw_publish(
-          pub,
-          msg,
-          nullptr);
-      }))
+      node->name, node->namespace_))
   {
     return nullptr;
   }
@@ -2960,13 +2951,7 @@ extern "C" rmw_ret_t rmw_destroy_publisher(rmw_node_t * node, rmw_publisher_t * 
   const auto cddspub = static_cast<const CddsPublisher *>(publisher->data);
   rmw_ret_t publish_ret = common->destroy_publisher_graph(
     cddspub->gid,
-    node->name, node->namespace_,
-    [](rmw_publisher_t * pub, void * msg) {
-      return rmw_publish(
-        pub,
-        msg,
-        nullptr);
-    });
+    node->name, node->namespace_);
   if (RMW_RET_OK != publish_ret) {
     error_state = *rmw_get_error_state();
     ret = publish_ret;
@@ -3205,13 +3190,7 @@ extern "C" rmw_subscription_t * rmw_create_subscription(
   const auto cddssub = static_cast<const CddsSubscription *>(sub->data);
   if (RMW_RET_OK != common->update_subscriber_graph(
       cddssub->gid,
-      node->name, node->namespace_,
-      [](rmw_publisher_t * pub, void * msg) {
-        return rmw_publish(
-          pub,
-          msg,
-          nullptr);
-      }))
+      node->name, node->namespace_))
   {
     return nullptr;
   }
@@ -3330,13 +3309,7 @@ extern "C" rmw_ret_t rmw_destroy_subscription(rmw_node_t * node, rmw_subscriptio
   const auto cddssub = static_cast<const CddsSubscription *>(subscription->data);
   ret = common->destroy_publisher_graph(
     cddssub->gid,
-    node->name, node->namespace_,
-    [](rmw_publisher_t * pub, void * msg) {
-      return rmw_publish(
-        pub,
-        msg,
-        nullptr);
-    });
+    node->name, node->namespace_);
   if (RMW_RET_OK != ret) {
     error_state = *rmw_get_error_state();
     error_string = rmw_get_error_string();
@@ -5121,13 +5094,7 @@ static rmw_ret_t destroy_client(
     if (RMW_RET_OK != common->destroy_client_graph(
         info->client.pub->gid,
         info->client.sub->gid,
-        node->name, node->namespace_,
-        [](rmw_publisher_t * pub, void * msg) {
-          return rmw_publish(
-            pub,
-            msg,
-            nullptr);
-        }))
+        node->name, node->namespace_))
     {
       RMW_SET_ERROR_MSG("failed to publish ParticipantEntitiesInfo when destroying client");
     }
@@ -5174,13 +5141,7 @@ extern "C" rmw_client_t * rmw_create_client(
   if (RMW_RET_OK != common->update_client_graph(
       info->client.pub->gid,
       info->client.sub->gid,
-      node->name, node->namespace_,
-      [](rmw_publisher_t * pub, void * msg) {
-        return rmw_publish(
-          pub,
-          msg,
-          nullptr);
-      }))
+      node->name, node->namespace_))
   {
     static_cast<void>(destroy_client(node, rmw_client, /* destroy_graph = */ false));
     return nullptr;
@@ -5224,13 +5185,7 @@ static rmw_ret_t destroy_service(
     if (RMW_RET_OK != common->destroy_service_graph(
         info->service.sub->gid,
         info->service.pub->gid,
-        node->name, node->namespace_,
-        [](rmw_publisher_t * pub, void * msg) {
-          return rmw_publish(
-            pub,
-            msg,
-            nullptr);
-        }))
+        node->name, node->namespace_))
     {
       RMW_SET_ERROR_MSG("failed to publish ParticipantEntitiesInfo when destroying service");
     }
@@ -5275,13 +5230,7 @@ extern "C" rmw_service_t * rmw_create_service(
   if (RMW_RET_OK != common->update_service_graph(
       info->service.sub->gid,
       info->service.pub->gid,
-      node->name, node->namespace_,
-      [](rmw_publisher_t * pub, void * msg) {
-        return rmw_publish(
-          pub,
-          msg,
-          nullptr);
-      }))
+      node->name, node->namespace_))
   {
     static_cast<void>(destroy_service(node, rmw_service, /* destroy_graph = */ false));
     return nullptr;
