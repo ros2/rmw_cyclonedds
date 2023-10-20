@@ -1450,7 +1450,7 @@ rmw_context_impl_s::init(rmw_init_options_t * options, size_t domain_id)
     this->clean_up();
     return RMW_RET_ERROR;
   }
-  this->common.publish_callback = [](rmw_publisher_t * pub, void * msg) {
+  this->common.publish_callback = [](const rmw_publisher_t * pub, const void * msg) {
       return rmw_publish(
         pub,
         msg,
