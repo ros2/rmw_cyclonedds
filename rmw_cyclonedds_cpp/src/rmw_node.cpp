@@ -5152,7 +5152,7 @@ extern "C" rmw_ret_t rmw_destroy_client(rmw_node_t * node, rmw_client_t * client
       info->client.sub->gid,
       node->name, node->namespace_))
   {
-    RMW_SAFE_FWRITE_TO_STDERR("failed to publish ParticipantEntitiesInfo when destroying client");
+    RMW_SET_ERROR_MSG("failed to publish ParticipantEntitiesInfo when destroying client");
   }
 
   rmw_fini_cs(&info->client);
