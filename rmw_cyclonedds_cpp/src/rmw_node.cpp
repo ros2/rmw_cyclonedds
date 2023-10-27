@@ -1766,11 +1766,6 @@ extern "C" rmw_node_t * rmw_create_node(
   RET_ALLOC_X(node->namespace_, return nullptr);
   memcpy(const_cast<char *>(node->namespace_), namespace_, strlen(namespace_) + 1);
 
-  // Though graph_cache methods are thread safe, both cache update and publishing have to also
-  // be atomic.
-  // If not, the following race condition is possible:
-  // node1-update-get-message / node2-update-get-message / node2-publish / node1-publish
-  // In that case, the last message published is not accurate.
   auto common = &context->impl->common;
   rmw_ret_t rmw_ret = common->update_node_graph(
     name, namespace_);
@@ -1797,11 +1792,6 @@ extern "C" rmw_ret_t rmw_destroy_node(rmw_node_t * node)
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   auto node_impl = static_cast<CddsNode *>(node->data);
 
-  // Though graph_cache methods are thread safe, both cache update and publishing have to also
-  // be atomic.
-  // If not, the following race condition is possible:
-  // node1-update-get-message / node2-update-get-message / node2-publish / node1-publish
-  // In that case, the last message published is not accurate.
   auto common = &node->context->impl->common;
   result_ret = common->destroy_node_graph(
     node->name, node->namespace_);
@@ -5070,8 +5060,75 @@ static void rmw_fini_cs(CddsCS * cs)
   dds_delete(cs->pub->enth);
 }
 
-static rmw_ret_t destroy_client(
-  const rmw_node_t * node, rmw_client_t * client, bool destroy_graph = true)
+extern "C" rmw_client_t * rmw_create_client(
+  const rmw_node_t * node,
+  const rosidl_service_type_support_t * type_supports,
+  const char * service_name,
+  const rmw_qos_profile_t * qos_policies)
+{
+  RMW_CHECK_ARGUMENT_FOR_NULL(qos_policies, nullptr);
+  CddsClient * info = new CddsClient();
+  auto cleanup_info = rcpputils::make_scope_exit(
+    [info]() {
+      delete (info);
+    });
+
+#if REPORT_BLOCKED_REQUESTS
+  info->lastcheck = 0;
+#endif
+  rmw_qos_profile_t adapted_qos_policies =
+    rmw_dds_common::qos_profile_update_best_available_for_services(*qos_policies);
+  if (
+    rmw_init_cs(
+      &info->client, &info->user_callback_data,
+      node, type_supports, service_name, &adapted_qos_policies, false) != RMW_RET_OK)
+  {
+    return nullptr;
+  }
+  auto cleanup_fini_cs = rcpputils::make_scope_exit(
+    [info]() {
+      rmw_fini_cs(&info->client);
+    });
+
+  rmw_client_t * rmw_client = rmw_client_allocate();
+  if (!rmw_client) {
+    return nullptr;
+  }
+  auto cleanup_client = rcpputils::make_scope_exit(
+    [rmw_client]() {
+      rmw_client_free(rmw_client);
+    });
+
+  auto common = &node->context->impl->common;
+  rmw_client->implementation_identifier = eclipse_cyclonedds_identifier;
+  rmw_client->data = info;
+  rmw_client->service_name = reinterpret_cast<const char *>(rmw_allocate(strlen(service_name) + 1));
+  if (!rmw_client->service_name) {
+    return nullptr;
+  }
+  auto cleanup_service_name = rcpputils::make_scope_exit(
+    [rmw_client]() {
+      rmw_free(const_cast<char *>(rmw_client->service_name));
+    });
+  memcpy(const_cast<char *>(rmw_client->service_name), service_name, strlen(service_name) + 1);
+
+  // Update graph
+  if (RMW_RET_OK != common->update_client_graph(
+      info->client.pub->gid,
+      info->client.sub->gid,
+      node->name, node->namespace_))
+  {
+    return nullptr;
+  }
+
+  cleanup_service_name.cancel();
+  cleanup_client.cancel();
+  cleanup_fini_cs.cancel();
+  cleanup_info.cancel();
+  return rmw_client;
+}
+
+extern "C" rmw_ret_t rmw_destroy_client(rmw_node_t * node, rmw_client_t * client)
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
@@ -5089,15 +5146,13 @@ static rmw_ret_t destroy_client(
   clean_waitset_caches();
 
   // Update graph
-  if (destroy_graph) {
-    auto common = &node->context->impl->common;
-    if (RMW_RET_OK != common->destroy_client_graph(
-        info->client.pub->gid,
-        info->client.sub->gid,
-        node->name, node->namespace_))
-    {
-      RMW_SET_ERROR_MSG("failed to publish ParticipantEntitiesInfo when destroying client");
-    }
+  auto common = &node->context->impl->common;
+  if (RMW_RET_OK != common->destroy_client_graph(
+      info->client.pub->gid,
+      info->client.sub->gid,
+      node->name, node->namespace_))
+  {
+    RMW_SAFE_FWRITE_TO_STDERR("failed to publish ParticipantEntitiesInfo when destroying client");
   }
 
   rmw_fini_cs(&info->client);
@@ -5107,62 +5162,70 @@ static rmw_ret_t destroy_client(
   return RMW_RET_OK;
 }
 
-extern "C" rmw_client_t * rmw_create_client(
+extern "C" rmw_service_t * rmw_create_service(
   const rmw_node_t * node,
   const rosidl_service_type_support_t * type_supports,
   const char * service_name,
   const rmw_qos_profile_t * qos_policies)
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(qos_policies, nullptr);
-  CddsClient * info = new CddsClient();
-#if REPORT_BLOCKED_REQUESTS
-  info->lastcheck = 0;
-#endif
+  CddsService * info = new CddsService();
+  auto cleanup_info = rcpputils::make_scope_exit(
+    [info]() {
+      delete (info);
+    });
   rmw_qos_profile_t adapted_qos_policies =
     rmw_dds_common::qos_profile_update_best_available_for_services(*qos_policies);
   if (
     rmw_init_cs(
-      &info->client, &info->user_callback_data,
-      node, type_supports, service_name, &adapted_qos_policies, false) != RMW_RET_OK)
+      &info->service, &info->user_callback_data,
+      node, type_supports, service_name, &adapted_qos_policies, true) != RMW_RET_OK)
   {
-    delete (info);
     return nullptr;
   }
-  rmw_client_t * rmw_client = rmw_client_allocate();
+  auto cleanup_fini_cs = rcpputils::make_scope_exit(
+    [info]() {
+      rmw_fini_cs(&info->service);
+    });
+  rmw_service_t * rmw_service = rmw_service_allocate();
+  if (!rmw_service) {
+    return nullptr;
+  }
+  auto cleanup_service = rcpputils::make_scope_exit(
+    [rmw_service]() {
+      rmw_service_free(rmw_service);
+    });
   auto common = &node->context->impl->common;
-  RET_NULL_X(rmw_client, goto fail_client);
-  rmw_client->implementation_identifier = eclipse_cyclonedds_identifier;
-  rmw_client->data = info;
-  rmw_client->service_name = reinterpret_cast<const char *>(rmw_allocate(strlen(service_name) + 1));
-  RET_NULL_X(rmw_client->service_name, goto fail_service_name);
-  memcpy(const_cast<char *>(rmw_client->service_name), service_name, strlen(service_name) + 1);
+  rmw_service->implementation_identifier = eclipse_cyclonedds_identifier;
+  rmw_service->data = info;
+  rmw_service->service_name =
+    reinterpret_cast<const char *>(rmw_allocate(strlen(service_name) + 1));
+  if (!rmw_service->service_name) {
+    return nullptr;
+  }
+  auto cleanup_service_name = rcpputils::make_scope_exit(
+    [rmw_service]() {
+      rmw_free(const_cast<char *>(rmw_service->service_name));
+    });
+  memcpy(const_cast<char *>(rmw_service->service_name), service_name, strlen(service_name) + 1);
 
   // Update graph
-  if (RMW_RET_OK != common->update_client_graph(
-      info->client.pub->gid,
-      info->client.sub->gid,
+  if (RMW_RET_OK != common->update_service_graph(
+      info->service.sub->gid,
+      info->service.pub->gid,
       node->name, node->namespace_))
   {
-    static_cast<void>(destroy_client(node, rmw_client, /* destroy_graph = */ false));
     return nullptr;
   }
 
-  return rmw_client;
-fail_service_name:
-  rmw_client_free(rmw_client);
-fail_client:
-  rmw_fini_cs(&info->client);
-  delete info;
-  return nullptr;
+  cleanup_service_name.cancel();
+  cleanup_service.cancel();
+  cleanup_fini_cs.cancel();
+  cleanup_info.cancel();
+  return rmw_service;
 }
 
-extern "C" rmw_ret_t rmw_destroy_client(rmw_node_t * node, rmw_client_t * client)
-{
-  return destroy_client(node, client);
-}
-
-static rmw_ret_t destroy_service(
-  const rmw_node_t * node, rmw_service_t * service, bool destroy_graph = true)
+extern "C" rmw_ret_t rmw_destroy_service(rmw_node_t * node, rmw_service_t * service)
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
@@ -5179,16 +5242,14 @@ static rmw_ret_t destroy_service(
   auto info = static_cast<CddsService *>(service->data);
   clean_waitset_caches();
 
-  if (destroy_graph) {
-    // Update graph
-    auto common = &node->context->impl->common;
-    if (RMW_RET_OK != common->destroy_service_graph(
-        info->service.sub->gid,
-        info->service.pub->gid,
-        node->name, node->namespace_))
-    {
-      RMW_SET_ERROR_MSG("failed to publish ParticipantEntitiesInfo when destroying service");
-    }
+  // Update graph
+  auto common = &node->context->impl->common;
+  if (RMW_RET_OK != common->destroy_service_graph(
+      info->service.sub->gid,
+      info->service.pub->gid,
+      node->name, node->namespace_))
+  {
+    RMW_SET_ERROR_MSG("failed to publish ParticipantEntitiesInfo when destroying service");
   }
 
   rmw_fini_cs(&info->service);
@@ -5196,58 +5257,6 @@ static rmw_ret_t destroy_service(
   rmw_free(const_cast<char *>(service->service_name));
   rmw_service_free(service);
   return RMW_RET_OK;
-}
-
-extern "C" rmw_service_t * rmw_create_service(
-  const rmw_node_t * node,
-  const rosidl_service_type_support_t * type_supports,
-  const char * service_name,
-  const rmw_qos_profile_t * qos_policies)
-{
-  RMW_CHECK_ARGUMENT_FOR_NULL(qos_policies, nullptr);
-  CddsService * info = new CddsService();
-  rmw_qos_profile_t adapted_qos_policies =
-    rmw_dds_common::qos_profile_update_best_available_for_services(*qos_policies);
-  if (
-    rmw_init_cs(
-      &info->service, &info->user_callback_data,
-      node, type_supports, service_name, &adapted_qos_policies, true) != RMW_RET_OK)
-  {
-    delete (info);
-    return nullptr;
-  }
-  rmw_service_t * rmw_service = rmw_service_allocate();
-  auto common = &node->context->impl->common;
-  RET_NULL_X(rmw_service, goto fail_service);
-  rmw_service->implementation_identifier = eclipse_cyclonedds_identifier;
-  rmw_service->data = info;
-  rmw_service->service_name =
-    reinterpret_cast<const char *>(rmw_allocate(strlen(service_name) + 1));
-  RET_NULL_X(rmw_service->service_name, goto fail_service_name);
-  memcpy(const_cast<char *>(rmw_service->service_name), service_name, strlen(service_name) + 1);
-
-  // Update graph
-  if (RMW_RET_OK != common->update_service_graph(
-      info->service.sub->gid,
-      info->service.pub->gid,
-      node->name, node->namespace_))
-  {
-    static_cast<void>(destroy_service(node, rmw_service, /* destroy_graph = */ false));
-    return nullptr;
-  }
-
-  return rmw_service;
-fail_service_name:
-  rmw_service_free(rmw_service);
-fail_service:
-  rmw_fini_cs(&info->service);
-  delete info;
-  return nullptr;
-}
-
-extern "C" rmw_ret_t rmw_destroy_service(rmw_node_t * node, rmw_service_t * service)
-{
-  return destroy_service(node, service);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
