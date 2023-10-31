@@ -1767,7 +1767,7 @@ extern "C" rmw_node_t * rmw_create_node(
   memcpy(const_cast<char *>(node->namespace_), namespace_, strlen(namespace_) + 1);
 
   auto common = &context->impl->common;
-  rmw_ret_t rmw_ret = common->update_node_graph(
+  rmw_ret_t rmw_ret = common->add_node_graph(
     name, namespace_);
   if (RMW_RET_OK != rmw_ret) {
     return nullptr;
@@ -1793,7 +1793,7 @@ extern "C" rmw_ret_t rmw_destroy_node(rmw_node_t * node)
   auto node_impl = static_cast<CddsNode *>(node->data);
 
   auto common = &node->context->impl->common;
-  result_ret = common->destroy_node_graph(
+  result_ret = common->remove_node_graph(
     node->name, node->namespace_);
 
   rmw_context_t * context = node->context;
@@ -2648,7 +2648,7 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
   // Update graph
   auto common = &node->context->impl->common;
   const auto cddspub = static_cast<const CddsPublisher *>(pub->data);
-  if (RMW_RET_OK != common->update_publisher_graph(
+  if (RMW_RET_OK != common->add_publisher_graph(
       cddspub->gid,
       node->name, node->namespace_))
   {
@@ -2939,7 +2939,7 @@ extern "C" rmw_ret_t rmw_destroy_publisher(rmw_node_t * node, rmw_publisher_t * 
   rmw_error_state_t error_state;
   auto common = &node->context->impl->common;
   const auto cddspub = static_cast<const CddsPublisher *>(publisher->data);
-  rmw_ret_t publish_ret = common->destroy_publisher_graph(
+  rmw_ret_t publish_ret = common->remove_publisher_graph(
     cddspub->gid,
     node->name, node->namespace_);
   if (RMW_RET_OK != publish_ret) {
@@ -3178,7 +3178,7 @@ extern "C" rmw_subscription_t * rmw_create_subscription(
   // Update graph
   auto common = &node->context->impl->common;
   const auto cddssub = static_cast<const CddsSubscription *>(sub->data);
-  if (RMW_RET_OK != common->update_subscriber_graph(
+  if (RMW_RET_OK != common->add_subscriber_graph(
       cddssub->gid,
       node->name, node->namespace_))
   {
@@ -3297,7 +3297,7 @@ extern "C" rmw_ret_t rmw_destroy_subscription(rmw_node_t * node, rmw_subscriptio
   rmw_error_string_t error_string;
   auto common = &node->context->impl->common;
   const auto cddssub = static_cast<const CddsSubscription *>(subscription->data);
-  ret = common->destroy_publisher_graph(
+  ret = common->remove_publisher_graph(
     cddssub->gid,
     node->name, node->namespace_);
   if (RMW_RET_OK != ret) {
@@ -5113,7 +5113,7 @@ extern "C" rmw_client_t * rmw_create_client(
   memcpy(const_cast<char *>(rmw_client->service_name), service_name, strlen(service_name) + 1);
 
   // Update graph
-  if (RMW_RET_OK != common->update_client_graph(
+  if (RMW_RET_OK != common->add_client_graph(
       info->client.pub->gid,
       info->client.sub->gid,
       node->name, node->namespace_))
@@ -5147,7 +5147,7 @@ extern "C" rmw_ret_t rmw_destroy_client(rmw_node_t * node, rmw_client_t * client
 
   // Update graph
   auto common = &node->context->impl->common;
-  if (RMW_RET_OK != common->destroy_client_graph(
+  if (RMW_RET_OK != common->remove_client_graph(
       info->client.pub->gid,
       info->client.sub->gid,
       node->name, node->namespace_))
@@ -5210,7 +5210,7 @@ extern "C" rmw_service_t * rmw_create_service(
   memcpy(const_cast<char *>(rmw_service->service_name), service_name, strlen(service_name) + 1);
 
   // Update graph
-  if (RMW_RET_OK != common->update_service_graph(
+  if (RMW_RET_OK != common->add_service_graph(
       info->service.sub->gid,
       info->service.pub->gid,
       node->name, node->namespace_))
@@ -5244,7 +5244,7 @@ extern "C" rmw_ret_t rmw_destroy_service(rmw_node_t * node, rmw_service_t * serv
 
   // Update graph
   auto common = &node->context->impl->common;
-  if (RMW_RET_OK != common->destroy_service_graph(
+  if (RMW_RET_OK != common->remove_service_graph(
       info->service.sub->gid,
       info->service.pub->gid,
       node->name, node->namespace_))
