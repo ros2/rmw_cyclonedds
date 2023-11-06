@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+2.0.0 (2023-11-06)
+------------------
 * avoid using dds common public mutex directly (`#474 <https://github.com/ros2/rmw_cyclonedds/issues/474>`_)
 * Contributors: Chen Lihui
 
