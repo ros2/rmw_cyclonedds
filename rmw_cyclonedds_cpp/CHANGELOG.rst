@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* avoid using dds common public mutex directly (`#474 <https://github.com/ros2/rmw_cyclonedds/issues/474>`_)
+* Contributors: Chen Lihui
+
 1.10.0 (2023-10-04)
 -------------------
 * Add rmw count clients,services impl (`#427 <https://github.com/ros2/rmw_cyclonedds/issues/427>`_)
