@@ -2024,6 +2024,7 @@ extern "C" rmw_ret_t rmw_publish_serialized_message(
     serialized_message, "serialized message handle is null",
     return RMW_RET_INVALID_ARGUMENT);
   auto pub = static_cast<CddsPublisher *>(publisher->data);
+  TRACETOOLS_TRACEPOINT(rmw_publish, serialized_message);
 
   struct ddsi_serdata * d = serdata_rmw_from_serialized_message(
     pub->sertype, serialized_message->buffer, serialized_message->buffer_length);
@@ -3506,7 +3507,12 @@ static rmw_ret_t rmw_take_ser_int(
       if (message_info) {
         message_info_from_sample_info(info, message_info);
       }
-
+    TRACETOOLS_TRACEPOINT(
+      rmw_take,
+      static_cast<const void *>(subscription),
+      static_cast<const void *>(serialized_message),
+      (message_info ? message_info->source_timestamp : 0LL),
+      *taken);
       // taking a serialized msg from shared memory
 #ifdef DDS_HAS_SHM
       if (d->iox_chunk != nullptr) {
