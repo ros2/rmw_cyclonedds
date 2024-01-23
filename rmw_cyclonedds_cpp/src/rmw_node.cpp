@@ -1999,8 +1999,9 @@ extern "C" rmw_ret_t rmw_publish(
     return RMW_RET_INVALID_ARGUMENT);
   auto pub = static_cast<CddsPublisher *>(publisher->data);
   assert(pub);
-  TRACETOOLS_TRACEPOINT(rmw_publish, ros_message);
-  if (dds_write(pub->enth, ros_message) >= 0) {
+  const dds_time_t tstamp = dds_time();
+  TRACETOOLS_TRACEPOINT(rmw_publish, (const void *)publisher, ros_message, tstamp);
+  if (dds_write_ts(pub->enth, ros_message, tstamp) >= 0) {
     return RMW_RET_OK;
   } else {
     RMW_SET_ERROR_MSG("failed to publish data");
@@ -2070,12 +2071,15 @@ static rmw_ret_t publish_loaned_int(
 
   // if the publisher allow loaning
   if (cdds_publisher->is_loaning_available) {
-    TRACETOOLS_TRACEPOINT(rmw_publish, ros_message);
     auto d = new serdata_rmw(cdds_publisher->sertype, ddsi_serdata_kind::SDK_DATA);
     d->iox_chunk = ros_message;
     // since we write the loaned chunk here, set the data state to raw
     shm_set_data_state(d->iox_chunk, IOX_CHUNK_CONTAINS_RAW_DATA);
-    if (dds_writecdr(cdds_publisher->enth, d) >= 0) {
+    const dds_time_t tstamp = dds_time();
+    d->timestamp.v = tstamp;
+    d->statusinfo = 0;
+    TRACETOOLS_TRACEPOINT(rmw_publish, (const void *)publisher, ros_message, tstamp);
+    if (dds_forwardcdr(cdds_publisher->enth, d) >= 0) {
       return RMW_RET_OK;
     } else {
       RMW_SET_ERROR_MSG("Failed to publish data");
