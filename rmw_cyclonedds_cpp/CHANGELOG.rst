@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Add timestamp to rmw_publish tracepoint (`#454 <https://github.com/ros2/rmw_cyclonedds/issues/454>`_)
+* Contributors: Christopher Wecht
+
 2.0.0 (2023-11-06)
 ------------------
 * avoid using dds common public mutex directly (`#474 <https://github.com/ros2/rmw_cyclonedds/issues/474>`_)
