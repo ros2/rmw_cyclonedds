@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+2.1.0 (2024-01-24)
+------------------
 * Add timestamp to rmw_publish tracepoint (`#454 <https://github.com/ros2/rmw_cyclonedds/issues/454>`_)
 * Contributors: Christopher Wecht
 
