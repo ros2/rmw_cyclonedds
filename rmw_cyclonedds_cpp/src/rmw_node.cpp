@@ -2024,11 +2024,12 @@ extern "C" rmw_ret_t rmw_publish_serialized_message(
     serialized_message, "serialized message handle is null",
     return RMW_RET_INVALID_ARGUMENT);
   auto pub = static_cast<CddsPublisher *>(publisher->data);
-   const dds_time_t tstamp = dds_time();
+  const dds_time_t tstamp = dds_time();
   TRACETOOLS_TRACEPOINT(rmw_publish, (const void *)publisher, serialized_message, tstamp);
 
   struct ddsi_serdata * d = serdata_rmw_from_serialized_message(
     pub->sertype, serialized_message->buffer, serialized_message->buffer_length);
+  d->timestamp.v = tstamp;
 
 #ifdef DDS_HAS_SHM
   // publishing a serialized message when SHM is available
