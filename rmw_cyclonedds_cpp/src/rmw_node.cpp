@@ -2030,6 +2030,7 @@ extern "C" rmw_ret_t rmw_publish_serialized_message(
   struct ddsi_serdata * d = serdata_rmw_from_serialized_message(
     pub->sertype, serialized_message->buffer, serialized_message->buffer_length);
   d->timestamp.v = tstamp;
+  d->statusinfo = 0;
 
 #ifdef DDS_HAS_SHM
   // publishing a serialized message when SHM is available
