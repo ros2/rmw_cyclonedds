@@ -2043,7 +2043,7 @@ extern "C" rmw_ret_t rmw_publish_serialized_message(
   }
 #endif
 
-  const bool ok = (dds_writecdr(pub->enth, d) >= 0);
+  const bool ok = (dds_forwardcdr(pub->enth, d) >= 0);
   return ok ? RMW_RET_OK : RMW_RET_ERROR;
 }
 
