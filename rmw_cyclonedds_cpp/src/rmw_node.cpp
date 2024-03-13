@@ -117,27 +117,10 @@ using namespace std::literals::chrono_literals;
 #define RET_NULL_X(var, code) do {if (!var) {RET_ERR_X(#var " is null", code);}} while (0)
 #define RET_ALLOC_X(var, code) do {if (!var) {RET_ERR_X("failed to allocate " #var, code);} \
 } while (0)
-#define RET_WRONG_IMPLID_X(var, code) do { \
-    if ((var)->implementation_identifier != eclipse_cyclonedds_identifier) { \
-      RET_ERR_X(#var " not from this implementation", code); \
-    } \
-} while (0)
-#define RET_NULL_OR_EMPTYSTR_X(var, code) do { \
-    if (!var || strlen(var) == 0) { \
-      RET_ERR_X(#var " is null or empty string", code); \
-    } \
-} while (0)
+
 #define RET_ERR(msg) RET_ERR_X(msg, return RMW_RET_ERROR)
 #define RET_NULL(var) RET_NULL_X(var, return RMW_RET_ERROR)
 #define RET_ALLOC(var) RET_ALLOC_X(var, return RMW_RET_ERROR)
-#define RET_WRONG_IMPLID(var) RET_WRONG_IMPLID_X(var, return RMW_RET_INCORRECT_RMW_IMPLEMENTATION)
-#define RET_NULL_OR_EMPTYSTR(var) RET_NULL_OR_EMPTYSTR_X(var, return RMW_RET_ERROR)
-#define RET_EXPECTED(func, expected_ret, error_msg, code) do { \
-    if ((expected_ret) != (func)) \
-    { \
-      RET_ERR_X(error_msg, code); \
-    } \
-} while (0)
 
 using rmw_dds_common::msg::ParticipantEntitiesInfo;
 
@@ -804,10 +787,8 @@ extern "C" rmw_ret_t rmw_init_options_copy(const rmw_init_options_t * src, rmw_i
     return RMW_RET_INVALID_ARGUMENT;
   }
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    src,
-    src->implementation_identifier,
-    eclipse_cyclonedds_identifier,
-    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+    init options copy, src->implementation_identifier,
+    eclipse_cyclonedds_identifier, return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   if (NULL != dst->implementation_identifier) {
     RMW_SET_ERROR_MSG("expected zero-initialized dst");
     return RMW_RET_INVALID_ARGUMENT;
@@ -838,10 +819,8 @@ extern "C" rmw_ret_t rmw_init_options_fini(rmw_init_options_t * init_options)
     return RMW_RET_INVALID_ARGUMENT;
   }
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    init_options,
-    init_options->implementation_identifier,
-    eclipse_cyclonedds_identifier,
-    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+    init options, init_options->implementation_identifier,
+    eclipse_cyclonedds_identifier, return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   rcutils_allocator_t * allocator = &init_options->allocator;
   RCUTILS_CHECK_ALLOCATOR(allocator, return RMW_RET_INVALID_ARGUMENT);
 
@@ -1552,17 +1531,15 @@ static void * init_and_alloc_sample(
 {
   // initialise the data allocator
   if (alloc_on_heap) {
-    RET_EXPECTED(
-      dds_data_allocator_init_heap(&entity->data_allocator),
-      DDS_RETCODE_OK,
-      "Reader data allocator initialization failed for heap",
-      return nullptr);
+    if (dds_data_allocator_init_heap(&entity->data_allocator) != DDS_RETCODE_OK) {
+      RMW_SET_ERROR_MSG("Reader data allocator initialization failed for heap");
+      return nullptr;
+    }
   } else {
-    RET_EXPECTED(
-      dds_data_allocator_init(entity->enth, &entity->data_allocator),
-      DDS_RETCODE_OK,
-      "Writer allocator initialisation failed",
-      return nullptr);
+    if (dds_data_allocator_init(entity->enth, &entity->data_allocator) != DDS_RETCODE_OK) {
+      RMW_SET_ERROR_MSG("Writer allocator initialisation failed");
+      return nullptr;
+    }
   }
   // allocate memory for message + header
   // the header will be initialized and the chunk pointer will be returned
@@ -1583,19 +1560,15 @@ static rmw_ret_t fini_and_free_sample(entityT & entity, void * loaned_message)
   // fini the message
   rmw_cyclonedds_cpp::fini_message(&entity->type_supports, loaned_message);
   // free the message memory
-  RET_EXPECTED(
-    dds_data_allocator_free(
-      &entity->data_allocator,
-      loaned_message),
-    DDS_RETCODE_OK,
-    "Failed to free the loaned message",
-    return RMW_RET_ERROR);
+  if (dds_data_allocator_free(&entity->data_allocator, loaned_message) != DDS_RETCODE_OK) {
+    RMW_SET_ERROR_MSG("Failed to free the loaned message");
+    return RMW_RET_ERROR;
+  }
   // fini the allocator
-  RET_EXPECTED(
-    dds_data_allocator_fini(&entity->data_allocator),
-    DDS_RETCODE_OK,
-    "Failed to fini data allocator",
-    return RMW_RET_ERROR);
+  if (dds_data_allocator_fini(&entity->data_allocator) != DDS_RETCODE_OK) {
+    RMW_SET_ERROR_MSG("Failed to fini data allocator");
+    return RMW_RET_ERROR;
+  }
   return RMW_RET_OK;
 }
 
@@ -1610,9 +1583,7 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
     "expected initialized init options",
     return RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    options,
-    options->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    options, options->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_FOR_NULL_WITH_MSG(
     options->enclave,
@@ -1663,9 +1634,7 @@ extern "C" rmw_ret_t rmw_shutdown(rmw_context_t * context)
     "expected initialized context",
     return RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    context,
-    context->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    context, context->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   context->impl->is_shutdown = true;
   return RMW_RET_OK;
@@ -1679,9 +1648,7 @@ extern "C" rmw_ret_t rmw_context_fini(rmw_context_t * context)
     "expected initialized context",
     return RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    context,
-    context->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    context, context->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   if (!context->impl->is_shutdown) {
     RMW_SET_ERROR_MSG("context has not been shutdown");
@@ -1704,9 +1671,7 @@ extern "C" rmw_node_t * rmw_create_node(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(context, nullptr);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    context,
-    context->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    context, context->implementation_identifier, eclipse_cyclonedds_identifier,
     return nullptr);
   RMW_CHECK_FOR_NULL_WITH_MSG(
     context->impl,
@@ -1786,9 +1751,7 @@ extern "C" rmw_ret_t rmw_destroy_node(rmw_node_t * node)
   rmw_ret_t result_ret = RMW_RET_OK;
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   auto node_impl = static_cast<CddsNode *>(node->data);
 
@@ -1808,7 +1771,9 @@ extern "C" rmw_ret_t rmw_destroy_node(rmw_node_t * node)
 extern "C" const rmw_guard_condition_t * rmw_node_get_graph_guard_condition(const rmw_node_t * node)
 {
   RET_NULL_X(node, return nullptr);
-  RET_WRONG_IMPLID_X(node, return nullptr);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
+    return nullptr);
   auto node_impl = static_cast<CddsNode *>(node->data);
   RET_NULL_X(node_impl, return nullptr);
   return node->context->impl->common.graph_guard_condition;
@@ -2460,7 +2425,11 @@ static CddsPublisher * create_cdds_publisher(
   const char * topic_name,
   const rmw_qos_profile_t * qos_policies)
 {
-  RET_NULL_OR_EMPTYSTR_X(topic_name, return nullptr);
+  if (!topic_name || topic_name[0] == '\0') {
+    RMW_SET_ERROR_MSG("topic_name is null or empty string");
+    return nullptr;
+  }
+
   RET_NULL_X(qos_policies, return nullptr);
   const rosidl_message_type_support_t * type_support = get_typesupport(type_supports);
   RET_NULL_X(type_support, return nullptr);
@@ -2591,9 +2560,7 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(node, nullptr);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return nullptr);
   RMW_CHECK_ARGUMENT_FOR_NULL(type_supports, nullptr);
   RMW_CHECK_ARGUMENT_FOR_NULL(topic_name, nullptr);
@@ -2668,9 +2635,7 @@ extern "C" rmw_ret_t rmw_get_gid_for_publisher(const rmw_publisher_t * publisher
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(publisher, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    publisher,
-    publisher->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    publisher, publisher->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_ARGUMENT_FOR_NULL(gid, RMW_RET_INVALID_ARGUMENT);
   auto pub = static_cast<const CddsPublisher *>(publisher->data);
@@ -2687,9 +2652,7 @@ extern "C" rmw_ret_t rmw_get_gid_for_client(const rmw_client_t * client, rmw_gid
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(client, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    client,
-    client->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    client, client->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_ARGUMENT_FOR_NULL(gid, RMW_RET_INVALID_ARGUMENT);
 
@@ -2709,15 +2672,11 @@ extern "C" rmw_ret_t rmw_compare_gids_equal(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(gid1, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    gid1,
-    gid1->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    gid1, gid1->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_ARGUMENT_FOR_NULL(gid2, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    gid2,
-    gid2->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    gid2, gid2->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_ARGUMENT_FOR_NULL(result, RMW_RET_INVALID_ARGUMENT);
   /* alignment is potentially lost because of the translation to an array of bytes, so use
@@ -2732,9 +2691,7 @@ extern "C" rmw_ret_t rmw_publisher_count_matched_subscriptions(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(publisher, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    publisher,
-    publisher->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    publisher, publisher->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_ARGUMENT_FOR_NULL(subscription_count, RMW_RET_INVALID_ARGUMENT);
 
@@ -2751,7 +2708,9 @@ extern "C" rmw_ret_t rmw_publisher_count_matched_subscriptions(
 rmw_ret_t rmw_publisher_assert_liveliness(const rmw_publisher_t * publisher)
 {
   RET_NULL(publisher);
-  RET_WRONG_IMPLID(publisher);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    publisher, publisher->implementation_identifier, eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   auto pub = static_cast<CddsPublisher *>(publisher->data);
   if (dds_assert_liveliness(pub->enth) < 0) {
     return RMW_RET_ERROR;
@@ -2765,9 +2724,7 @@ rmw_ret_t rmw_publisher_wait_for_all_acked(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(publisher, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    publisher,
-    publisher->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    publisher, publisher->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
 
   auto pub = static_cast<CddsPublisher *>(publisher->data);
@@ -2796,9 +2753,7 @@ rmw_ret_t rmw_publisher_get_actual_qos(const rmw_publisher_t * publisher, rmw_qo
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(publisher, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    publisher,
-    publisher->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    publisher, publisher->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_ARGUMENT_FOR_NULL(qos, RMW_RET_INVALID_ARGUMENT);
   auto pub = static_cast<CddsPublisher *>(publisher->data);
@@ -2821,9 +2776,7 @@ static rmw_ret_t borrow_loaned_message_int(
   }
   RCUTILS_CHECK_ARGUMENT_FOR_NULL(type_support, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    publisher,
-    publisher->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    publisher, publisher->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RCUTILS_CHECK_ARGUMENT_FOR_NULL(ros_message, RMW_RET_INVALID_ARGUMENT);
   if (*ros_message) {
@@ -2874,9 +2827,7 @@ static rmw_ret_t return_loaned_message_from_publisher_int(
   }
   RCUTILS_CHECK_ARGUMENT_FOR_NULL(loaned_message, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    publisher,
-    publisher->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    publisher, publisher->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
 
   auto cdds_publisher = static_cast<CddsPublisher *>(publisher->data);
@@ -2929,14 +2880,10 @@ extern "C" rmw_ret_t rmw_destroy_publisher(rmw_node_t * node, rmw_publisher_t * 
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_ARGUMENT_FOR_NULL(publisher, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    publisher,
-    publisher->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    publisher, publisher->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
 
   rmw_ret_t ret = RMW_RET_OK;
@@ -2983,7 +2930,10 @@ static CddsSubscription * create_cdds_subscription(
   const rosidl_message_type_support_t * type_supports, const char * topic_name,
   const rmw_qos_profile_t * qos_policies, bool ignore_local_publications)
 {
-  RET_NULL_OR_EMPTYSTR_X(topic_name, return nullptr);
+  if (!topic_name || topic_name[0] == '\0') {
+    RMW_SET_ERROR_MSG("topic_name is null or empty string");
+    return nullptr;
+  }
   RET_NULL_X(qos_policies, return nullptr);
   const rosidl_message_type_support_t * type_support = get_typesupport(type_supports);
   RET_NULL_X(type_support, return nullptr);
@@ -3121,9 +3071,7 @@ extern "C" rmw_subscription_t * rmw_create_subscription(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(node, nullptr);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return nullptr);
   RMW_CHECK_ARGUMENT_FOR_NULL(type_supports, nullptr);
   RMW_CHECK_ARGUMENT_FOR_NULL(topic_name, nullptr);
@@ -3199,9 +3147,7 @@ extern "C" rmw_ret_t rmw_subscription_count_matched_publishers(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(subscription, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    subscription,
-    subscription->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    subscription, subscription->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_ARGUMENT_FOR_NULL(publisher_count, RMW_RET_INVALID_ARGUMENT);
 
@@ -3221,9 +3167,7 @@ extern "C" rmw_ret_t rmw_subscription_get_actual_qos(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(subscription, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    subscription,
-    subscription->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    subscription, subscription->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_ARGUMENT_FOR_NULL(qos, RMW_RET_INVALID_ARGUMENT);
 
@@ -3286,14 +3230,10 @@ extern "C" rmw_ret_t rmw_destroy_subscription(rmw_node_t * node, rmw_subscriptio
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_ARGUMENT_FOR_NULL(subscription, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    subscription,
-    subscription->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    subscription, subscription->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
 
   rmw_ret_t ret = RMW_RET_OK;
@@ -3354,8 +3294,7 @@ static rmw_ret_t rmw_take_int(
     subscription, RMW_RET_INVALID_ARGUMENT);
 
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    subscription handle,
-    subscription->implementation_identifier, eclipse_cyclonedds_identifier,
+    subscription handle, subscription->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   CddsSubscription * sub = static_cast<CddsSubscription *>(subscription->data);
   RET_NULL(sub);
@@ -3405,11 +3344,9 @@ static rmw_ret_t rmw_take_seq(
 
   RMW_CHECK_ARGUMENT_FOR_NULL(
     subscription, RMW_RET_INVALID_ARGUMENT);
-  RET_WRONG_IMPLID(subscription);
 
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    subscription handle,
-    subscription->implementation_identifier, eclipse_cyclonedds_identifier,
+    subscription handle, subscription->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
 
   if (0u == count) {
@@ -3494,8 +3431,7 @@ static rmw_ret_t rmw_take_ser_int(
   RMW_CHECK_ARGUMENT_FOR_NULL(
     taken, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    subscription handle,
-    subscription->implementation_identifier, eclipse_cyclonedds_identifier,
+    subscription handle, subscription->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   CddsSubscription * sub = static_cast<CddsSubscription *>(subscription->data);
   RET_NULL(sub);
@@ -3580,8 +3516,7 @@ static rmw_ret_t rmw_take_loan_int(
   RMW_CHECK_ARGUMENT_FOR_NULL(
     taken, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    subscription handle,
-    subscription->implementation_identifier, eclipse_cyclonedds_identifier,
+    subscription handle, subscription->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   auto cdds_subscription = static_cast<CddsSubscription *>(subscription->data);
   if (!cdds_subscription) {
@@ -3749,8 +3684,7 @@ static rmw_ret_t return_loaned_message_from_subscription_int(
   RMW_CHECK_ARGUMENT_FOR_NULL(
     loaned_message, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    subscription handle,
-    subscription->implementation_identifier, eclipse_cyclonedds_identifier,
+    subscription handle, subscription->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   auto cdds_subscription = static_cast<CddsSubscription *>(subscription->data);
   if (!cdds_subscription) {
@@ -3887,7 +3821,10 @@ extern "C" rmw_ret_t rmw_publisher_event_init(
   rmw_event_t * rmw_event, const rmw_publisher_t * publisher, rmw_event_type_t event_type)
 {
   RET_NULL(publisher);
-  RET_WRONG_IMPLID(publisher);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    publisher, publisher->implementation_identifier, eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+
   return init_rmw_event(
     rmw_event,
     publisher->implementation_identifier,
@@ -3899,7 +3836,9 @@ extern "C" rmw_ret_t rmw_subscription_event_init(
   rmw_event_t * rmw_event, const rmw_subscription_t * subscription, rmw_event_type_t event_type)
 {
   RET_NULL(subscription);
-  RET_WRONG_IMPLID(subscription);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    subscription, subscription->implementation_identifier, eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   return init_rmw_event(
     rmw_event,
     subscription->implementation_identifier,
@@ -3912,7 +3851,9 @@ extern "C" rmw_ret_t rmw_take_event(
   bool * taken)
 {
   RET_NULL(event_handle);
-  RET_WRONG_IMPLID(event_handle);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    event_handle, event_handle->implementation_identifier, eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RET_NULL(taken);
   RET_NULL(event_info);
   switch (event_handle->event_type) {
@@ -4155,7 +4096,9 @@ extern "C" rmw_ret_t rmw_trigger_guard_condition(
   const rmw_guard_condition_t * guard_condition_handle)
 {
   RET_NULL(guard_condition_handle);
-  RET_WRONG_IMPLID(guard_condition_handle);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    guard_condition_handle, guard_condition_handle->implementation_identifier,
+    eclipse_cyclonedds_identifier, return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   auto * gcond_impl = static_cast<CddsGuardCondition *>(guard_condition_handle->data);
   dds_set_guardcondition(gcond_impl->gcondh, true);
   return RMW_RET_OK;
@@ -4224,7 +4167,9 @@ fail_alloc_wait_set:
 extern "C" rmw_ret_t rmw_destroy_wait_set(rmw_wait_set_t * wait_set)
 {
   RET_NULL(wait_set);
-  RET_WRONG_IMPLID(wait_set);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    wait_set, wait_set->implementation_identifier,
+    eclipse_cyclonedds_identifier, return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   auto result = RMW_RET_OK;
   auto ws = static_cast<CddsWaitset *>(wait_set->data);
   RET_NULL(ws);
@@ -4385,7 +4330,9 @@ extern "C" rmw_ret_t rmw_wait(
   rmw_wait_set_t * wait_set, const rmw_time_t * wait_timeout)
 {
   RET_NULL_X(wait_set, return RMW_RET_INVALID_ARGUMENT);
-  RET_WRONG_IMPLID(wait_set);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    wait_set, wait_set->implementation_identifier,
+    eclipse_cyclonedds_identifier, return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   CddsWaitset * ws = static_cast<CddsWaitset *>(wait_set->data);
   RET_NULL(ws);
 
@@ -4410,25 +4357,52 @@ extern "C" rmw_ret_t rmw_wait(
   {
     size_t nelems = 0;
     waitset_detach(ws);
-#define ATTACH(type, var, name, cond) do { \
-    ws->var.resize(0); \
-    if (var) { \
-      ws->var.reserve(var->name ## _count); \
-      for (size_t i = 0; i < var->name ## _count; i++) { \
-        auto x = static_cast<type *>(var->name ## s[i]); \
-        ws->var.push_back(x); \
-        dds_waitset_attach(ws->waitseth, x->cond, nelems); \
-        nelems++; \
-      } \
-    } \
-} \
-  while (0)
-    ATTACH(CddsSubscription, subs, subscriber, rdcondh);
-    ATTACH(CddsGuardCondition, gcs, guard_condition, gcondh);
-    ATTACH(CddsService, srvs, service, service.sub->rdcondh);
-    ATTACH(CddsClient, cls, client, client.sub->rdcondh);
-#undef ATTACH
 
+    // Attach subscriptions
+    ws->subs.resize(0);
+    if (subs) {
+      ws->subs.reserve(subs->subscriber_count);
+      for (size_t i = 0; i < subs->subscriber_count; i++) {
+        auto x = static_cast<CddsSubscription *>(subs->subscribers[i]);
+        ws->subs.push_back(x);
+        dds_waitset_attach(ws->waitseth, x->rdcondh, nelems++);
+      }
+    }
+
+    // Attach guard conditions
+    ws->gcs.resize(0);
+    if (gcs) {
+      ws->gcs.reserve(gcs->guard_condition_count);
+      for (size_t i = 0; i < gcs->guard_condition_count; i++) {
+        auto x = static_cast<CddsGuardCondition *>(gcs->guard_conditions[i]);
+        ws->gcs.push_back(x);
+        dds_waitset_attach(ws->waitseth, x->gcondh, nelems++);
+      }
+    }
+
+    // Attach service servers
+    ws->srvs.resize(0);
+    if (srvs) {
+      ws->srvs.reserve(srvs->service_count);
+      for (size_t i = 0; i < srvs->service_count; i++) {
+        auto x = static_cast<CddsService *>(srvs->services[i]);
+        ws->srvs.push_back(x);
+        dds_waitset_attach(ws->waitseth, x->service.sub->rdcondh, nelems++);
+      }
+    }
+
+    // Attach service clients
+    ws->cls.resize(0);
+    if (cls) {
+      ws->cls.reserve(cls->client_count);
+      for (size_t i = 0; i < cls->client_count; i++) {
+        auto x = static_cast<CddsClient *>(cls->clients[i]);
+        ws->cls.push_back(x);
+        dds_waitset_attach(ws->waitseth, x->client.sub->rdcondh, nelems++);
+      }
+    }
+
+    // Attach events
     ws->evs.resize(0);
     if (evs) {
       std::unordered_set<dds_entity_t> event_entities;
@@ -4468,29 +4442,58 @@ extern "C" rmw_ret_t rmw_wait(
 
   {
     dds_attach_t trig_idx = 0;
-    bool dummy;
     size_t nelems = 0;
-#define DETACH(type, var, name, cond, on_triggered) do { \
-    if (var) { \
-      for (size_t i = 0; i < var->name ## _count; i++) { \
-        auto x = static_cast<type *>(var->name ## s[i]); \
-        if (ws->trigs[trig_idx] == static_cast<dds_attach_t>(nelems)) { \
-          on_triggered; \
-          trig_idx++; \
-        } else { \
-          var->name ## s[i] = nullptr; \
-        } \
-        nelems++; \
-      } \
-    } \
-} while (0)
-    DETACH(CddsSubscription, subs, subscriber, rdcondh, (void) x);
-    DETACH(
-      CddsGuardCondition, gcs, guard_condition, gcondh,
-      dds_take_guardcondition(x->gcondh, &dummy));
-    DETACH(CddsService, srvs, service, service.sub->rdcondh, (void) x);
-    DETACH(CddsClient, cls, client, client.sub->rdcondh, (void) x);
-#undef DETACH
+
+    // Detach subscriptions
+    if (subs) {
+      for (size_t i = 0; i < subs->subscriber_count; i++) {
+        if (ws->trigs[trig_idx] == static_cast<dds_attach_t>(nelems)) {
+          trig_idx++;
+        } else {
+          subs->subscribers[i] = nullptr;
+        }
+        nelems++;
+      }
+    }
+
+    // Detach guard conditions
+    if (gcs) {
+      for (size_t i = 0; i < gcs->guard_condition_count; i++) {
+        auto x = static_cast<CddsGuardCondition *>(gcs->guard_conditions[i]);
+        if (ws->trigs[trig_idx] == static_cast<dds_attach_t>(nelems)) {
+          bool dummy;
+          dds_take_guardcondition(x->gcondh, &dummy);
+        } else {
+          gcs->guard_conditions[i] = nullptr;
+        }
+        nelems++;
+      }
+    }
+
+    // Detach service servers
+    if (srvs) {
+      for (size_t i = 0; i < srvs->service_count; i++) {
+        if (ws->trigs[trig_idx] == static_cast<dds_attach_t>(nelems)) {
+          trig_idx++;
+        } else {
+          srvs->services[i] = nullptr;
+        }
+        nelems++;
+      }
+    }
+
+    // Detach service clients
+    if (cls) {
+      for (size_t i = 0; i < cls->client_count; i++) {
+        if (ws->trigs[trig_idx] == static_cast<dds_attach_t>(nelems)) {
+          trig_idx++;
+        } else {
+          cls->clients[i] = nullptr;
+        }
+        nelems++;
+      }
+    }
+
     handle_active_events(evs);
   }
 
@@ -4622,8 +4625,7 @@ extern "C" rmw_ret_t rmw_take_response(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(client, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    client,
-    client->implementation_identifier, eclipse_cyclonedds_identifier,
+    client, client->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   auto info = static_cast<CddsClient *>(client->data);
   dds_time_t source_timestamp;
@@ -4673,8 +4675,7 @@ extern "C" rmw_ret_t rmw_take_request(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(service, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    service,
-    service->implementation_identifier, eclipse_cyclonedds_identifier,
+    service, service->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   auto info = static_cast<CddsService *>(service->data);
   return rmw_take_response_request(
@@ -4751,8 +4752,7 @@ extern "C" rmw_ret_t rmw_send_response(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(service, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    service,
-    service->implementation_identifier, eclipse_cyclonedds_identifier,
+    service, service->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_ARGUMENT_FOR_NULL(request_header, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_ARGUMENT_FOR_NULL(ros_response, RMW_RET_INVALID_ARGUMENT);
@@ -4804,8 +4804,7 @@ extern "C" rmw_ret_t rmw_send_request(
   static std::atomic_uint next_request_id;
   RMW_CHECK_ARGUMENT_FOR_NULL(client, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    client,
-    client->implementation_identifier, eclipse_cyclonedds_identifier,
+    client, client->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_ARGUMENT_FOR_NULL(ros_request, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_ARGUMENT_FOR_NULL(sequence_id, RMW_RET_INVALID_ARGUMENT);
@@ -4890,9 +4889,7 @@ static rmw_ret_t rmw_init_cs(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_ARGUMENT_FOR_NULL(type_supports, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_ARGUMENT_FOR_NULL(service_name, RMW_RET_INVALID_ARGUMENT);
@@ -5136,15 +5133,11 @@ extern "C" rmw_ret_t rmw_destroy_client(rmw_node_t * node, rmw_client_t * client
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_ARGUMENT_FOR_NULL(client, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    client,
-    client->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    client, client->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   auto info = static_cast<CddsClient *>(client->data);
   clean_waitset_caches();
@@ -5233,15 +5226,11 @@ extern "C" rmw_ret_t rmw_destroy_service(rmw_node_t * node, rmw_service_t * serv
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_ARGUMENT_FOR_NULL(service, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    service,
-    service->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    service, service->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   auto info = static_cast<CddsService *>(service->data);
   clean_waitset_caches();
@@ -5276,9 +5265,7 @@ extern "C" rmw_ret_t rmw_get_node_names(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   if (RMW_RET_OK != rmw_check_zero_rmw_string_array(node_names)) {
     return RMW_RET_INVALID_ARGUMENT;
@@ -5304,9 +5291,7 @@ extern "C" rmw_ret_t rmw_get_node_names_with_enclaves(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   if (RMW_RET_OK != rmw_check_zero_rmw_string_array(node_names)) {
     return RMW_RET_INVALID_ARGUMENT;
@@ -5334,9 +5319,7 @@ extern "C" rmw_ret_t rmw_get_topic_names_and_types(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RCUTILS_CHECK_ALLOCATOR_WITH_MSG(
     allocator, "allocator argument is invalid", return RMW_RET_INVALID_ARGUMENT);
@@ -5365,9 +5348,7 @@ extern "C" rmw_ret_t rmw_get_service_names_and_types(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RCUTILS_CHECK_ALLOCATOR_WITH_MSG(
     allocator, "allocator argument is invalid", return RMW_RET_INVALID_ARGUMENT);
@@ -5454,9 +5435,13 @@ extern "C" rmw_ret_t rmw_service_server_is_available(
   bool * is_available)
 {
   RET_NULL(node);
-  RET_WRONG_IMPLID(node);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    node, node->implementation_identifier,
+    eclipse_cyclonedds_identifier, return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RET_NULL(client);
-  RET_WRONG_IMPLID(client);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    client, client->implementation_identifier,
+    eclipse_cyclonedds_identifier, return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RET_NULL(is_available);
   *is_available = false;
 
@@ -5492,9 +5477,7 @@ extern "C" rmw_ret_t rmw_count_publishers(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_ARGUMENT_FOR_NULL(topic_name, RMW_RET_INVALID_ARGUMENT);
   int validation_result = RMW_TOPIC_VALID;
@@ -5520,9 +5503,7 @@ extern "C" rmw_ret_t rmw_count_subscribers(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_ARGUMENT_FOR_NULL(topic_name, RMW_RET_INVALID_ARGUMENT);
   int validation_result = RMW_TOPIC_VALID;
@@ -5548,9 +5529,7 @@ extern "C" rmw_ret_t rmw_count_clients(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_ARGUMENT_FOR_NULL(service_name, RMW_RET_INVALID_ARGUMENT);
   int validation_result = RMW_TOPIC_VALID;
@@ -5576,9 +5555,7 @@ extern "C" rmw_ret_t rmw_count_services(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RMW_CHECK_ARGUMENT_FOR_NULL(service_name, RMW_RET_INVALID_ARGUMENT);
   int validation_result = RMW_TOPIC_VALID;
@@ -5620,9 +5597,7 @@ static rmw_ret_t get_topic_names_and_types_by_node(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RCUTILS_CHECK_ALLOCATOR_WITH_MSG(
     allocator, "allocator argument is invalid", return RMW_RET_INVALID_ARGUMENT);
@@ -5777,9 +5752,7 @@ extern "C" rmw_ret_t rmw_get_publishers_info_by_topic(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RCUTILS_CHECK_ALLOCATOR_WITH_MSG(
     allocator, "allocator argument is invalid", return RMW_RET_INVALID_ARGUMENT);
@@ -5811,9 +5784,7 @@ extern "C" rmw_ret_t rmw_get_subscriptions_info_by_topic(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
-    node,
-    node->implementation_identifier,
-    eclipse_cyclonedds_identifier,
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   RCUTILS_CHECK_ALLOCATOR_WITH_MSG(
     allocator, "allocator argument is invalid", return RMW_RET_INVALID_ARGUMENT);

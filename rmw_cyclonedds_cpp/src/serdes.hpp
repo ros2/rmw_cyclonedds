@@ -174,24 +174,27 @@ public:
     pos += sz * sizeof(wchar_t);
   }
 
+  // *INDENT-OFF*
 #define DESER8_A(T) DESER_A(T, )
 #define DESER_A(T, fn_swap) inline void deserializeA(T * x, size_t cnt) { \
-    if (cnt > 0) { \
-      align(sizeof(T)); \
-      validate_size(cnt, sizeof(T)); \
-      if (swap_bytes) { \
-        for (size_t i = 0; i < cnt; i++) { \
-          x[i] = fn_swap(*reinterpret_cast<const T *>(data + pos)); \
-          pos += sizeof(T); \
-        } \
-      } else { \
-        memcpy( \
-          reinterpret_cast<void *>(x), reinterpret_cast<const void *>(data + pos), \
-          cnt * sizeof(T)); \
-        pos += cnt * sizeof(T); \
+  if (cnt > 0) { \
+    align(sizeof(T)); \
+    validate_size(cnt, sizeof(T)); \
+    if (swap_bytes) { \
+      for (size_t i = 0; i < cnt; i++) { \
+        x[i] = fn_swap(*reinterpret_cast<const T *>(data + pos)); \
+        pos += sizeof(T); \
       } \
+    } else { \
+      memcpy( \
+        reinterpret_cast<void *>(x), reinterpret_cast<const void *>(data + pos), \
+        cnt * sizeof(T)); \
+      pos += cnt * sizeof(T); \
     } \
+  } \
 }
+  // *INDENT-ON*
+
   DESER8_A(char);
   DESER8_A(int8_t);
   DESER8_A(uint8_t);
