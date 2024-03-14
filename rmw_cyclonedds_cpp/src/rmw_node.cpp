@@ -3584,7 +3584,7 @@ static rmw_ret_t rmw_take_ser_int(
     rmw_take,
     static_cast<const void *>(subscription),
     static_cast<const void *>(serialized_message),
-    (message_info ? message_info->source_timestamp : 0LL),
+    0LL,
     *taken);
   return RMW_RET_OK;
 }
