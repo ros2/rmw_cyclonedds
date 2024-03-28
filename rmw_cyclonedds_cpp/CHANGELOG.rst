@@ -2,6 +2,12 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Remove a bunch of unnecessary macros. (`#482 <https://github.com/ros2/rmw_cyclonedds/issues/482>`_)
+* compare string contents but string pointer addresses. (`#481 <https://github.com/ros2/rmw_cyclonedds/issues/481>`_)
+* Contributors: Chris Lalancette, Tomoya Fujita
+
 2.1.0 (2024-01-24)
 ------------------
 * Add timestamp to rmw_publish tracepoint (`#454 <https://github.com/ros2/rmw_cyclonedds/issues/454>`_)
