@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+2.1.1 (2024-03-28)
+------------------
 * Remove a bunch of unnecessary macros. (`#482 <https://github.com/ros2/rmw_cyclonedds/issues/482>`_)
 * compare string contents but string pointer addresses. (`#481 <https://github.com/ros2/rmw_cyclonedds/issues/481>`_)
 * Contributors: Chris Lalancette, Tomoya Fujita
