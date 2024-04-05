@@ -3510,6 +3510,7 @@ static rmw_ret_t rmw_take_ser_int(
       if (message_info) {
         message_info_from_sample_info(info, message_info);
       }
+
       // taking a serialized msg from shared memory
 #ifdef DDS_HAS_SHM
       if (d->iox_chunk != nullptr) {
