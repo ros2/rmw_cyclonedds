@@ -1989,9 +1989,13 @@ extern "C" rmw_ret_t rmw_publish_serialized_message(
     serialized_message, "serialized message handle is null",
     return RMW_RET_INVALID_ARGUMENT);
   auto pub = static_cast<CddsPublisher *>(publisher->data);
+  const dds_time_t tstamp = dds_time();
+  TRACETOOLS_TRACEPOINT(rmw_publish, (const void *)publisher, serialized_message, tstamp);
 
   struct ddsi_serdata * d = serdata_rmw_from_serialized_message(
     pub->sertype, serialized_message->buffer, serialized_message->buffer_length);
+  d->timestamp.v = tstamp;
+  d->statusinfo = 0;
 
 #ifdef DDS_HAS_SHM
   // publishing a serialized message when SHM is available
@@ -2005,7 +2009,7 @@ extern "C" rmw_ret_t rmw_publish_serialized_message(
   }
 #endif
 
-  const bool ok = (dds_writecdr(pub->enth, d) >= 0);
+  const bool ok = (dds_forwardcdr(pub->enth, d) >= 0);
   return ok ? RMW_RET_OK : RMW_RET_ERROR;
 }
 
@@ -3458,6 +3462,12 @@ static rmw_ret_t rmw_take_ser_int(
           serialized_message->buffer_length = size;
           ddsi_serdata_unref(d);
           *taken = true;
+          TRACETOOLS_TRACEPOINT(
+            rmw_take,
+            static_cast<const void *>(subscription),
+            static_cast<const void *>(serialized_message),
+            (message_info ? message_info->source_timestamp : 0LL),
+            *taken);
           return RMW_RET_OK;
         } else if (iox_header->shm_data_state == IOX_CHUNK_CONTAINS_RAW_DATA) {
           if (rmw_serialize(d->iox_chunk, &sub->type_supports, serialized_message) != RMW_RET_OK) {
@@ -3468,6 +3478,12 @@ static rmw_ret_t rmw_take_ser_int(
           }
           ddsi_serdata_unref(d);
           *taken = true;
+          TRACETOOLS_TRACEPOINT(
+            rmw_take,
+            static_cast<const void *>(subscription),
+            static_cast<const void *>(serialized_message),
+            (message_info ? message_info->source_timestamp : 0LL),
+            *taken);
           return RMW_RET_OK;
         } else {
           RMW_SET_ERROR_MSG("The recieved sample over SHM is not initialized");
@@ -3489,12 +3505,24 @@ static rmw_ret_t rmw_take_ser_int(
         serialized_message->buffer_length = size;
         ddsi_serdata_unref(d);
         *taken = true;
+        TRACETOOLS_TRACEPOINT(
+          rmw_take,
+          static_cast<const void *>(subscription),
+          static_cast<const void *>(serialized_message),
+          (message_info ? message_info->source_timestamp : 0LL),
+          *taken);
         return RMW_RET_OK;
       }
     }
     ddsi_serdata_unref(d);
   }
   *taken = false;
+  TRACETOOLS_TRACEPOINT(
+    rmw_take,
+    static_cast<const void *>(subscription),
+    static_cast<const void *>(serialized_message),
+    0LL,
+    *taken);
   return RMW_RET_OK;
 }
 
