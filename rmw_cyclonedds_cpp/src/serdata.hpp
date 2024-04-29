@@ -22,17 +22,12 @@
 #include "bytewise.hpp"
 #include "dds/dds.h"
 #include "dds/ddsi/ddsi_serdata.h"
-#ifdef DDS_HAS_SHM
+#include "cdds_version.hpp"
+
+#if CDDS_VERSION == CDDS_VERSION_0_10 && defined DDS_HAS_SHM
 extern "C" {
 #include "dds/ddsi/ddsi_shm_transport.h"
 }
-#endif  // DDS_HAS_SHM
-
-#if !DDS_HAS_DDSI_SERTYPE
-#define ddsi_sertype ddsi_sertopic
-#define ddsi_sertype_ops ddsi_sertopic_ops
-#define sertype_rmw sertopic_rmw
-#define sertype_rmw_ops sertopic_rmw_ops
 #endif
 
 namespace rmw_cyclonedds_cpp
@@ -53,8 +48,10 @@ struct sertype_rmw : ddsi_sertype
   std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRWriter> cdr_writer;
   bool is_fixed;
   std::mutex serialize_lock;
+#if DDS_HAS_TYPELIB
   struct dds_type_meta_ser type_information;
   struct dds_type_meta_ser type_mapping;
+#endif
 };
 
 class serdata_rmw : public ddsi_serdata
@@ -117,4 +114,5 @@ void create_req_dds_dynamic_type(
 void create_res_dds_dynamic_type(
   const char* type_support_identifier,
   const void * untyped_members, dds_entity_t dds_ppant, struct sertype_rmw * st);
+
 #endif  // SERDATA_HPP_
