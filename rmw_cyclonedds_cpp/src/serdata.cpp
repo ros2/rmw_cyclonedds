@@ -306,9 +306,11 @@ static bool serdata_rmw_to_sample(
     }
   } catch (rmw_cyclonedds_cpp::Exception & e) {
     RMW_SET_ERROR_MSG(e.what());
+    rcutils_reset_error();
     return false;
   } catch (std::runtime_error & e) {
     RMW_SET_ERROR_MSG(e.what());
+    rcutils_reset_error();
     return false;
   }
 
