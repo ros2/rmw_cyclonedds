@@ -3278,7 +3278,7 @@ static void message_info_from_sample_info(
     message_info->publisher_gid.data, &info.publication_handle,
     sizeof(info.publication_handle));
   message_info->source_timestamp = info.source_timestamp;
-  // TODO(iluetkeb) add received timestamp, when implemented by Cyclone
+  // TODO(iluetkeb) get received_timestamp from Cyclone when implemented there
   message_info->received_timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
     std::chrono::steady_clock::now().time_since_epoch()).count();
   message_info->publication_sequence_number = RMW_MESSAGE_INFO_SEQUENCE_NUMBER_UNSUPPORTED;
