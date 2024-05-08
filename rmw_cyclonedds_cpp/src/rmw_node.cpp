@@ -4632,8 +4632,9 @@ static rmw_ret_t rmw_take_response_request(
         static_cast<const void *>(&info.publication_handle), sizeof(info.publication_handle));
       request_header->request_id.sequence_number = wrap.header.seq;
       request_header->source_timestamp = info.source_timestamp;
-      // TODO(iluetkeb) replace with real received timestamp when available in cyclone
-      request_header->received_timestamp = 0;
+      // TODO(iluetkeb) get received_timestamp from Cyclone when implemented there
+      request_header->received_timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
       if (source_timestamp) {
         *source_timestamp = info.source_timestamp;
       }
