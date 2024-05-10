@@ -3278,8 +3278,9 @@ static void message_info_from_sample_info(
     message_info->publisher_gid.data, &info.publication_handle,
     sizeof(info.publication_handle));
   message_info->source_timestamp = info.source_timestamp;
-  // TODO(iluetkeb) add received timestamp, when implemented by Cyclone
-  message_info->received_timestamp = 0;
+  // TODO(iluetkeb) get received_timestamp from Cyclone when implemented there
+  message_info->received_timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
+    std::chrono::system_clock::now().time_since_epoch()).count();
   message_info->publication_sequence_number = RMW_MESSAGE_INFO_SEQUENCE_NUMBER_UNSUPPORTED;
   message_info->reception_sequence_number = RMW_MESSAGE_INFO_SEQUENCE_NUMBER_UNSUPPORTED;
 }
@@ -4631,8 +4632,9 @@ static rmw_ret_t rmw_take_response_request(
         static_cast<const void *>(&info.publication_handle), sizeof(info.publication_handle));
       request_header->request_id.sequence_number = wrap.header.seq;
       request_header->source_timestamp = info.source_timestamp;
-      // TODO(iluetkeb) replace with real received timestamp when available in cyclone
-      request_header->received_timestamp = 0;
+      // TODO(iluetkeb) get received_timestamp from Cyclone when implemented there
+      request_header->received_timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
       if (source_timestamp) {
         *source_timestamp = info.source_timestamp;
       }
