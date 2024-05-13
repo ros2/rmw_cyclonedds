@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+2.2.1 (2024-05-13)
+------------------
 * Set received_timestamp to system_clock::now() in message_info (`#491 <https://github.com/ros2/rmw_cyclonedds/issues/491>`_) (`#493 <https://github.com/ros2/rmw_cyclonedds/issues/493>`_)
   * Set received_timestamp to steady_clock::now() in message_info
   * Use 'system_clock' instead of 'steady_clock'
