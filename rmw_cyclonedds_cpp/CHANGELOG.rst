@@ -2,6 +2,16 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Set received_timestamp to system_clock::now() in message_info (`#491 <https://github.com/ros2/rmw_cyclonedds/issues/491>`_) (`#493 <https://github.com/ros2/rmw_cyclonedds/issues/493>`_)
+  * Set received_timestamp to steady_clock::now() in message_info
+  * Use 'system_clock' instead of 'steady_clock'
+  * Also update receive_timestamp for services.
+  (cherry picked from commit 76c9d8f38a03d160b258902af6d1d06f6ed9391e)
+  Co-authored-by: Michael Orlov <morlovmr@gmail.com>
+* Contributors: mergify[bot]
+
 2.2.0 (2024-04-09)
 ------------------
 * Add tracepoint for publish/subscribe serialized message (`#485 <https://github.com/ros2/rmw_cyclonedds/issues/485>`_)
