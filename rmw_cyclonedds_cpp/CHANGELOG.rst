@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.0.0 (2024-06-17)
+------------------
 * Make rmw_service_server_is_available return RMW_RET_INVALID_ARGUMENT (`#496 <https://github.com/ros2/rmw_cyclonedds/issues/496>`_)
 * Use rmw_namespace_validation_result_string() in rmw_create_node (`#497 <https://github.com/ros2/rmw_cyclonedds/issues/497>`_)
 * Make rmw_destroy_wait_set return RMW_RET_INVALID_ARGUMENT (`#498 <https://github.com/ros2/rmw_cyclonedds/issues/498>`_)
