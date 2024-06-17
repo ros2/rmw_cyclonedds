@@ -2,6 +2,14 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Make rmw_service_server_is_available return RMW_RET_INVALID_ARGUMENT (`#496 <https://github.com/ros2/rmw_cyclonedds/issues/496>`_)
+* Use rmw_namespace_validation_result_string() in rmw_create_node (`#497 <https://github.com/ros2/rmw_cyclonedds/issues/497>`_)
+* Make rmw_destroy_wait_set return RMW_RET_INVALID_ARGUMENT (`#498 <https://github.com/ros2/rmw_cyclonedds/issues/498>`_)
+* Set received_timestamp to system_clock::now() in message_info (`#491 <https://github.com/ros2/rmw_cyclonedds/issues/491>`_)
+* Contributors: Christophe Bedard, Michael Orlov
+
 2.3.0 (2024-04-26)
 ------------------
 
