@@ -5837,6 +5837,232 @@ extern "C" rmw_ret_t rmw_get_subscriptions_info_by_topic(
     subscriptions_info);
 }
 
+extern "C" rmw_ret_t rmw_get_clients_info_by_service(
+  const rmw_node_t * node,
+  rcutils_allocator_t * allocator,
+  const char * service_name,
+  bool no_mangle,
+  rmw_topic_endpoint_info_array_t * clients_info)
+{
+  RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RCUTILS_CHECK_ALLOCATOR_WITH_MSG(
+    allocator, "allocator argument is invalid", return RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(service_name, RMW_RET_INVALID_ARGUMENT);
+  if (RMW_RET_OK != rmw_topic_endpoint_info_array_check_zero(clients_info)) {
+    return RMW_RET_INVALID_ARGUMENT;
+  }
+  auto common_context = &node->context->impl->common;
+  std::string mangled_rq_topic_name, mangled_rp_topic_name;
+  mangled_rq_topic_name = mangled_rp_topic_name = service_name;
+  DemangleFunction demangle_type = _identity_demangle;
+  if (!no_mangle) {
+    mangled_rq_topic_name = \
+      make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", false);
+    mangled_rp_topic_name = \
+      make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", false);
+    demangle_type = _demangle_if_ros_type;
+  }
+
+  rmw_topic_endpoint_info_array_t publishers_info = \
+    rmw_get_zero_initialized_topic_endpoint_info_array();
+  rmw_ret_t ret = common_context->graph_cache.get_writers_info_by_topic(
+    mangled_rq_topic_name,
+    demangle_type,
+    allocator,
+    &publishers_info);
+  std::unique_ptr<
+    rmw_topic_endpoint_info_array_t,
+    std::function<void(rmw_topic_endpoint_info_array_t *)>>
+  publishers_info_delete_on_error(
+    &publishers_info,
+    [allocator](rmw_topic_endpoint_info_array_t * p) {
+      rmw_ret_t ret = rmw_topic_endpoint_info_array_fini(
+        p,
+        allocator
+      );
+      if (RMW_RET_OK != ret) {
+        RCUTILS_SAFE_FWRITE_TO_STDERR("Failed to destroy publishers_info when function failed.");
+      }
+    }
+  );
+  if (RMW_RET_OK != ret) {
+    return ret;
+  }
+
+  rmw_topic_endpoint_info_array_t subscriptions_info = \
+    rmw_get_zero_initialized_topic_endpoint_info_array();
+  ret = common_context->graph_cache.get_readers_info_by_topic(
+    mangled_rp_topic_name,
+    demangle_type,
+    allocator,
+    &subscriptions_info);
+  std::unique_ptr<
+    rmw_topic_endpoint_info_array_t,
+    std::function<void(rmw_topic_endpoint_info_array_t *)>>
+  subscriptions_info_delete_on_error(
+    &subscriptions_info,
+    [allocator](rmw_topic_endpoint_info_array_t * p) {
+      rmw_ret_t ret = rmw_topic_endpoint_info_array_fini(
+        p,
+        allocator
+      );
+      if (RMW_RET_OK != ret) {
+        RCUTILS_SAFE_FWRITE_TO_STDERR("Failed to destroy subscriptions_info when function failed.");
+      }
+    }
+  );
+  if (RMW_RET_OK != ret) {
+    return ret;
+  }
+
+  size_t total_size = publishers_info.size + subscriptions_info.size;
+  ret = rmw_topic_endpoint_info_array_init_with_size(clients_info, total_size, allocator);
+  std::unique_ptr<
+    rmw_topic_endpoint_info_array_t,
+    std::function<void(rmw_topic_endpoint_info_array_t *)>>
+  clients_info_delete_on_error(
+    clients_info,
+    [allocator](rmw_topic_endpoint_info_array_t * p) {
+      rmw_ret_t ret = rmw_topic_endpoint_info_array_fini(
+        p,
+        allocator
+      );
+      if (RMW_RET_OK != ret) {
+        RCUTILS_SAFE_FWRITE_TO_STDERR("Failed to destroy clients_info when function failed.");
+      }
+    }
+  );
+  if (RMW_RET_OK != ret) {
+    return ret;
+  }
+  for (size_t i = 0; i < publishers_info.size; ++i) {
+    clients_info->info_array[i] = publishers_info.info_array[i];
+  }
+  for (size_t i = 0; i < subscriptions_info.size; ++i) {
+    clients_info->info_array[publishers_info.size + i] = subscriptions_info.info_array[i];
+  }
+  publishers_info_delete_on_error.release();
+  subscriptions_info_delete_on_error.release();
+  clients_info_delete_on_error.release();
+  return RMW_RET_OK;
+}
+
+extern "C" rmw_ret_t rmw_get_servers_info_by_service(
+  const rmw_node_t * node,
+  rcutils_allocator_t * allocator,
+  const char * service_name,
+  bool no_mangle,
+  rmw_topic_endpoint_info_array_t * servers_info)
+{
+  RMW_CHECK_ARGUMENT_FOR_NULL(node, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    node, node->implementation_identifier, eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  RCUTILS_CHECK_ALLOCATOR_WITH_MSG(
+    allocator, "allocator argument is invalid", return RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(service_name, RMW_RET_INVALID_ARGUMENT);
+  if (RMW_RET_OK != rmw_topic_endpoint_info_array_check_zero(servers_info)) {
+    return RMW_RET_INVALID_ARGUMENT;
+  }
+
+  auto common_context = &node->context->impl->common;
+
+  std::string mangled_rq_topic_name, mangled_rp_topic_name;
+  mangled_rq_topic_name = mangled_rp_topic_name = service_name;
+  DemangleFunction demangle_type = _identity_demangle;
+  if (!no_mangle) {
+    mangled_rq_topic_name = \
+      make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", false);
+    mangled_rp_topic_name = \
+      make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", false);
+    demangle_type = _demangle_if_ros_type;
+  }
+  rmw_topic_endpoint_info_array_t subscriptions_info = \
+    rmw_get_zero_initialized_topic_endpoint_info_array();
+  rmw_ret_t ret = common_context->graph_cache.get_readers_info_by_topic(
+    mangled_rq_topic_name,
+    demangle_type,
+    allocator,
+    &subscriptions_info);
+  std::unique_ptr<
+    rmw_topic_endpoint_info_array_t,
+    std::function<void(rmw_topic_endpoint_info_array_t *)>>
+  subscriptions_info_delete_on_error(
+    &subscriptions_info,
+    [allocator](rmw_topic_endpoint_info_array_t * p) {
+      rmw_ret_t ret = rmw_topic_endpoint_info_array_fini(
+        p,
+        allocator
+      );
+      if (RMW_RET_OK != ret) {
+        RCUTILS_SAFE_FWRITE_TO_STDERR("Failed to destroy subscriptions_info when function failed.");
+      }
+    }
+  );
+  if (RMW_RET_OK != ret) {
+    return ret;
+  }
+  rmw_topic_endpoint_info_array_t publishers_info = \
+    rmw_get_zero_initialized_topic_endpoint_info_array();
+  ret = common_context->graph_cache.get_writers_info_by_topic(
+    mangled_rp_topic_name,
+    demangle_type,
+    allocator,
+    &publishers_info);
+  std::unique_ptr<
+    rmw_topic_endpoint_info_array_t,
+    std::function<void(rmw_topic_endpoint_info_array_t *)>>
+  publishers_info_delete_on_error(
+    &publishers_info,
+    [allocator](rmw_topic_endpoint_info_array_t * p) {
+      rmw_ret_t ret = rmw_topic_endpoint_info_array_fini(
+        p,
+        allocator
+      );
+      if (RMW_RET_OK != ret) {
+        RCUTILS_SAFE_FWRITE_TO_STDERR("Failed to destroy publishers_info when function failed.");
+      }
+    }
+  );
+  if (RMW_RET_OK != ret) {
+    return ret;
+  }
+
+  size_t total_size = publishers_info.size + subscriptions_info.size;
+  ret = rmw_topic_endpoint_info_array_init_with_size(servers_info, total_size, allocator);
+  std::unique_ptr<
+    rmw_topic_endpoint_info_array_t,
+    std::function<void(rmw_topic_endpoint_info_array_t *)>>
+  servers_info_delete_on_error(
+    servers_info,
+    [allocator](rmw_topic_endpoint_info_array_t * p) {
+      rmw_ret_t ret = rmw_topic_endpoint_info_array_fini(
+        p,
+        allocator
+      );
+      if (RMW_RET_OK != ret) {
+        RCUTILS_SAFE_FWRITE_TO_STDERR("Failed to destroy servers_info when function failed.");
+      }
+    }
+  );
+  if (RMW_RET_OK != ret) {
+    return ret;
+  }
+  for (size_t i = 0; i < publishers_info.size; ++i) {
+    servers_info->info_array[i] = publishers_info.info_array[i];
+  }
+  for (size_t i = 0; i < subscriptions_info.size; ++i) {
+    servers_info->info_array[publishers_info.size + i] = subscriptions_info.info_array[i];
+  }
+  publishers_info_delete_on_error.release();
+  subscriptions_info_delete_on_error.release();
+  servers_info_delete_on_error.release();
+  return RMW_RET_OK;
+}
+
 extern "C" rmw_ret_t rmw_qos_profile_check_compatible(
   const rmw_qos_profile_t publisher_profile,
   const rmw_qos_profile_t subscription_profile,
