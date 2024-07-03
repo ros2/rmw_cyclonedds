@@ -47,6 +47,14 @@
 #include "dds/ddsi/ddsi_typelib.h"
 #endif
 
+// When non-zero throw an exception when dynamic type construction fails.  Right now, it
+// should handle everything but WStrings fine, but those are part of the test suite.
+//
+// Not having a dynamic type associated with the topic doesn't do damage, it just means
+// the integration with the DDS type system is missing just like when you don't do this at
+// all.
+#define THROW_ON_DYNAMIC_TYPE_ERROR 0
+
 using TypeSupport_c =
   rmw_cyclonedds_cpp::TypeSupport<rosidl_typesupport_introspection_c__MessageMembers>;
 using TypeSupport_cpp =
@@ -1157,8 +1165,10 @@ void create_msg_dds_dynamic_type(const char * type_support_identifier, const voi
 
     if (construct_dds_dynamic_type(&dstruct, dds_ppant, members))
       dynamic_type_register(st, dstruct, dds_ppant);
+#if THROW_ON_DYNAMIC_TYPE_ERROR
     else
-     throw std::runtime_error("construct_dds_dynamic_type failed");
+      throw std::runtime_error("construct_dds_dynamic_type failed");
+#endif
   } 
   else if (using_introspection_cpp_typesupport(type_support_identifier)) 
   {
@@ -1170,8 +1180,10 @@ void create_msg_dds_dynamic_type(const char * type_support_identifier, const voi
 
     if (construct_dds_dynamic_type(&dstruct, dds_ppant, members))
       dynamic_type_register(st, dstruct, dds_ppant);
+#if THROW_ON_DYNAMIC_TYPE_ERROR
     else
-     throw std::runtime_error("construct_dds_dynamic_type failed");
+      throw std::runtime_error("construct_dds_dynamic_type failed");
+#endif
   } 
   else 
   {
@@ -1198,8 +1210,10 @@ void create_req_dds_dynamic_type(const char * type_support_identifier, const voi
 
     if (construct_dds_dynamic_type(&dstruct, dds_ppant, members->request_members_))
       dynamic_type_register(st, dstruct, dds_ppant);
+#if THROW_ON_DYNAMIC_TYPE_ERROR
     else
-     throw std::runtime_error("construct_dds_dynamic_type failed");
+      throw std::runtime_error("construct_dds_dynamic_type failed");
+#endif
   } 
   else if (using_introspection_cpp_typesupport(type_support_identifier)) 
   {
@@ -1211,8 +1225,10 @@ void create_req_dds_dynamic_type(const char * type_support_identifier, const voi
 
     if (construct_dds_dynamic_type(&dstruct, dds_ppant, members->request_members_))
       dynamic_type_register(st, dstruct, dds_ppant);
+#if THROW_ON_DYNAMIC_TYPE_ERROR
     else
-     throw std::runtime_error("construct_dds_dynamic_type failed");
+      throw std::runtime_error("construct_dds_dynamic_type failed");
+#endif
   } 
   else 
   {
@@ -1238,9 +1254,11 @@ void create_res_dds_dynamic_type(const char * type_support_identifier, const voi
     dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
 
     if (construct_dds_dynamic_type(&dstruct, dds_ppant, members->response_members_))
-      dynamic_type_register(st, dstruct, dds_ppant); 
+      dynamic_type_register(st, dstruct, dds_ppant);
+#if THROW_ON_DYNAMIC_TYPE_ERROR    
     else
-     throw std::runtime_error("construct_dds_dynamic_type failed");
+      throw std::runtime_error("construct_dds_dynamic_type failed");
+#endif
   } 
   else if (using_introspection_cpp_typesupport(type_support_identifier)) 
   {
@@ -1251,8 +1269,10 @@ void create_res_dds_dynamic_type(const char * type_support_identifier, const voi
 
     if (construct_dds_dynamic_type(&dstruct, dds_ppant, members->response_members_))
       dynamic_type_register(st, dstruct, dds_ppant); 
+#if THROW_ON_DYNAMIC_TYPE_ERROR
     else
-     throw std::runtime_error("construct_dds_dynamic_type failed");
+      throw std::runtime_error("construct_dds_dynamic_type failed");
+#endif
   } 
   else 
   {
