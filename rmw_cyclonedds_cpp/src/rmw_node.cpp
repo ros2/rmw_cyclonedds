@@ -4498,6 +4498,7 @@ extern "C" rmw_ret_t rmw_wait(
     dds_attach_t trig_idx = 0;
     bool dummy;
     size_t nelems = 0;
+<<<<<<< HEAD
 #define DETACH(type, var, name, cond, on_triggered) do { \
     if (var) { \
       for (size_t i = 0; i < var->name ## _count; i++) { \
@@ -4519,6 +4520,60 @@ extern "C" rmw_ret_t rmw_wait(
     DETACH(CddsService, srvs, service, service.sub->rdcondh, (void) x);
     DETACH(CddsClient, cls, client, client.sub->rdcondh, (void) x);
 #undef DETACH
+=======
+
+    // Detach subscriptions
+    if (subs) {
+      for (size_t i = 0; i < subs->subscriber_count; i++) {
+        if (ws->trigs[trig_idx] == static_cast<dds_attach_t>(nelems)) {
+          trig_idx++;
+        } else {
+          subs->subscribers[i] = nullptr;
+        }
+        nelems++;
+      }
+    }
+
+    // Detach guard conditions
+    if (gcs) {
+      for (size_t i = 0; i < gcs->guard_condition_count; i++) {
+        auto x = static_cast<CddsGuardCondition *>(gcs->guard_conditions[i]);
+        if (ws->trigs[trig_idx] == static_cast<dds_attach_t>(nelems)) {
+          bool dummy;
+          dds_take_guardcondition(x->gcondh, &dummy);
+          trig_idx++;
+        } else {
+          gcs->guard_conditions[i] = nullptr;
+        }
+        nelems++;
+      }
+    }
+
+    // Detach service servers
+    if (srvs) {
+      for (size_t i = 0; i < srvs->service_count; i++) {
+        if (ws->trigs[trig_idx] == static_cast<dds_attach_t>(nelems)) {
+          trig_idx++;
+        } else {
+          srvs->services[i] = nullptr;
+        }
+        nelems++;
+      }
+    }
+
+    // Detach service clients
+    if (cls) {
+      for (size_t i = 0; i < cls->client_count; i++) {
+        if (ws->trigs[trig_idx] == static_cast<dds_attach_t>(nelems)) {
+          trig_idx++;
+        } else {
+          cls->clients[i] = nullptr;
+        }
+        nelems++;
+      }
+    }
+
+>>>>>>> 899bbdf (Fix the triggering of guard conditions. (#504))
     handle_active_events(evs);
   }
 
