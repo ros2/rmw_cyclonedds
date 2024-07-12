@@ -2,6 +2,17 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+2.2.2 (2024-07-12)
+------------------
+* Fix the triggering of guard conditions. (`#504 <https://github.com/ros2/rmw_cyclonedds/issues/504>`_) (`#505 <https://github.com/ros2/rmw_cyclonedds/issues/505>`_)
+  When a guard condition goes active, we have to remember
+  to increase the trig_idx so we look at the next trigger.
+  Otherwise, we can get into situations where we skip a
+  triggered member.
+  (cherry picked from commit 899bbdf73fb57c8f5926b31e9570f017b8c2fdb9)
+  Co-authored-by: Chris Lalancette <clalancette@gmail.com>
+* Contributors: mergify[bot]
+
 2.2.1 (2024-05-13)
 ------------------
 * Set received_timestamp to system_clock::now() in message_info (`#491 <https://github.com/ros2/rmw_cyclonedds/issues/491>`_) (`#493 <https://github.com/ros2/rmw_cyclonedds/issues/493>`_)
@@ -257,7 +268,7 @@ Changelog for package rmw_cyclonedds_cpp
 * Updated error returns on rmw_take_serialized() and rmw_take_with_message_info() (`#242 <https://github.com/ros2/rmw_cyclonedds/issues/242>`_)
 * Updated error returns on rmw_take() (`#241 <https://github.com/ros2/rmw_cyclonedds/issues/241>`_)
 * Add quality declaration for Cyclone DDS (`#218 <https://github.com/ros2/rmw_cyclonedds/issues/218>`_)
-* Contributors: Erik Boasson, Joe Speed, Jose Tomas Lorente, Scott K Logan 
+* Contributors: Erik Boasson, Joe Speed, Jose Tomas Lorente, Scott K Logan
 
 0.16.0 (2020-09-14)
 -------------------
