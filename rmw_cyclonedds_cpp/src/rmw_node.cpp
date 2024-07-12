@@ -4492,6 +4492,7 @@ extern "C" rmw_ret_t rmw_wait(
         if (ws->trigs[trig_idx] == static_cast<dds_attach_t>(nelems)) {
           bool dummy;
           dds_take_guardcondition(x->gcondh, &dummy);
+          trig_idx++;
         } else {
           gcs->guard_conditions[i] = nullptr;
         }
