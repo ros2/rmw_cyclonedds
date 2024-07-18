@@ -5922,3 +5922,9 @@ extern "C" bool rmw_feature_supported(rmw_feature_t feature)
   (void)feature;
   return false;
 }
+
+rmw_ret_t
+rmw_notify_participant_dynamic_network_interface(rmw_context_t * context)
+{
+  return RMW_RET_UNSUPPORTED;
+}
