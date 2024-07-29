@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.0.2 (2024-07-29)
+------------------
+* remove rmw_localhost_only_t. (`#508 <https://github.com/ros2/rmw_cyclonedds/issues/508>`_)
+* Contributors: Tomoya Fujita
+
 3.0.1 (2024-07-12)
 ------------------
 * Fix the triggering of guard conditions. (`#504 <https://github.com/ros2/rmw_cyclonedds/issues/504>`_)
