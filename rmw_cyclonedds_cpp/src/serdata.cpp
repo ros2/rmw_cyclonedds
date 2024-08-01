@@ -20,15 +20,40 @@
 #include <string>
 #include <utility>
 
+#include "dds/dds.h"
+#include "cdds_version.hpp"
+
 #include "rmw/allocators.h"
 #include "Serialization.hpp"
 #include "TypeSupport2.hpp"
 #include "bytewise.hpp"
+#if CDDS_VERSION == CDDS_VERSION_0_10
 #include "dds/ddsi/q_radmin.h"
+#define ddsi_rdata nn_rdata
+#define DDSI_RMSG_PAYLOADOFF(rmsg, rdata) NN_RMSG_PAYLOADOFF((rmsg), (rdata))
+#define DDSI_RDATA_PAYLOAD_OFF(rdata) NN_RDATA_PAYLOAD_OFF((rdata))
+#else
+#include "dds/ddsi/ddsi_radmin.h"
+#include "dds/ddsc/dds_psmx.h"
+#endif
 #include "rmw/error_handling.h"
 #include "MessageTypeSupport.hpp"
 #include "ServiceTypeSupport.hpp"
 #include "serdes.hpp"
+
+#if DDS_HAS_TYPELIB
+#include "dds/ddsrt/string.h"
+#include "dds/ddsrt/heap.h"
+#include "dds/ddsi/ddsi_typelib.h"
+#endif
+
+// When non-zero throw an exception when dynamic type construction fails.  Right now, it
+// should handle everything but WStrings fine, but those are part of the test suite.
+//
+// Not having a dynamic type associated with the topic doesn't do damage, it just means
+// the integration with the DDS type system is missing just like when you don't do this at
+// all.
+#define THROW_ON_DYNAMIC_TYPE_ERROR 0
 
 using TypeSupport_c =
   rmw_cyclonedds_cpp::TypeSupport<rosidl_typesupport_introspection_c__MessageMembers>;
@@ -142,7 +167,22 @@ static void serialize_into_serdata_rmw(serdata_rmw * d, const void * sample)
 
 static void serialize_into_serdata_rmw_on_demand(serdata_rmw * d)
 {
-#ifdef DDS_HAS_SHM
+#if CDDS_VERSION > CDDS_VERSION_0_10
+  auto type = const_cast<sertype_rmw *>(static_cast<const sertype_rmw *>(d->type));
+  {
+    std::lock_guard<std::mutex> lock(type->serialize_lock);
+    if (d->loan && d->data() == nullptr) {
+      if (d->loan->metadata->sample_state == DDS_LOANED_SAMPLE_STATE_SERIALIZED_DATA) {
+        d->resize(d->loan->metadata->sample_size);
+        memcpy(d->data(), d->loan->sample_ptr, d->loan->metadata->sample_size);
+      } else if (d->loan->metadata->sample_state == DDS_LOANED_SAMPLE_STATE_RAW_DATA) {
+        serialize_into_serdata_rmw(const_cast<serdata_rmw *>(d), d->loan->sample_ptr);
+      } else {
+        RMW_SET_ERROR_MSG("Received iox chunk is uninitialized");
+      }
+    }
+  }
+#elif defined DDS_HAS_SHM
   auto type = const_cast<sertype_rmw *>(static_cast<const sertype_rmw *>(d->type));
   {
     std::lock_guard<std::mutex> lock(type->serialize_lock);
@@ -177,7 +217,11 @@ static void serdata_rmw_free(struct ddsi_serdata * dcmn)
 {
   auto * d = static_cast<serdata_rmw *>(dcmn);
 
-#ifdef DDS_HAS_SHM
+#if CDDS_VERSION > CDDS_VERSION_0_10
+  if (d->loan) {
+    dds_loaned_sample_unref (d->loan);
+  }
+#elif defined DDS_HAS_SHM
   if (d->iox_chunk && d->iox_subscriber) {
     free_iox_chunk(static_cast<iox_sub_t *>(d->iox_subscriber), &d->iox_chunk);
     d->iox_chunk = nullptr;
@@ -189,7 +233,7 @@ static void serdata_rmw_free(struct ddsi_serdata * dcmn)
 static struct ddsi_serdata * serdata_rmw_from_ser(
   const struct ddsi_sertype * type,
   enum ddsi_serdata_kind kind,
-  const struct nn_rdata * fragchain, size_t size)
+  const struct ddsi_rdata * fragchain, size_t size)
 {
   try {
     auto d = std::make_unique<serdata_rmw>(type, kind);
@@ -203,7 +247,7 @@ static struct ddsi_serdata * serdata_rmw_from_ser(
       if (fragchain->maxp1 > off) {
         /* only copy if this fragment adds data */
         const unsigned char * payload =
-          NN_RMSG_PAYLOADOFF(fragchain->rmsg, NN_RDATA_PAYLOAD_OFF(fragchain));
+          DDSI_RMSG_PAYLOADOFF(fragchain->rmsg, DDSI_RDATA_PAYLOAD_OFF(fragchain));
         auto src = payload + off - fragchain->min;
         auto n_bytes = fragchain->maxp1 - off;
         memcpy(cursor, src, n_bytes);
@@ -251,7 +295,7 @@ static struct ddsi_serdata * serdata_rmw_from_keyhash(
   return new serdata_rmw(type, SDK_KEY);
 }
 
-static struct ddsi_serdata * serdata_rmw_from_sample(
+static std::unique_ptr<serdata_rmw> serdata_rmw_from_sample_unique(
   const struct ddsi_sertype * typecmn,
   enum ddsi_serdata_kind kind,
   const void * sample)
@@ -260,14 +304,134 @@ static struct ddsi_serdata * serdata_rmw_from_sample(
     const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(typecmn);
     auto d = std::make_unique<serdata_rmw>(type, kind);
     serialize_into_serdata_rmw(d.get(), sample);
-    return d.release();
+    return d;
   } catch (std::exception & e) {
     RMW_SET_ERROR_MSG(e.what());
     return nullptr;
   }
 }
 
-#ifdef DDS_HAS_SHM
+static struct ddsi_serdata * serdata_rmw_from_sample(
+  const struct ddsi_sertype * typecmn,
+  enum ddsi_serdata_kind kind,
+  const void * sample)
+{
+  return serdata_rmw_from_sample_unique(typecmn, kind, sample).release();
+}
+
+struct ddsi_serdata * serdata_rmw_from_serialized_message(
+  const struct ddsi_sertype * typecmn,
+  const void * raw, size_t size)
+{
+  ddsrt_iovec_t iov;
+  iov.iov_len = static_cast<ddsrt_iov_len_t>(size);
+  if (iov.iov_len != size) {
+    return nullptr;
+  }
+  iov.iov_base = const_cast<void *>(raw);
+  return ddsi_serdata_from_ser_iov(typecmn, SDK_DATA, 1, &iov, size);
+}
+
+#if CDDS_VERSION > CDDS_VERSION_0_10
+static struct ddsi_serdata * serdata_rmw_from_loaned_sample(
+  const struct ddsi_sertype *typecmn, enum ddsi_serdata_kind kind,
+  const char *sample, dds_loaned_sample_t *loaned_sample,
+  bool will_require_cdr)
+{
+  /*
+    type = the type of data being serialized
+    kind = the kind of data contained (key or normal)
+    sample = the raw sample made into the serdata
+    loaned_sample = the loaned buffer in use
+    will_require_cdr = whether we will need the CDR (or a highly likely to need it)
+  */
+  const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(typecmn);
+
+  assert(sample == loaned_sample->sample_ptr);
+  assert(loaned_sample->metadata->sample_state ==
+    (kind == SDK_KEY ? DDS_LOANED_SAMPLE_STATE_RAW_KEY : DDS_LOANED_SAMPLE_STATE_RAW_DATA));
+  assert(loaned_sample->metadata->cdr_identifier == DDSI_RTPS_SAMPLE_NATIVE);
+  assert(loaned_sample->metadata->cdr_options == 0);
+
+  struct std::unique_ptr<serdata_rmw> d;
+  if (will_require_cdr) {
+    // If serialization is/will be required, construct the serdata the normal way
+    d = serdata_rmw_from_sample_unique(type, kind, sample);
+  } else {
+    // If we know there is no neeed for the serialized representation (so only PSMX and "memcpy safe"),
+    // construct an empty serdata and stay away from the serializers
+    d = std::make_unique<serdata_rmw>(type, kind);
+  }
+  if (d == nullptr) {
+    return nullptr;
+  } else {
+    // now owner of loan
+    d->loan = loaned_sample;
+    return d.release();
+  }
+}
+
+static bool loaned_sample_state_to_serdata_kind(
+  dds_loaned_sample_state_t lss,
+  enum ddsi_serdata_kind & kind)
+{
+  switch (lss) {
+    case DDS_LOANED_SAMPLE_STATE_RAW_KEY:
+    case DDS_LOANED_SAMPLE_STATE_SERIALIZED_KEY:
+      kind = SDK_KEY;
+      return true;
+    case DDS_LOANED_SAMPLE_STATE_RAW_DATA:
+    case DDS_LOANED_SAMPLE_STATE_SERIALIZED_DATA:
+      kind = SDK_DATA;
+      return true;
+    case DDS_LOANED_SAMPLE_STATE_UNITIALIZED:
+      // invalid
+      return false;
+  }
+  // "impossible" value
+  return false;
+}
+
+static struct ddsi_serdata * serdata_rmw_from_psmx(
+  const struct ddsi_sertype * typecmn, dds_loaned_sample_t *loaned_sample)
+{
+  try {
+    const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(typecmn);
+    struct dds_psmx_metadata * const md = loaned_sample->metadata;
+    enum ddsi_serdata_kind kind;
+    if (!loaned_sample_state_to_serdata_kind (md->sample_state, kind)) {
+      return nullptr;
+    }
+
+    auto d = std::make_unique<serdata_rmw>(type, kind);
+    d->statusinfo = md->statusinfo;
+    d->timestamp.v = md->timestamp;
+    switch (md->sample_state) {
+      case DDS_LOANED_SAMPLE_STATE_UNITIALIZED:
+        assert (0);
+        return nullptr;
+      case DDS_LOANED_SAMPLE_STATE_RAW_KEY:
+        // nothing to be done for key (yet)
+        break;
+      case DDS_LOANED_SAMPLE_STATE_RAW_DATA:
+        d->loan = loaned_sample;
+        dds_loaned_sample_ref (d->loan);
+        break;
+      case DDS_LOANED_SAMPLE_STATE_SERIALIZED_KEY:
+        // nothing to be done for key (yet)
+        break;
+      case DDS_LOANED_SAMPLE_STATE_SERIALIZED_DATA:
+        // ugly hack - drops `d`, makes a new one ... :(
+        return serdata_rmw_from_serialized_message(typecmn, loaned_sample->sample_ptr,
+        md->sample_size);
+    }
+    return d.release();
+  } catch (std::exception & e) {
+    RMW_SET_ERROR_MSG(e.what());
+    return nullptr;
+  }
+}
+#elif defined DDS_HAS_SHM
 static struct ddsi_serdata * serdata_rmw_from_iox(
   const struct ddsi_sertype * typecmn,
   enum  ddsi_serdata_kind kind, void * sub, void * iox_buffer)
@@ -283,31 +447,13 @@ static struct ddsi_serdata * serdata_rmw_from_iox(
     return nullptr;
   }
 }
-#endif  // DDS_HAS_SHM
-
-struct ddsi_serdata * serdata_rmw_from_serialized_message(
-  const struct ddsi_sertype * typecmn,
-  const void * raw, size_t size)
-{
-  ddsrt_iovec_t iov;
-  iov.iov_len = static_cast<ddsrt_iov_len_t>(size);
-  if (iov.iov_len != size) {
-    return nullptr;
-  }
-  iov.iov_base = const_cast<void *>(raw);
-  return ddsi_serdata_from_ser_iov(typecmn, SDK_DATA, 1, &iov, size);
-}
+#endif
 
 static struct ddsi_serdata * serdata_rmw_to_untyped(const struct ddsi_serdata * dcmn)
 {
   auto d = static_cast<const serdata_rmw *>(dcmn);
-#if DDS_HAS_DDSI_SERTYPE
   auto d1 = new serdata_rmw(d->type, SDK_KEY);
   d1->type = nullptr;
-#else
-  auto d1 = new serdata_rmw(d->topic, SDK_KEY);
-  d1->topic = nullptr;
-#endif
   return d1;
 }
 
@@ -343,11 +489,7 @@ static bool serdata_rmw_to_sample(
     static_cast<void>(bufptr);    // unused
     static_cast<void>(buflim);    // unused
     auto d = static_cast<const serdata_rmw *>(dcmn);
-#if DDS_HAS_DDSI_SERTYPE
     const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(d->type);
-#else
-    const struct sertopic_rmw * type = static_cast<const struct sertopic_rmw *>(d->topic);
-#endif
     assert(bufptr == NULL);
     assert(buflim == NULL);
     if (d->kind != SDK_DATA) {
@@ -495,20 +637,19 @@ static const struct ddsi_serdata_ops serdata_rmw_ops = {
   serdata_rmw_free,
   serdata_rmw_print,
   serdata_rmw_get_keyhash
-#ifdef DDS_HAS_SHM
+#if CDDS_VERSION > CDDS_VERSION_0_10
+  , serdata_rmw_from_loaned_sample,
+  serdata_rmw_from_psmx
+#elif defined DDS_HAS_SHM
   , ddsi_serdata_iox_size,
   serdata_rmw_from_iox
-#endif  // DDS_HAS_SHM
+#endif
 };
 
 static void sertype_rmw_free(struct ddsi_sertype * tpcmn)
 {
   struct sertype_rmw * tp = static_cast<struct sertype_rmw *>(tpcmn);
-#if DDS_HAS_DDSI_SERTYPE
   ddsi_sertype_fini(tpcmn);
-#else
-  ddsi_sertopic_fini(tpcmn);
-#endif
   if (tp->type_support.type_support_) {
     if (using_introspection_c_typesupport(tp->type_support.typesupport_identifier_)) {
       delete static_cast<TypeSupport_c *>(tp->type_support.type_support_);
@@ -517,7 +658,10 @@ static void sertype_rmw_free(struct ddsi_sertype * tpcmn)
     }
     tp->type_support.type_support_ = NULL;
   }
-
+#if DDS_HAS_TYPELIB
+  ddsrt_free((void *)tp->type_information.data);
+  ddsrt_free((void *)tp->type_mapping.data);
+#endif
   delete tp;
 }
 
@@ -632,49 +776,89 @@ bool sertype_serialize_into(
   return true;
 }
 
+#if DDS_HAS_TYPELIB
+static ddsi_typeid_t * sertype_rmw_typeid(const struct ddsi_sertype * d, ddsi_typeid_kind_t kind)
+{
+  assert(d);
+  const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(d);
+  ddsi_typeinfo_t *type_info = ddsi_typeinfo_deser(
+      tp->type_information.data, tp->type_information.sz);
+  if (type_info == NULL) {
+    return NULL;
+  }
+  ddsi_typeid_t *type_id = ddsi_typeinfo_typeid(type_info, kind);
+
+  dds_free_typeinfo(type_info);
+
+  return type_id;
+}
+
+static ddsi_typemap_t * sertype_rmw_typemap(const struct ddsi_sertype * d)
+{
+  assert(d);
+  const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(d);
+  return ddsi_typemap_deser (tp->type_mapping.data, tp->type_mapping.sz);
+}
+
+static ddsi_typeinfo_t * sertype_rmw_typeinfo(const struct ddsi_sertype * d)
+{
+  assert(d);
+  const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(d);
+  return ddsi_typeinfo_deser (tp->type_information.data, tp->type_information.sz);
+}
+
+static struct ddsi_sertype * sertype_rmw_derive_sertype(
+  const struct ddsi_sertype *base_sertype,
+  dds_data_representation_id_t data_representation,
+  dds_type_consistency_enforcement_qospolicy_t tce_qos)
+{
+  const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(base_sertype);
+  struct sertype_rmw *derived_sertype = NULL;
+
+  assert(base_sertype);
+
+  (void) tce_qos;
+
+  if (base_sertype->serdata_ops == &serdata_rmw_ops) {
+    derived_sertype = (struct sertype_rmw *) base_sertype;
+  } else {
+    derived_sertype = static_cast<sertype_rmw *>(ddsrt_memdup (tp, sizeof(*derived_sertype)));
+    ddsrt_atomic_st32 (&derived_sertype->flags_refc, 1);
+    derived_sertype->base_sertype = ddsi_sertype_ref (base_sertype);
+    derived_sertype->serdata_ops = &serdata_rmw_ops;
+    derived_sertype->allowed_data_representation = data_representation;
+  }
+
+  return (struct ddsi_sertype *) derived_sertype;
+}
+#endif
 static const struct ddsi_sertype_ops sertype_rmw_ops = {
-#if DDS_HAS_DDSI_SERTYPE
   ddsi_sertype_v0,
   nullptr,
-#endif
   sertype_rmw_free,
   sertype_rmw_zero_samples,
   sertype_rmw_realloc_samples,
   sertype_rmw_free_samples,
   sertype_rmw_equal,
   sertype_rmw_hash
-#if DDS_HAS_DDSI_SERTYPE
-  /* not yet providing type discovery, assignability checking */
-  , nullptr,
+  /* type discovery, assignability checking only if cyclone has type library */
+#if DDS_HAS_TYPELIB
+  ,
+  sertype_rmw_typeid,
+  sertype_rmw_typemap,
+  sertype_rmw_typeinfo,
+  sertype_rmw_derive_sertype
+#else
+  ,
   nullptr,
   nullptr,
   nullptr,
+  nullptr
+#endif
+  ,
   sertype_get_serialized_size,
   sertype_serialize_into
-#endif
 };
-
-template<typename MembersType>
-ROSIDL_TYPESUPPORT_INTROSPECTION_CPP_LOCAL
-inline std::string create_type_name(const void * untyped_members)
-{
-  auto members = static_cast<const MembersType *>(untyped_members);
-  if (!members) {
-    RMW_SET_ERROR_MSG("members handle is null");
-    return "";
-  }
-
-  std::ostringstream ss;
-  std::string message_namespace(members->message_namespace_);
-  // Find and replace C namespace separator with C++, in case this is using C typesupport
-  message_namespace = std::regex_replace(message_namespace, std::regex("__"), "::");
-  std::string message_name(members->message_name_);
-  if (!message_namespace.empty()) {
-    ss << message_namespace << "::";
-  }
-  ss << "dds_::" << message_name << "_";
-  return ss.str();
-}
 
 static std::string get_type_name(const char * type_support_identifier, void * type_support)
 {
@@ -689,6 +873,444 @@ static std::string get_type_name(const char * type_support_identifier, void * ty
   }
 }
 
+template<typename MembersType>
+ROSIDL_TYPESUPPORT_INTROSPECTION_CPP_LOCAL
+inline std::string create_type_name(const void * untyped_members)
+{
+  auto members = static_cast<const MembersType *>(untyped_members);
+  if (!members) {
+    RMW_SET_ERROR_MSG("members handle is null");
+    return "";
+  }
+
+  std::ostringstream ss;
+  std::string message_namespace(members->message_namespace_);
+  std::string message_name(members->message_name_);
+
+  if (!message_namespace.empty()) {
+    // Find and replace C namespace separator with C++, in case this is using C typesupport
+    message_namespace = std::regex_replace(message_namespace, std::regex("__"), "::");
+    ss << message_namespace << "::";
+  }
+
+  ss << "dds_::" << message_name << "_";
+  return ss.str();
+}
+
+#if DDS_HAS_TYPELIB
+dds_dynamic_type_descriptor_t get_dynamic_type_descriptor_prim(
+  dds_dynamic_type_kind_t kind, const char *name, uint32_t num_bounds, const uint32_t *bounds,
+  dds_dynamic_type_kind_t type)
+{
+  dds_dynamic_type_descriptor_t desc{};
+  desc.kind = kind;
+  desc.name = name;
+  desc.num_bounds = num_bounds;
+  desc.bounds = bounds;
+  desc.element_type = DDS_DYNAMIC_TYPE_SPEC_PRIM(type);
+  return desc;
+}
+
+dds_dynamic_type_descriptor_t get_dynamic_type_descriptor(
+  dds_dynamic_type_kind_t kind, const char *name, uint32_t num_bounds, const uint32_t *bounds,
+  dds_dynamic_type_t type)
+{
+  dds_dynamic_type_descriptor_t desc{};
+  desc.kind = kind;
+  desc.name = name;
+  desc.num_bounds = num_bounds;
+  desc.bounds = bounds;
+  desc.element_type = DDS_DYNAMIC_TYPE_SPEC(type);
+  return desc;
+}
+
+dds_dynamic_member_descriptor_t get_dynamic_member_descriptor_prim(
+  dds_dynamic_type_kind_t type, const char *name)
+{
+  return DDS_DYNAMIC_MEMBER_PRIM(type, name);
+}
+
+dds_dynamic_member_descriptor_t get_dynamic_member_descriptor(
+  dds_dynamic_type_t ddt, const char *name)
+{
+  return DDS_DYNAMIC_MEMBER(ddt, name);
+}
+
+
+template<typename MemberType>
+static void dynamic_type_add_array_prim(
+  dds_dynamic_type_t * dstruct, dds_entity_t dds_ppant, const MemberType * member,
+  const dds_dynamic_type_kind_t type)
+{
+  dds_dynamic_type_t ddt;
+
+  if (member->array_size_) {
+    uint32_t array_size = static_cast<uint32_t>(member->array_size_);
+    if (!member->is_upper_bound_) {
+      ddt = dds_dynamic_type_create(dds_ppant,
+        get_dynamic_type_descriptor_prim(DDS_DYNAMIC_ARRAY, member->name_, 1, &array_size, type));
+    } else {
+      ddt = dds_dynamic_type_create(dds_ppant,
+        get_dynamic_type_descriptor_prim(DDS_DYNAMIC_SEQUENCE, member->name_, 1, &array_size,
+        type));
+    }
+  } else {
+    ddt = dds_dynamic_type_create(dds_ppant,
+       get_dynamic_type_descriptor_prim(DDS_DYNAMIC_SEQUENCE, member->name_, 0, nullptr, type));
+  }
+
+  dds_return_t ret = dds_dynamic_type_add_member(dstruct,
+    get_dynamic_member_descriptor(ddt, member->name_));
+  assert(ret == DDS_RETCODE_OK);
+}
+
+template<typename MemberType>
+static void dynamic_type_add_array(
+  dds_dynamic_type * dstruct, dds_entity_t dds_ppant, const MemberType * member,
+  const dds_dynamic_type_t ddt)
+{
+  dds_dynamic_type_t dseq;
+
+  if (member->array_size_) {
+    uint32_t array_size = static_cast<uint32_t>(member->array_size_);
+    if (!member->is_upper_bound_) {
+      dseq = dds_dynamic_type_create(dds_ppant,
+       get_dynamic_type_descriptor(DDS_DYNAMIC_ARRAY, member->name_, 1, &array_size, ddt));
+    } else {
+      dseq = dds_dynamic_type_create(dds_ppant,
+        get_dynamic_type_descriptor(DDS_DYNAMIC_SEQUENCE, member->name_, 1, &array_size, ddt));
+    }
+  } else {
+    dseq = dds_dynamic_type_create(dds_ppant,
+     get_dynamic_type_descriptor(DDS_DYNAMIC_SEQUENCE, member->name_, 0, nullptr, ddt));
+  }
+
+  dds_return_t ret = dds_dynamic_type_add_member(dstruct,
+    get_dynamic_member_descriptor(dseq, member->name_));
+  assert(ret == DDS_RETCODE_OK);
+}
+
+template<typename MemberType>
+static void dynamic_type_add_member(
+  dds_dynamic_type_t * dstruct, dds_entity_t dds_ppant, const MemberType * member,
+  const dds_dynamic_type_kind_t type)
+{
+  dds_return_t ret;
+
+  assert(member->type_id_ != rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING);
+  assert(member->type_id_ != rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE);
+
+  if (!member->is_array_) {
+    ret = dds_dynamic_type_add_member(dstruct,
+      get_dynamic_member_descriptor_prim(type, member->name_));
+    assert(ret == DDS_RETCODE_OK);
+  } else {
+    dynamic_type_add_array_prim(dstruct, dds_ppant, member, type);
+  }
+}
+
+static void dynamic_type_register(
+  struct sertype_rmw * st, dds_dynamic_type_t dt,
+  dds_entity_t dds_ppant)
+{
+  dds_typeinfo_t *type_info;
+  auto rc = dds_dynamic_type_register(&dt, &type_info);
+  if (rc != DDS_RETCODE_OK) {
+    RMW_SET_ERROR_MSG("dds_dynamic_type_register failed to register type");
+    goto fail_typeinfo;
+  }
+
+  dds_topic_descriptor_t *desc;
+  rc = dds_create_topic_descriptor(
+    DDS_FIND_SCOPE_GLOBAL, dds_ppant, type_info, 0, &desc);
+  if (rc != DDS_RETCODE_OK) {
+    RMW_SET_ERROR_MSG("dds_create_topic_descriptor failed to create descriptor");
+    goto fail_descriptor;
+  }
+
+  st->type_information.data =
+    static_cast<const unsigned char *>(ddsrt_memdup(desc->type_information.data,
+    desc->type_information.sz));
+  st->type_information.sz = desc->type_information.sz;
+  st->type_mapping.data = static_cast<const unsigned char *>(ddsrt_memdup(desc->type_mapping.data,
+    desc->type_mapping.sz));
+  st->type_mapping.sz = desc->type_mapping.sz;
+
+  dds_dynamic_type_unref(&dt);
+fail_descriptor:
+  dds_delete_topic_descriptor(desc);
+fail_typeinfo:
+  dds_free_typeinfo(type_info);
+}
+
+template<typename MembersType>
+static bool construct_dds_dynamic_type(
+  dds_dynamic_type_t * dstruct, dds_entity_t dds_ppant, const MembersType * members)
+{
+  assert(members);
+  assert(dds_ppant);
+
+  dds_return_t ret;
+
+  for (uint32_t i = 0; i < members->member_count_; ++i) {
+    const auto * member = members->members_ + i;
+    switch (member->type_id_) {
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_BOOL:
+        dynamic_type_add_member(dstruct, dds_ppant, member, DDS_DYNAMIC_BOOLEAN);
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_BYTE:
+        dynamic_type_add_member(dstruct, dds_ppant, member, DDS_DYNAMIC_BYTE);
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT8:
+        dynamic_type_add_member(dstruct, dds_ppant, member, DDS_DYNAMIC_UINT8);
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_CHAR:
+        dynamic_type_add_member(dstruct, dds_ppant, member, DDS_DYNAMIC_CHAR8);
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT8:
+        dynamic_type_add_member(dstruct, dds_ppant, member, DDS_DYNAMIC_INT8);
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT32:
+        dynamic_type_add_member(dstruct, dds_ppant, member, DDS_DYNAMIC_FLOAT32);
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT64:
+        dynamic_type_add_member(dstruct, dds_ppant, member, DDS_DYNAMIC_FLOAT64);
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT16:
+        dynamic_type_add_member(dstruct, dds_ppant, member, DDS_DYNAMIC_INT16);
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT16:
+        dynamic_type_add_member(dstruct, dds_ppant, member, DDS_DYNAMIC_UINT16);
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT32:
+        dynamic_type_add_member(dstruct, dds_ppant, member, DDS_DYNAMIC_INT32);
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT32:
+        dynamic_type_add_member(dstruct, dds_ppant, member, DDS_DYNAMIC_UINT32);
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT64:
+        dynamic_type_add_member(dstruct, dds_ppant, member, DDS_DYNAMIC_INT64);
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT64:
+        dynamic_type_add_member(dstruct, dds_ppant, member, DDS_DYNAMIC_UINT64);
+        break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING:
+        {
+          dds_dynamic_type_t ddt;
+          if (member->string_upper_bound_) {
+            uint32_t string_size = static_cast<uint32_t>(member->string_upper_bound_);
+            ddt = dds_dynamic_type_create(dds_ppant,
+              get_dynamic_type_descriptor(DDS_DYNAMIC_STRING8, nullptr, 1, &string_size, {}));
+          } else {
+            ddt = dds_dynamic_type_create(dds_ppant,
+              get_dynamic_type_descriptor(DDS_DYNAMIC_STRING8, nullptr, 0, nullptr, {}));
+          }
+          if (!member->is_array_) {
+            ret = dds_dynamic_type_add_member(dstruct,
+            get_dynamic_member_descriptor(ddt, member->name_));
+            assert(ret == DDS_RETCODE_OK);
+          } else {
+            dynamic_type_add_array(dstruct, dds_ppant, member, ddt);
+          }
+
+          break;
+        }
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE:
+        {
+          if (!member->members_) {
+            RMW_SET_ERROR_MSG("no members value");
+            return false;
+          }
+
+          auto sub_members = static_cast<const MembersType *>(member->members_->data);
+          dds_dynamic_type_t ddt;
+          ddt = dds_dynamic_type_create(dds_ppant,
+            get_dynamic_type_descriptor(DDS_DYNAMIC_STRUCTURE,
+          create_type_name<MembersType>(member->members_->data).c_str(), 0, nullptr, {}));
+
+          dds_dynamic_type_set_extensibility(&ddt, DDS_DYNAMIC_TYPE_EXT_FINAL);
+
+          if (!construct_dds_dynamic_type(&ddt, dds_ppant, sub_members)) {
+            RMW_SET_ERROR_MSG("construct_dds_dynamic_type error");
+            return false;
+          }
+
+          if (!member->is_array_) {
+            ret = dds_dynamic_type_add_member(dstruct,
+            get_dynamic_member_descriptor(ddt, member->name_));
+            assert(ret == DDS_RETCODE_OK);
+          } else {
+            dynamic_type_add_array(dstruct, dds_ppant, member, ddt);
+          }
+
+          break;
+        }
+      default:
+        RMW_SET_ERROR_MSG((std::string("unknown type id ") +
+          std::to_string(member->type_id_)).c_str());
+        return false;
+    }
+  }
+
+  return true;
+}
+#endif
+void create_msg_dds_dynamic_type(
+  const char * type_support_identifier, const void * untyped_members,
+  dds_entity_t dds_ppant, struct sertype_rmw * st)
+{
+#if DDS_HAS_TYPELIB
+  if (using_introspection_c_typesupport(type_support_identifier)) {
+    auto members =
+      static_cast<const rosidl_typesupport_introspection_c__MessageMembers_s *>(untyped_members);
+    auto dstruct = dds_dynamic_type_create(dds_ppant,
+      get_dynamic_type_descriptor(DDS_DYNAMIC_STRUCTURE,
+      create_type_name<rosidl_typesupport_introspection_c__MessageMembers_s>(
+      untyped_members).c_str(), 0, nullptr, {}));
+
+    dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
+
+    if (construct_dds_dynamic_type(&dstruct, dds_ppant, members)) {
+      dynamic_type_register(st, dstruct, dds_ppant);
+    }
+#if THROW_ON_DYNAMIC_TYPE_ERROR
+    else {
+      throw std::runtime_error("construct_dds_dynamic_type failed");
+    }
+#endif
+  } else if (using_introspection_cpp_typesupport(type_support_identifier)) {
+    auto members =
+      static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers_s *>(untyped_members);
+    auto dstruct = dds_dynamic_type_create(dds_ppant,
+      get_dynamic_type_descriptor(DDS_DYNAMIC_STRUCTURE,
+      create_type_name<rosidl_typesupport_introspection_cpp::MessageMembers_s>(
+      untyped_members).c_str(), 0, nullptr, {}));
+
+    dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
+
+    if (construct_dds_dynamic_type(&dstruct, dds_ppant, members)) {
+      dynamic_type_register(st, dstruct, dds_ppant);
+    }
+#if THROW_ON_DYNAMIC_TYPE_ERROR
+    else {
+      throw std::runtime_error("construct_dds_dynamic_type failed");
+    }
+#endif
+  } else {
+    throw std::runtime_error("create_dds_dynamic_type, unsupported typesupport");
+  }
+#else
+  static_cast<void>(type_support_identifier);
+  static_cast<void>(untyped_members);
+  static_cast<void>(dds_ppant);
+  static_cast<void>(st);
+#endif
+}
+
+void create_req_dds_dynamic_type(
+  const char * type_support_identifier, const void * untyped_members,
+  dds_entity_t dds_ppant, struct sertype_rmw * st)
+{
+#if DDS_HAS_TYPELIB
+  if (using_introspection_c_typesupport(type_support_identifier)) {
+    auto members =
+      static_cast<const rosidl_typesupport_introspection_c__ServiceMembers_s *>(untyped_members);
+    auto dstruct = dds_dynamic_type_create(dds_ppant,
+      get_dynamic_type_descriptor(DDS_DYNAMIC_STRUCTURE,
+      create_type_name<rosidl_typesupport_introspection_c__MessageMembers_s>(
+      untyped_members).c_str(), 0, nullptr, {}));
+
+    dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
+
+    if (construct_dds_dynamic_type(&dstruct, dds_ppant, members->request_members_)) {
+      dynamic_type_register(st, dstruct, dds_ppant);
+    }
+#if THROW_ON_DYNAMIC_TYPE_ERROR
+    else {
+      throw std::runtime_error("construct_dds_dynamic_type failed");
+    }
+#endif
+  } else if (using_introspection_cpp_typesupport(type_support_identifier)) {
+    auto members =
+      static_cast<const rosidl_typesupport_introspection_cpp::ServiceMembers_s *>(untyped_members);
+    auto dstruct = dds_dynamic_type_create(dds_ppant,
+      get_dynamic_type_descriptor(DDS_DYNAMIC_STRUCTURE,
+      create_type_name<rosidl_typesupport_introspection_cpp::MessageMembers_s>(
+      untyped_members).c_str(), 0, nullptr, {}));
+
+    dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
+
+    if (construct_dds_dynamic_type(&dstruct, dds_ppant, members->request_members_)) {
+      dynamic_type_register(st, dstruct, dds_ppant);
+    }
+#if THROW_ON_DYNAMIC_TYPE_ERROR
+    else {
+      throw std::runtime_error("construct_dds_dynamic_type failed");
+    }
+#endif
+  } else {
+    throw std::runtime_error("create_dds_dynamic_type, unsupported typesupport");
+  }
+#else
+  static_cast<void>(type_support_identifier);
+  static_cast<void>(untyped_members);
+  static_cast<void>(dds_ppant);
+  static_cast<void>(st);
+#endif
+}
+
+void create_res_dds_dynamic_type(
+  const char * type_support_identifier, const void * untyped_members,
+  dds_entity_t dds_ppant, struct sertype_rmw * st)
+{
+#if DDS_HAS_TYPELIB
+  if (using_introspection_c_typesupport(type_support_identifier)) {
+    auto members =
+      static_cast<const rosidl_typesupport_introspection_c__ServiceMembers_s *>(untyped_members);
+    auto dstruct = dds_dynamic_type_create(dds_ppant,
+     get_dynamic_type_descriptor(DDS_DYNAMIC_STRUCTURE,
+      create_type_name<rosidl_typesupport_introspection_c__MessageMembers_s>(
+      untyped_members).c_str(), 0, nullptr, {}));
+
+    dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
+
+    if (construct_dds_dynamic_type(&dstruct, dds_ppant, members->response_members_)) {
+      dynamic_type_register(st, dstruct, dds_ppant);
+    }
+#if THROW_ON_DYNAMIC_TYPE_ERROR
+    else {
+      throw std::runtime_error("construct_dds_dynamic_type failed");
+    }
+#endif
+  } else if (using_introspection_cpp_typesupport(type_support_identifier)) {
+    auto members =
+      static_cast<const rosidl_typesupport_introspection_cpp::ServiceMembers_s *>(untyped_members);
+    auto dstruct = dds_dynamic_type_create(dds_ppant,
+      get_dynamic_type_descriptor(DDS_DYNAMIC_STRUCTURE,
+      create_type_name<rosidl_typesupport_introspection_cpp::MessageMembers_s>(
+      untyped_members).c_str(), 0, nullptr, {}));
+    dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
+
+    if (construct_dds_dynamic_type(&dstruct, dds_ppant, members->response_members_)) {
+      dynamic_type_register(st, dstruct, dds_ppant);
+    }
+#if THROW_ON_DYNAMIC_TYPE_ERROR
+    else {
+      throw std::runtime_error("construct_dds_dynamic_type failed");
+    }
+#endif
+  } else {
+    throw std::runtime_error("create_dds_dynamic_type, unsupported typesupport");
+  }
+
+#else
+  static_cast<void>(type_support_identifier);
+  static_cast<void>(untyped_members);
+  static_cast<void>(dds_ppant);
+  static_cast<void>(st);
+#endif
+}
+
 struct sertype_rmw * create_sertype(
   const char * type_support_identifier,
   void * type_support, bool is_request_header,
@@ -697,6 +1319,17 @@ struct sertype_rmw * create_sertype(
 {
   struct sertype_rmw * st = new struct sertype_rmw;
   std::string type_name = get_type_name(type_support_identifier, type_support);
+#if CDDS_VERSION > CDDS_VERSION_0_10
+  const uint32_t flags = 0;
+  dds_data_type_properties_t props = 0;
+  if (is_fixed_type) {
+    props |= DDS_DATA_TYPE_IS_MEMCPY_SAFE;
+  }
+  ddsi_sertype_init_props(
+    static_cast<struct ddsi_sertype *>(st),
+    type_name.c_str(), &sertype_rmw_ops, &serdata_rmw_ops,
+    sample_size, props, DDS_DATA_REPRESENTATION_FLAG_XCDR1, flags);
+#else
   uint32_t flags = DDSI_SERTYPE_FLAG_TOPICKIND_NO_KEY;
   if (is_fixed_type) {
     flags |= DDSI_SERTYPE_FLAG_FIXED_SIZE;
@@ -710,7 +1343,8 @@ struct sertype_rmw * create_sertype(
   st->iox_size = sample_size;
 #else
   static_cast<void>(sample_size);
-#endif  // DDS_HAS_SHM
+#endif // DDS_HAS_SHM
+#endif
   st->type_support.typesupport_identifier_ = type_support_identifier;
   st->type_support.type_support_ = type_support;
   st->is_request_header = is_request_header;
