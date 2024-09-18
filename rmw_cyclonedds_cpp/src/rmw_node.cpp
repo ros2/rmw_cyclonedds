@@ -1601,7 +1601,7 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
   }
 
   auto restore_context = rcpputils::make_scope_exit(
-    [context]() {*context = rmw_get_zero_initialized_context();});
+    [context]() {*context = rmw_get_default_context();});
 
   context->instance_id = options->instance_id;
   context->implementation_identifier = eclipse_cyclonedds_identifier;
