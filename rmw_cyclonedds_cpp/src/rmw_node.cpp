@@ -5855,99 +5855,18 @@ extern "C" rmw_ret_t rmw_get_clients_info_by_service(
     return RMW_RET_INVALID_ARGUMENT;
   }
   auto common_context = &node->context->impl->common;
-  std::string mangled_rq_topic_name, mangled_rp_topic_name;
-  mangled_rq_topic_name = mangled_rp_topic_name = service_name;
+  std::string mangled_rp_topic_name = service_name;
   DemangleFunction demangle_type = _identity_demangle;
   if (!no_mangle) {
-    mangled_rq_topic_name = \
-      make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", false);
     mangled_rp_topic_name = \
       make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", false);
     demangle_type = _demangle_if_ros_type;
   }
-
-  rmw_topic_endpoint_info_array_t publishers_info = \
-    rmw_get_zero_initialized_topic_endpoint_info_array();
-  rmw_ret_t ret = common_context->graph_cache.get_writers_info_by_topic(
-    mangled_rq_topic_name,
-    demangle_type,
-    allocator,
-    &publishers_info);
-  std::unique_ptr<
-    rmw_topic_endpoint_info_array_t,
-    std::function<void(rmw_topic_endpoint_info_array_t *)>>
-  publishers_info_delete_on_error(
-    &publishers_info,
-    [allocator](rmw_topic_endpoint_info_array_t * p) {
-      rmw_ret_t ret = rmw_topic_endpoint_info_array_fini(
-        p,
-        allocator
-      );
-      if (RMW_RET_OK != ret) {
-        RCUTILS_SAFE_FWRITE_TO_STDERR("Failed to destroy publishers_info when function failed.");
-      }
-    }
-  );
-  if (RMW_RET_OK != ret) {
-    return ret;
-  }
-
-  rmw_topic_endpoint_info_array_t subscriptions_info = \
-    rmw_get_zero_initialized_topic_endpoint_info_array();
-  ret = common_context->graph_cache.get_readers_info_by_topic(
+  return common_context->graph_cache.get_readers_info_by_topic(
     mangled_rp_topic_name,
     demangle_type,
     allocator,
-    &subscriptions_info);
-  std::unique_ptr<
-    rmw_topic_endpoint_info_array_t,
-    std::function<void(rmw_topic_endpoint_info_array_t *)>>
-  subscriptions_info_delete_on_error(
-    &subscriptions_info,
-    [allocator](rmw_topic_endpoint_info_array_t * p) {
-      rmw_ret_t ret = rmw_topic_endpoint_info_array_fini(
-        p,
-        allocator
-      );
-      if (RMW_RET_OK != ret) {
-        RCUTILS_SAFE_FWRITE_TO_STDERR("Failed to destroy subscriptions_info when function failed.");
-      }
-    }
-  );
-  if (RMW_RET_OK != ret) {
-    return ret;
-  }
-
-  size_t total_size = publishers_info.size + subscriptions_info.size;
-  ret = rmw_topic_endpoint_info_array_init_with_size(clients_info, total_size, allocator);
-  std::unique_ptr<
-    rmw_topic_endpoint_info_array_t,
-    std::function<void(rmw_topic_endpoint_info_array_t *)>>
-  clients_info_delete_on_error(
-    clients_info,
-    [allocator](rmw_topic_endpoint_info_array_t * p) {
-      rmw_ret_t ret = rmw_topic_endpoint_info_array_fini(
-        p,
-        allocator
-      );
-      if (RMW_RET_OK != ret) {
-        RCUTILS_SAFE_FWRITE_TO_STDERR("Failed to destroy clients_info when function failed.");
-      }
-    }
-  );
-  if (RMW_RET_OK != ret) {
-    return ret;
-  }
-  for (size_t i = 0; i < publishers_info.size; ++i) {
-    clients_info->info_array[i] = publishers_info.info_array[i];
-  }
-  for (size_t i = 0; i < subscriptions_info.size; ++i) {
-    clients_info->info_array[publishers_info.size + i] = subscriptions_info.info_array[i];
-  }
-  publishers_info_delete_on_error.release();
-  subscriptions_info_delete_on_error.release();
-  clients_info_delete_on_error.release();
-  return RMW_RET_OK;
+    clients_info);
 }
 
 extern "C" rmw_ret_t rmw_get_servers_info_by_service(
@@ -5970,97 +5889,18 @@ extern "C" rmw_ret_t rmw_get_servers_info_by_service(
 
   auto common_context = &node->context->impl->common;
 
-  std::string mangled_rq_topic_name, mangled_rp_topic_name;
-  mangled_rq_topic_name = mangled_rp_topic_name = service_name;
+  std::string mangled_rp_topic_name = service_name;
   DemangleFunction demangle_type = _identity_demangle;
   if (!no_mangle) {
-    mangled_rq_topic_name = \
-      make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", false);
     mangled_rp_topic_name = \
       make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", false);
     demangle_type = _demangle_if_ros_type;
   }
-  rmw_topic_endpoint_info_array_t subscriptions_info = \
-    rmw_get_zero_initialized_topic_endpoint_info_array();
-  rmw_ret_t ret = common_context->graph_cache.get_readers_info_by_topic(
-    mangled_rq_topic_name,
-    demangle_type,
-    allocator,
-    &subscriptions_info);
-  std::unique_ptr<
-    rmw_topic_endpoint_info_array_t,
-    std::function<void(rmw_topic_endpoint_info_array_t *)>>
-  subscriptions_info_delete_on_error(
-    &subscriptions_info,
-    [allocator](rmw_topic_endpoint_info_array_t * p) {
-      rmw_ret_t ret = rmw_topic_endpoint_info_array_fini(
-        p,
-        allocator
-      );
-      if (RMW_RET_OK != ret) {
-        RCUTILS_SAFE_FWRITE_TO_STDERR("Failed to destroy subscriptions_info when function failed.");
-      }
-    }
-  );
-  if (RMW_RET_OK != ret) {
-    return ret;
-  }
-  rmw_topic_endpoint_info_array_t publishers_info = \
-    rmw_get_zero_initialized_topic_endpoint_info_array();
-  ret = common_context->graph_cache.get_writers_info_by_topic(
+  return common_context->graph_cache.get_writers_info_by_topic(
     mangled_rp_topic_name,
     demangle_type,
     allocator,
-    &publishers_info);
-  std::unique_ptr<
-    rmw_topic_endpoint_info_array_t,
-    std::function<void(rmw_topic_endpoint_info_array_t *)>>
-  publishers_info_delete_on_error(
-    &publishers_info,
-    [allocator](rmw_topic_endpoint_info_array_t * p) {
-      rmw_ret_t ret = rmw_topic_endpoint_info_array_fini(
-        p,
-        allocator
-      );
-      if (RMW_RET_OK != ret) {
-        RCUTILS_SAFE_FWRITE_TO_STDERR("Failed to destroy publishers_info when function failed.");
-      }
-    }
-  );
-  if (RMW_RET_OK != ret) {
-    return ret;
-  }
-
-  size_t total_size = publishers_info.size + subscriptions_info.size;
-  ret = rmw_topic_endpoint_info_array_init_with_size(servers_info, total_size, allocator);
-  std::unique_ptr<
-    rmw_topic_endpoint_info_array_t,
-    std::function<void(rmw_topic_endpoint_info_array_t *)>>
-  servers_info_delete_on_error(
-    servers_info,
-    [allocator](rmw_topic_endpoint_info_array_t * p) {
-      rmw_ret_t ret = rmw_topic_endpoint_info_array_fini(
-        p,
-        allocator
-      );
-      if (RMW_RET_OK != ret) {
-        RCUTILS_SAFE_FWRITE_TO_STDERR("Failed to destroy servers_info when function failed.");
-      }
-    }
-  );
-  if (RMW_RET_OK != ret) {
-    return ret;
-  }
-  for (size_t i = 0; i < publishers_info.size; ++i) {
-    servers_info->info_array[i] = publishers_info.info_array[i];
-  }
-  for (size_t i = 0; i < subscriptions_info.size; ++i) {
-    servers_info->info_array[publishers_info.size + i] = subscriptions_info.info_array[i];
-  }
-  publishers_info_delete_on_error.release();
-  subscriptions_info_delete_on_error.release();
-  servers_info_delete_on_error.release();
-  return RMW_RET_OK;
+    servers_info);
 }
 
 extern "C" rmw_ret_t rmw_qos_profile_check_compatible(
