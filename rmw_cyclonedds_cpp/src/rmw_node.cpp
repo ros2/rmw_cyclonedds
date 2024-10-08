@@ -361,9 +361,7 @@ struct CddsSubscription : CddsEntity
 
 struct client_service_id_t
 {
-  // strangely, the writer_guid in an rmw_request_id_t is smaller than the identifier in
-  // an rmw_gid_t
-  uint8_t data[sizeof((reinterpret_cast<rmw_request_id_t *>(0))->writer_guid)]; // NOLINT
+  uint8_t data[RMW_GID_STORAGE_SIZE];
 };
 
 struct CddsCS
@@ -4889,11 +4887,8 @@ static void get_unique_csid(const rmw_node_t * node, client_service_id_t & id)
 {
   auto impl = node->context->impl;
   static_assert(
-    sizeof(dds_guid_t) <= sizeof(id.data),
+    sizeof(dds_guid_t) <= RMW_GID_STORAGE_SIZE,
     "client/service id assumed it can hold a DDSI GUID");
-  static_assert(
-    sizeof(dds_guid_t) <= sizeof((reinterpret_cast<rmw_gid_t *>(0))->data),
-    "client/service id assumes rmw_gid_t can hold a DDSI GUID");
   uint32_t x;
 
   {
