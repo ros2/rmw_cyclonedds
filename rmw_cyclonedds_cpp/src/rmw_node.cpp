@@ -747,6 +747,7 @@ extern "C" rmw_ret_t rmw_event_set_callback(
       }
 
     case RMW_EVENT_INVALID:
+    case RMW_EVENT_TYPE_MAX:
       {
         return RMW_RET_INVALID_ARGUMENT;
       }
