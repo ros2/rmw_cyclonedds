@@ -114,7 +114,6 @@ enum class ROSIDL_TypeKind : uint8_t
 {
   FLOAT = tsi_enum::ROS_TYPE_FLOAT,
   DOUBLE = tsi_enum::ROS_TYPE_DOUBLE,
-  LONG_DOUBLE = tsi_enum::ROS_TYPE_LONG_DOUBLE,
   CHAR = tsi_enum::ROS_TYPE_CHAR,
   WCHAR = tsi_enum::ROS_TYPE_WCHAR,
   BOOLEAN = tsi_enum::ROS_TYPE_BOOLEAN,
@@ -305,8 +304,6 @@ struct PrimitiveValueType : public AnyValueType
         return sizeof(float);
       case ROSIDL_TypeKind::DOUBLE:
         return sizeof(double);
-      case ROSIDL_TypeKind::LONG_DOUBLE:
-        return sizeof(long double);
       case ROSIDL_TypeKind::CHAR:
         return sizeof(char);
       case ROSIDL_TypeKind::WCHAR:
