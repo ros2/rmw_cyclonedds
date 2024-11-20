@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.0.3 (2024-11-20)
+------------------
 * use RMW_GID_STORAGE_SIZE to client_service_id_t. (`#515 <https://github.com/ros2/rmw_cyclonedds/issues/515>`_)
 * Contributors: Tomoya Fujita
 
