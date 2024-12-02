@@ -747,6 +747,7 @@ extern "C" rmw_ret_t rmw_event_set_callback(
       }
 
     case RMW_EVENT_INVALID:
+    case RMW_EVENT_TYPE_MAX:
       {
         return RMW_RET_INVALID_ARGUMENT;
       }
@@ -4061,12 +4062,10 @@ extern "C" rmw_ret_t rmw_take_event(
         return RMW_RET_OK;
       }
 
-    case RMW_EVENT_INVALID: {
+    case RMW_EVENT_INVALID:
+    case RMW_EVENT_TYPE_MAX: {
         break;
       }
-
-    default:
-      rmw_cyclonedds_cpp::unreachable();
   }
   *taken = false;
   return RMW_RET_ERROR;
