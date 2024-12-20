@@ -191,6 +191,17 @@ struct Cdds
   {}
 };
 
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)   // for clang
+#define __SANITIZE_ADDRESS__           // GCC already sets this
+#endif
+#endif
+
+#if defined(__SANITIZE_ADDRESS__)
+#include <sanitizer/lsan_interface.h>
+#endif
+
+
 /* Use construct-on-first-use for the global state rather than a plain global variable to
    prevent its destructor from running prior to last use by some other component in the
    system.  E.g., some rclcpp tests (at the time of this commit) drop a guard condition in
@@ -209,6 +220,9 @@ struct Cdds
 static Cdds & gcdds()
 {
   static Cdds * x = new Cdds();
+#if defined(__SANITIZE_ADDRESS__)
+  __lsan_ignore_object(x);
+#endif
   return *x;
 }
 
