@@ -2,8 +2,8 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+3.2.0 (2024-12-20)
+------------------
 * Instrument client/service for end-to-end request/response tracking (`#521 <https://github.com/ros2/rmw_cyclonedds/issues/521>`_)
 * Contributors: Christophe Bedard
 
