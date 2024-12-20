@@ -15,6 +15,7 @@
   <buildtool_depend>ament_cmake_ros</buildtool_depend>
 
   <depend>cyclonedds</depend>
+  <!-- Iceoryx not a build dependency for Cyclone versions greater than 0.10 -->
   <depend>iceoryx_binding_c</depend>
   <depend>rcutils</depend>
   <depend>rcpputils</depend>
