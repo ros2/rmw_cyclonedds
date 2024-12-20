@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Instrument client/service for end-to-end request/response tracking (`#521 <https://github.com/ros2/rmw_cyclonedds/issues/521>`_)
+* Contributors: Christophe Bedard
+
 3.1.0 (2024-11-25)
 ------------------
 * Drop support for float128. (`#522 <https://github.com/ros2/rmw_cyclonedds/issues/522>`_)
