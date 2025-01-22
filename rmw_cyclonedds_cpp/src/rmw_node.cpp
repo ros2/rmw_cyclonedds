@@ -1811,6 +1811,7 @@ extern "C" rmw_ret_t rmw_serialize(
     auto size = writer->get_serialized_size(ros_message);
     rmw_ret_t ret = rmw_serialized_message_resize(serialized_message, size);
     if (RMW_RET_OK != ret) {
+      rmw_reset_error();
       RMW_SET_ERROR_MSG("rmw_serialize: failed to allocate space for message");
       return ret;
     }
