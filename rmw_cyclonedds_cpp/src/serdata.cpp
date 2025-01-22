@@ -1067,6 +1067,9 @@ static bool construct_dds_dynamic_type(
       case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_CHAR:
         dynamic_type_add_member(dstruct, dds_ppant, member, DDS_DYNAMIC_CHAR8);
         break;
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_WCHAR:
+        dynamic_type_add_member(dstruct, dds_ppant, member, DDS_DYNAMIC_CHAR16);
+        break;
       case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT8:
         dynamic_type_add_member(dstruct, dds_ppant, member, DDS_DYNAMIC_INT8);
         break;
@@ -1104,6 +1107,27 @@ static bool construct_dds_dynamic_type(
           } else {
             ddt = dds_dynamic_type_create(dds_ppant,
               get_dynamic_type_descriptor(DDS_DYNAMIC_STRING8, nullptr, 0, nullptr, {}));
+          }
+          if (!member->is_array_) {
+            ret = dds_dynamic_type_add_member(dstruct,
+            get_dynamic_member_descriptor(ddt, member->name_));
+            assert(ret == DDS_RETCODE_OK);
+          } else {
+            dynamic_type_add_array(dstruct, dds_ppant, member, ddt);
+          }
+
+          break;
+        }
+      case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_WSTRING:
+        {
+          dds_dynamic_type_t ddt;
+          if (member->string_upper_bound_) {
+            uint32_t string_size = static_cast<uint32_t>(member->string_upper_bound_);
+            ddt = dds_dynamic_type_create(dds_ppant,
+              get_dynamic_type_descriptor(DDS_DYNAMIC_STRING16, nullptr, 1, &string_size, {}));
+          } else {
+            ddt = dds_dynamic_type_create(dds_ppant,
+              get_dynamic_type_descriptor(DDS_DYNAMIC_STRING16, nullptr, 0, nullptr, {}));
           }
           if (!member->is_array_) {
             ret = dds_dynamic_type_add_member(dstruct,
