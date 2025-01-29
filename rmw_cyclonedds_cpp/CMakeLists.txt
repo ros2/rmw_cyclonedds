@@ -50,6 +50,7 @@ endif()
 
 find_package(rmw REQUIRED)
 find_package(rmw_dds_common REQUIRED)
+find_package(rmw_security_common REQUIRED)
 find_package(rosidl_runtime_c REQUIRED)
 find_package(rosidl_typesupport_introspection_c REQUIRED)
 find_package(rosidl_typesupport_introspection_cpp REQUIRED)
@@ -63,6 +64,7 @@ ament_export_dependencies(rcpputils)
 ament_export_dependencies(rmw)
 ament_export_dependencies(rosidl_runtime_c)
 ament_export_dependencies(rmw_dds_common)
+ament_export_dependencies(rmw_security_common)
 ament_export_dependencies(rosidl_typesupport_introspection_c)
 ament_export_dependencies(rosidl_typesupport_introspection_cpp)
 ament_export_dependencies(tracetools)
@@ -88,6 +90,7 @@ target_link_libraries(rmw_cyclonedds_cpp PRIVATE
   rcutils::rcutils
   rcpputils::rcpputils
   rmw_dds_common::rmw_dds_common_library
+  rmw_security_common::rmw_security_common_library
   rosidl_typesupport_introspection_c::rosidl_typesupport_introspection_c
   rosidl_typesupport_introspection_cpp::rosidl_typesupport_introspection_cpp
   rosidl_runtime_c::rosidl_runtime_c

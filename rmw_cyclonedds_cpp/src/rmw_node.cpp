@@ -76,7 +76,8 @@
 #include "rmw_dds_common/graph_cache.hpp"
 #include "rmw_dds_common/msg/participant_entities_info.hpp"
 #include "rmw_dds_common/qos.hpp"
-#include "rmw_dds_common/security.hpp"
+
+#include "rmw_security_common/security.hpp"
 
 #include "rosidl_runtime_c/type_hash.h"
 
@@ -1269,25 +1270,38 @@ rmw_ret_t configure_qos_for_security(
   const rmw_security_options_t * security_options)
 {
 #if RMW_SUPPORT_SECURITY
-  std::unordered_map<std::string, std::string> security_files;
+  rcutils_allocator_t allocator = rcutils_get_default_allocator();
+  rcutils_string_map_t security_files = rcutils_get_zero_initialized_string_map();
+  rcutils_ret_t ret = rcutils_string_map_init(&security_files, 0, allocator);
+  if (ret != RMW_RET_OK) {
+    RMW_SET_ERROR_MSG("Failed to initialize string map for security");
+    return RMW_RET_ERROR;
+  }
+
   if (security_options->security_root_path == nullptr) {
     return RMW_RET_UNSUPPORTED;
   }
 
-  if (!rmw_dds_common::get_security_files(
-      "file:", security_options->security_root_path, security_files))
+  if (!get_security_files(
+      "file:", security_options->security_root_path, &security_files))
   {
     RCUTILS_LOG_INFO_NAMED(
       "rmw_cyclonedds_cpp", "could not find all security files");
     return RMW_RET_UNSUPPORTED;
   }
 
-  dds_qset_prop(qos, "dds.sec.auth.identity_ca", security_files["IDENTITY_CA"].c_str());
-  dds_qset_prop(qos, "dds.sec.auth.identity_certificate", security_files["CERTIFICATE"].c_str());
-  dds_qset_prop(qos, "dds.sec.auth.private_key", security_files["PRIVATE_KEY"].c_str());
-  dds_qset_prop(qos, "dds.sec.access.permissions_ca", security_files["PERMISSIONS_CA"].c_str());
-  dds_qset_prop(qos, "dds.sec.access.governance", security_files["GOVERNANCE"].c_str());
-  dds_qset_prop(qos, "dds.sec.access.permissions", security_files["PERMISSIONS"].c_str());
+  dds_qset_prop(qos, "dds.sec.auth.identity_ca",
+    std::string(rcutils_string_map_get(&security_files, "IDENTITY_CA")).c_str());
+  dds_qset_prop(qos, "dds.sec.auth.identity_certificate",
+    std::string(rcutils_string_map_get(&security_files, "CERTIFICATE")).c_str());
+  dds_qset_prop(qos, "dds.sec.auth.private_key",
+    std::string(rcutils_string_map_get(&security_files, "PRIVATE_KEY")).c_str());
+  dds_qset_prop(qos, "dds.sec.access.permissions_ca",
+    std::string(rcutils_string_map_get(&security_files, "PERMISSIONS_CA")).c_str());
+  dds_qset_prop(qos, "dds.sec.access.governance",
+    std::string(rcutils_string_map_get(&security_files, "GOVERNANCE")).c_str());
+  dds_qset_prop(qos, "dds.sec.access.permissions",
+    std::string(rcutils_string_map_get(&security_files, "PERMISSIONS")).c_str());
 
   dds_qset_prop(qos, "dds.sec.auth.library.path", "dds_security_auth");
   dds_qset_prop(qos, "dds.sec.auth.library.init", "init_authentication");
@@ -1301,8 +1315,15 @@ rmw_ret_t configure_qos_for_security(
   dds_qset_prop(qos, "dds.sec.access.library.init", "init_access_control");
   dds_qset_prop(qos, "dds.sec.access.library.finalize", "finalize_access_control");
 
-  if (security_files.count("CRL") > 0) {
-    dds_qset_prop(qos, "org.eclipse.cyclonedds.sec.auth.crl", security_files["CRL"].c_str());
+  if (rcutils_string_map_key_exists(&security_files, "CRL")) {
+    dds_qset_prop(
+      qos, "org.eclipse.cyclonedds.sec.auth.crl",
+      std::string(rcutils_string_map_get(&security_files, "CRL")).c_str());
+  }
+
+  ret = rcutils_string_map_fini(&security_files);
+  if (ret != RMW_RET_OK) {
+    RMW_SET_ERROR_MSG("Failed to fini string map for security");
   }
 
   return RMW_RET_OK;
