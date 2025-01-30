@@ -1282,8 +1282,8 @@ rmw_ret_t configure_qos_for_security(
     return RMW_RET_UNSUPPORTED;
   }
 
-  if (!get_security_files(
-      "file:", security_options->security_root_path, &security_files))
+  if (get_security_files(
+      "file:", security_options->security_root_path, &security_files) != RMW_RET_OK)
   {
     RCUTILS_LOG_INFO_NAMED(
       "rmw_cyclonedds_cpp", "could not find all security files");
