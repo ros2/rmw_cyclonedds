@@ -1273,6 +1273,16 @@ rmw_ret_t configure_qos_for_security(
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   rcutils_string_map_t security_files = rcutils_get_zero_initialized_string_map();
   rcutils_ret_t ret = rcutils_string_map_init(&security_files, 0, allocator);
+
+  auto scope_exit_ws = rcpputils::make_scope_exit(
+    [&security_files]()
+    {
+      rcutils_ret_t ret = rcutils_string_map_fini(&security_files);
+      if (ret != RMW_RET_OK) {
+        RMW_SET_ERROR_MSG("Failed to fini string map for security");
+      }
+    });
+
   if (ret != RMW_RET_OK) {
     RMW_SET_ERROR_MSG("Failed to initialize string map for security");
     return RMW_RET_ERROR;
@@ -1319,11 +1329,6 @@ rmw_ret_t configure_qos_for_security(
     dds_qset_prop(
       qos, "org.eclipse.cyclonedds.sec.auth.crl",
       std::string(rcutils_string_map_get(&security_files, "CRL")).c_str());
-  }
-
-  ret = rcutils_string_map_fini(&security_files);
-  if (ret != RMW_RET_OK) {
-    RMW_SET_ERROR_MSG("Failed to fini string map for security");
   }
 
   return RMW_RET_OK;
