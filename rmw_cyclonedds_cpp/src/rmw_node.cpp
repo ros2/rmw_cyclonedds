@@ -748,6 +748,7 @@ extern "C" rmw_ret_t rmw_event_set_callback(
       }
 
     case RMW_EVENT_INVALID:
+    case RMW_EVENT_TYPE_MAX:
       {
         return RMW_RET_INVALID_ARGUMENT;
       }
@@ -1837,6 +1838,7 @@ extern "C" rmw_ret_t rmw_serialize(
     auto size = writer->get_serialized_size(ros_message);
     rmw_ret_t ret = rmw_serialized_message_resize(serialized_message, size);
     if (RMW_RET_OK != ret) {
+      rmw_reset_error();
       RMW_SET_ERROR_MSG("rmw_serialize: failed to allocate space for message");
       return ret;
     }
@@ -4087,12 +4089,10 @@ extern "C" rmw_ret_t rmw_take_event(
         return RMW_RET_OK;
       }
 
-    case RMW_EVENT_INVALID: {
+    case RMW_EVENT_INVALID:
+    case RMW_EVENT_TYPE_MAX: {
         break;
       }
-
-    default:
-      rmw_cyclonedds_cpp::unreachable();
   }
   *taken = false;
   return RMW_RET_ERROR;
