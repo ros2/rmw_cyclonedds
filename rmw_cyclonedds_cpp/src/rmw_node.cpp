@@ -3910,7 +3910,7 @@ extern "C" rmw_ret_t rmw_subscription_event_init(
     event_type);
 }
 
-extern "C" bool rmw_event_check_compatible(rmw_event_type_t rmw_event_type)
+extern "C" bool rmw_event_type_is_supported(rmw_event_type_t rmw_event_type)
 {
   return is_event_supported(rmw_event_type);
 }
