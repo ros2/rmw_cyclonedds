@@ -3875,6 +3875,11 @@ extern "C" rmw_ret_t rmw_subscription_event_init(
     event_type);
 }
 
+extern "C" bool rmw_event_type_is_supported(rmw_event_type_t rmw_event_type)
+{
+  return is_event_supported(rmw_event_type);
+}
+
 extern "C" rmw_ret_t rmw_take_event(
   const rmw_event_t * event_handle, void * event_info,
   bool * taken)
