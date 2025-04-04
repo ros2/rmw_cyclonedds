@@ -12,7 +12,7 @@
 
   <author email="michel@ekumenlabs.com">Michel Hidalgo</author>
 
-  <buildtool_depend>ament_cmake_ros</buildtool_depend>
+  <buildtool_depend>ament_cmake_ros_core</buildtool_depend>
 
   <depend>cyclonedds</depend>
   <depend>iceoryx_binding_c</depend>
