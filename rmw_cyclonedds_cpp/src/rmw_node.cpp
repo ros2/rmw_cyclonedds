@@ -5711,9 +5711,9 @@ extern "C" rmw_ret_t rmw_count_services(
   }
   RMW_CHECK_ARGUMENT_FOR_NULL(count, RMW_RET_INVALID_ARGUMENT);
   auto common_context = &node->context->impl->common;
-  const std::string mangled_rp_service_name =
-    make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", false);
-  return common_context->graph_cache.get_writer_count(mangled_rp_service_name, count);
+  const std::string mangled_rq_topic_name =
+    make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", false);
+  return common_context->graph_cache.get_reader_count(mangled_rq_topic_name, count);
 }
 
 using GetNamesAndTypesByNodeFunction = rmw_ret_t (*)(
