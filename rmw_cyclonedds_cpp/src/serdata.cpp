@@ -730,7 +730,7 @@ uint32_t sertype_rmw_hash(const struct ddsi_sertype * tpcmn)
   return h1 ^ h2;
 }
 
-size_t sertype_get_serialized_size(const struct ddsi_sertype * d, const void * sample)
+static size_t sertype_get_serialized_size_impl(const struct ddsi_sertype * d, const void * sample)
 {
   const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(d);
   size_t serialized_size = 0;
@@ -750,16 +750,13 @@ size_t sertype_get_serialized_size(const struct ddsi_sertype * d, const void * s
   return serialized_size;
 }
 
-bool sertype_serialize_into(
+static bool sertype_serialize_into_impl(
   const struct ddsi_sertype * d,
   const void * sample,
-  void * dst_buffer,
-  size_t dst_size)
+  void * dst_buffer)
 {
   const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(d);
   try {
-    // ignore destination size (assuming that the destination buffer is resized before correctly)
-    static_cast<void>(dst_size);
     // ROS 2 doesn't support keys, so its all data (?)
     if (!type->is_request_header) {
       type->cdr_writer->serialize(dst_buffer, sample);
@@ -775,6 +772,53 @@ bool sertype_serialize_into(
   }
   return true;
 }
+
+#if CDDS_VERSION == CDDS_VERSION_0_10
+size_t sertype_get_serialized_size(const struct ddsi_sertype * d, const void * sample)
+{
+  return sertype_get_serialized_size_impl(d, sample);
+}
+
+bool sertype_serialize_into(
+  const struct ddsi_sertype * d,
+  const void * sample,
+  void * dst_buffer,
+  size_t dst_size)
+{
+  static_cast<void>(dst_size);
+  return sertype_serialize_into_impl(d, sample, dst_buffer);
+}
+#else
+dds_return_t sertype_get_serialized_size(
+  const struct ddsi_sertype * d,
+  enum ddsi_serdata_kind sdkind,
+  const void * sample,
+  size_t * size,
+  uint16_t * enc_identifier)
+{
+  static_cast<void>(sdkind);
+  size_t serialized_size = sertype_get_serialized_size_impl(d, sample);
+  // encoding identifier is always plain CDR for this serializer
+  *enc_identifier = (native_endian() == endian::little) ? DDSI_RTPS_CDR_LE : DDSI_RTPS_CDR_BE;
+  // Cyclone's including or excluding the CDR encoding header in the various situations is
+  // painfully inconsistent ...
+  assert (serialized_size >= 4);
+  *size = serialized_size - 4;
+  return DDS_RETCODE_OK;
+}
+
+bool sertype_serialize_into(
+  const struct ddsi_sertype * d,
+  enum ddsi_serdata_kind sdkind,
+  const void * sample,
+  void * dst_buffer,
+  size_t dst_size)
+{
+  static_cast<void>(sdkind);
+  static_cast<void>(dst_size);
+  return sertype_serialize_into_impl(d, sample, dst_buffer);
+}
+#endif
 
 #if DDS_HAS_TYPELIB
 static ddsi_typeid_t * sertype_rmw_typeid(const struct ddsi_sertype * d, ddsi_typeid_kind_t kind)

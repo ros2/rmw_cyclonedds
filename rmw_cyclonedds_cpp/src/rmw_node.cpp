@@ -1583,7 +1583,11 @@ static void * init_and_alloc_sample(
   // the header will be initialized and the chunk pointer will be returned
   auto chunk_ptr = dds_data_allocator_alloc(&entity->data_allocator, sample_size);
 #else
-  auto chunk_ptr = dds_request_loan_of_size(entity->enth, sample_size);
+  static_cast<void>(alloc_on_heap);
+  void *chunk_ptr;
+  if (dds_request_loan_of_size(entity->enth, sample_size, &chunk_ptr) != DDS_RETCODE_OK) {
+    chunk_ptr = nullptr;
+  }
 #endif
   RMW_CHECK_FOR_NULL_WITH_MSG(
     chunk_ptr,
@@ -1612,7 +1616,7 @@ static rmw_ret_t fini_and_free_sample(entityT & entity, void * loaned_message)
     return RMW_RET_ERROR;
   }
 #else
-  if (dds_return_loan(entity->enth, loaned_message) != DDS_RETCODE_OK) {
+  if (dds_return_loan(entity->enth, 1, &loaned_message) != DDS_RETCODE_OK) {
     RMW_SET_ERROR_MSG("Failed to free the loaned message");
     return RMW_RET_ERROR;
   }
