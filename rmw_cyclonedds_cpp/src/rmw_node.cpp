@@ -14,6 +14,7 @@
 
 #include <cassert>
 #include <cstring>
+#include <dds/ddsc/dds_public_loan_api.h>
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
@@ -91,7 +92,9 @@
 
 #include "dds/dds.h"
 #include "cdds_version.hpp"
-#if CDDS_VERSION == CDDS_VERSION_0_10 && defined DDS_HAS_SHM
+#if CDDS_VERSION > CDDS_VERSION_0_10
+#include "dds/ddsc/dds_psmx.h"
+#elif defined DDS_HAS_SHM
 #include "dds/ddsc/dds_data_allocator.h"
 #include "dds/ddsc/dds_loan_api.h"
 #endif
@@ -1590,7 +1593,11 @@ static void * init_and_alloc_sample(
   // the header will be initialized and the chunk pointer will be returned
   auto chunk_ptr = dds_data_allocator_alloc(&entity->data_allocator, sample_size);
 #else
-  auto chunk_ptr = dds_request_loan_of_size(entity->enth, sample_size);
+  static_cast<void>(alloc_on_heap);
+  void *chunk_ptr;
+  if (dds_request_loan_of_size(entity->enth, sample_size, &chunk_ptr) != DDS_RETCODE_OK) {
+    chunk_ptr = nullptr;
+  }
 #endif
   RMW_CHECK_FOR_NULL_WITH_MSG(
     chunk_ptr,
@@ -1619,7 +1626,7 @@ static rmw_ret_t fini_and_free_sample(entityT & entity, void * loaned_message)
     return RMW_RET_ERROR;
   }
 #else
-  if (dds_return_loan(entity->enth, loaned_message) != DDS_RETCODE_OK) {
+  if (dds_return_loan(entity->enth, &loaned_message, 1) != DDS_RETCODE_OK) {
     RMW_SET_ERROR_MSG("Failed to free the loaned message");
     return RMW_RET_ERROR;
   }
@@ -2048,7 +2055,7 @@ extern "C" rmw_ret_t rmw_publish_serialized_message(
   d->timestamp.v = tstamp;
   d->statusinfo = 0;
 
-#ifdef DDS_HAS_SHM
+#if CDDS_VERSION == CDDS_VERSION_0_10 && defined DDS_HAS_SHM
   // publishing a serialized message when SHM is available
   // (the type need not necessarily be fixed)
   if (dds_is_shared_memory_available(pub->enth)) {
@@ -2064,11 +2071,15 @@ extern "C" rmw_ret_t rmw_publish_serialized_message(
   return ok ? RMW_RET_OK : RMW_RET_ERROR;
 }
 
-static rmw_ret_t publish_loaned_int(
+extern "C" rmw_ret_t rmw_publish_loaned_message(
   const rmw_publisher_t * publisher,
-  void * ros_message)
+  void * ros_message,
+  rmw_publisher_allocation_t * allocation)
 {
-#ifdef DDS_HAS_SHM
+#if CDDS_VERSION > CDDS_VERSION_0_10
+  return rmw_publish (publisher, ros_message, allocation);
+#elif defined DDS_HAS_SHM
+  static_cast<void>(allocation);
   RMW_CHECK_FOR_NULL_WITH_MSG(
     publisher, "publisher handle is null",
     return RMW_RET_INVALID_ARGUMENT);
@@ -2115,18 +2126,10 @@ static rmw_ret_t publish_loaned_int(
 #else
   static_cast<void>(publisher);
   static_cast<void>(ros_message);
+  static_cast<void>(allocation);
   RMW_SET_ERROR_MSG("rmw_publish_loaned_message not implemented for rmw_cyclonedds_cpp");
   return RMW_RET_UNSUPPORTED;
 #endif
-}
-
-extern "C" rmw_ret_t rmw_publish_loaned_message(
-  const rmw_publisher_t * publisher,
-  void * ros_message,
-  rmw_publisher_allocation_t * allocation)
-{
-  static_cast<void>(allocation);
-  return publish_loaned_int(publisher, ros_message);
 }
 
 static const rosidl_message_type_support_t * get_typesupport(
@@ -2842,12 +2845,11 @@ rmw_ret_t rmw_publisher_get_actual_qos(const rmw_publisher_t * publisher, rmw_qo
   return RMW_RET_ERROR;
 }
 
-static rmw_ret_t borrow_loaned_message_int(
+extern "C" rmw_ret_t rmw_borrow_loaned_message(
   const rmw_publisher_t * publisher,
   const rosidl_message_type_support_t * type_support,
   void ** ros_message)
 {
-#ifdef DDS_HAS_SHM
   RCUTILS_CHECK_ARGUMENT_FOR_NULL(publisher, RMW_RET_INVALID_ARGUMENT);
   if (!publisher->can_loan_messages) {
     RMW_SET_ERROR_MSG("Loaning is not supported");
@@ -2869,36 +2871,25 @@ static rmw_ret_t borrow_loaned_message_int(
 
   // if the publisher can loan
   if (cdds_publisher->is_loaning_available) {
+#if CDDS_VERSION > CDDS_VERSION_0_10 || defined DDS_HAS_SHM
     auto sample_ptr = init_and_alloc_sample(cdds_publisher, cdds_publisher->sample_size);
     RET_NULL_X(sample_ptr, return RMW_RET_ERROR);
     *ros_message = sample_ptr;
     return RMW_RET_OK;
+#else
+    RMW_SET_ERROR_MSG("rmw_borrow_loaned_message not implemented for rmw_cyclonedds_cpp");
+    return RMW_RET_UNSUPPORTED;
+#endif
   } else {
     RMW_SET_ERROR_MSG("Borrowing loan for a non fixed type is not allowed");
     return RMW_RET_ERROR;
   }
-#else
-  (void) publisher;
-  (void) type_support;
-  (void) ros_message;
-  RMW_SET_ERROR_MSG("rmw_borrow_loaned_message not implemented for rmw_cyclonedds_cpp");
-  return RMW_RET_UNSUPPORTED;
-#endif
 }
 
-extern "C" rmw_ret_t rmw_borrow_loaned_message(
-  const rmw_publisher_t * publisher,
-  const rosidl_message_type_support_t * type_support,
-  void ** ros_message)
-{
-  return borrow_loaned_message_int(publisher, type_support, ros_message);
-}
-
-static rmw_ret_t return_loaned_message_from_publisher_int(
+extern "C" rmw_ret_t rmw_return_loaned_message_from_publisher(
   const rmw_publisher_t * publisher,
   void * loaned_message)
 {
-#ifdef DDS_HAS_SHM
   RCUTILS_CHECK_ARGUMENT_FOR_NULL(publisher, RMW_RET_INVALID_ARGUMENT);
   if (!publisher->can_loan_messages) {
     RMW_SET_ERROR_MSG("Loaning is not supported");
@@ -2917,25 +2908,17 @@ static rmw_ret_t return_loaned_message_from_publisher_int(
 
   // if the publisher can loan
   if (cdds_publisher->is_loaning_available) {
+#if CDDS_VERSION > CDDS_VERSION_0_10 || defined DDS_HAS_SHM
     return fini_and_free_sample(cdds_publisher, loaned_message);
+#else
+    RMW_SET_ERROR_MSG(
+            "rmw_return_loaned_message_from_publisher not implemented for rmw_cyclonedds_cpp");
+    return RMW_RET_UNSUPPORTED;
+#endif    
   } else {
     RMW_SET_ERROR_MSG("returning loan for a non fixed type is not allowed");
     return RMW_RET_ERROR;
   }
-#else
-  (void) publisher;
-  (void) loaned_message;
-  RMW_SET_ERROR_MSG(
-    "rmw_return_loaned_message_from_publisher not implemented for rmw_cyclonedds_cpp");
-  return RMW_RET_UNSUPPORTED;
-#endif
-}
-
-extern "C" rmw_ret_t rmw_return_loaned_message_from_publisher(
-  const rmw_publisher_t * publisher,
-  void * loaned_message)
-{
-  return return_loaned_message_from_publisher_int(publisher, loaned_message);
 }
 
 static rmw_ret_t destroy_publisher(rmw_publisher_t * publisher)
@@ -3513,6 +3496,42 @@ static rmw_ret_t rmw_take_seq(
   return RMW_RET_OK;
 }
 
+#if CDDS_VERSION > CDDS_VERSION_0_10
+static bool rmw_take_ser_int_from_shm(struct ddsi_serdata * d, rmw_serialized_message_t * serialized_message)
+{
+  if (d->loan == nullptr)
+    return false;
+  if (d->loan->metadata->sample_state != DDS_LOANED_SAMPLE_STATE_SERIALIZED_DATA)
+    return false;
+  const size_t size = d->loan->metadata->sample_size;
+  if (rmw_serialized_message_resize(serialized_message, size) != RMW_RET_OK)
+    return false;
+  std::memcpy(serialized_message->buffer, d->loan->sample_ptr, size);
+  serialized_message->buffer_length = size;
+  return true;
+}
+#elif defined DDS_HAS_SHM
+static bool rmw_take_ser_int_from_shm(struct ddsi_serdata * d, rmw_serialized_message_t * serialized_message)
+{
+  if (d->iox_chunk == nullptr)
+    return false;
+  auto iox_header = iceoryx_header_from_chunk(d->iox_chunk);
+  if (iox_header->shm_data_state != IOX_CHUNK_CONTAINS_SERIALIZED_DATA)
+    return false;
+  const size_t size = iox_header->data_size;
+  if (rmw_serialized_message_resize(serialized_message, size) != RMW_RET_OK)
+    return false;
+  std::memcpy(serialized_message->buffer, d->iox_chunk, size);
+  serialized_message->buffer_length = size;
+  return true;
+}
+#else
+static bool rmw_take_ser_int_from_shm(struct ddsi_serdata *, rmw_serialized_message_t *)
+{
+  return false;
+}
+#endif
+
 static rmw_ret_t rmw_take_ser_int(
   const rmw_subscription_t * subscription,
   rmw_serialized_message_t * serialized_message, bool * taken,
@@ -3532,79 +3551,44 @@ static rmw_ret_t rmw_take_ser_int(
   dds_sample_info_t info;
   struct ddsi_serdata * d;
   while (dds_takecdr(sub->enth, &d, 1, &info, DDS_ANY_STATE) == 1) {
-    if (info.valid_data) {
-      if (message_info) {
-        message_info_from_sample_info(info, message_info);
-      }
-
-      // taking a serialized msg from shared memory
-#ifdef DDS_HAS_SHM
-      if (d->iox_chunk != nullptr) {
-        auto iox_header = iceoryx_header_from_chunk(d->iox_chunk);
-        if (iox_header->shm_data_state == IOX_CHUNK_CONTAINS_SERIALIZED_DATA) {
-          const size_t size = iox_header->data_size;
-          if (rmw_serialized_message_resize(serialized_message, size) != RMW_RET_OK) {
-            ddsi_serdata_unref(d);
-            *taken = false;
-            return RMW_RET_ERROR;
-          }
-          ddsi_serdata_to_ser(d, 0, size, serialized_message->buffer);
-          serialized_message->buffer_length = size;
-          ddsi_serdata_unref(d);
-          *taken = true;
-          TRACETOOLS_TRACEPOINT(
-            rmw_take,
-            static_cast<const void *>(subscription),
-            static_cast<const void *>(serialized_message),
-            (message_info ? message_info->source_timestamp : 0LL),
-            *taken);
-          return RMW_RET_OK;
-        } else if (iox_header->shm_data_state == IOX_CHUNK_CONTAINS_RAW_DATA) {
-          if (rmw_serialize(d->iox_chunk, &sub->type_supports, serialized_message) != RMW_RET_OK) {
-            RMW_SET_ERROR_MSG("Failed to serialize sample from loaned memory");
-            ddsi_serdata_unref(d);
-            *taken = false;
-            return RMW_RET_ERROR;
-          }
-          ddsi_serdata_unref(d);
-          *taken = true;
-          TRACETOOLS_TRACEPOINT(
-            rmw_take,
-            static_cast<const void *>(subscription),
-            static_cast<const void *>(serialized_message),
-            (message_info ? message_info->source_timestamp : 0LL),
-            *taken);
-          return RMW_RET_OK;
-        } else {
-          RMW_SET_ERROR_MSG("The recieved sample over SHM is not initialized");
-          ddsi_serdata_unref(d);
-          return RMW_RET_ERROR;
-        }
-        // release the chunk
-        free_iox_chunk(static_cast<iox_sub_t *>(d->iox_subscriber), &d->iox_chunk);
-      } else  // NOLINT
-#endif
-      {
-        size_t size = ddsi_serdata_size(d);
-        if (rmw_serialized_message_resize(serialized_message, size) != RMW_RET_OK) {
-          ddsi_serdata_unref(d);
-          *taken = false;
-          return RMW_RET_ERROR;
-        }
-        ddsi_serdata_to_ser(d, 0, size, serialized_message->buffer);
-        serialized_message->buffer_length = size;
-        ddsi_serdata_unref(d);
-        *taken = true;
-        TRACETOOLS_TRACEPOINT(
-          rmw_take,
-          static_cast<const void *>(subscription),
-          static_cast<const void *>(serialized_message),
-          (message_info ? message_info->source_timestamp : 0LL),
-          *taken);
-        return RMW_RET_OK;
-      }
+    if (!info.valid_data) {
+      ddsi_serdata_unref(d);
+      continue;
     }
-    ddsi_serdata_unref(d);
+          
+    if (message_info) {
+      message_info_from_sample_info(info, message_info);
+    }
+
+    if (rmw_take_ser_int_from_shm(d, serialized_message)) {
+      ddsi_serdata_unref(d);
+      *taken = true;
+      TRACETOOLS_TRACEPOINT(
+              rmw_take,
+              static_cast<const void *>(subscription),
+              static_cast<const void *>(serialized_message),
+              (message_info ? message_info->source_timestamp : 0LL),
+              *taken);
+      return RMW_RET_OK;
+    } else {
+      size_t size = ddsi_serdata_size(d);
+      if (rmw_serialized_message_resize(serialized_message, size) != RMW_RET_OK) {
+        ddsi_serdata_unref(d);
+        *taken = false;
+        return RMW_RET_ERROR;
+      }
+      ddsi_serdata_to_ser(d, 0, size, serialized_message->buffer);
+      serialized_message->buffer_length = size;
+      ddsi_serdata_unref(d);
+      *taken = true;
+      TRACETOOLS_TRACEPOINT(
+              rmw_take,
+              static_cast<const void *>(subscription),
+              static_cast<const void *>(serialized_message),
+              (message_info ? message_info->source_timestamp : 0LL),
+              *taken);
+      return RMW_RET_OK;
+    }
   }
   *taken = false;
   TRACETOOLS_TRACEPOINT(
@@ -3616,13 +3600,57 @@ static rmw_ret_t rmw_take_ser_int(
   return RMW_RET_OK;
 }
 
+#if CDDS_VERSION > CDDS_VERSION_0_10
 static rmw_ret_t rmw_take_loan_int(
   const rmw_subscription_t * subscription,
   void ** loaned_message,
   bool * taken,
   rmw_message_info_t * message_info)
 {
-#ifdef DDS_HAS_SHM
+  RMW_CHECK_ARGUMENT_FOR_NULL(
+    subscription, RMW_RET_INVALID_ARGUMENT);
+  if (!subscription->can_loan_messages) {
+    RMW_SET_ERROR_MSG("Loaning is not supported");
+    return RMW_RET_UNSUPPORTED;
+  }
+  RMW_CHECK_ARGUMENT_FOR_NULL(
+    loaned_message, RMW_RET_INVALID_ARGUMENT);
+  if (*loaned_message != nullptr) {
+    RMW_SET_ERROR_MSG("Loaned message pointer on input must be NULL");
+    return RMW_RET_INVALID_ARGUMENT;
+  }
+  RMW_CHECK_ARGUMENT_FOR_NULL(
+    taken, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
+    subscription handle, subscription->implementation_identifier, eclipse_cyclonedds_identifier,
+    return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
+  auto cdds_subscription = static_cast<CddsSubscription *>(subscription->data);
+  if (!cdds_subscription) {
+    RMW_SET_ERROR_MSG("Subscription data is null");
+    return RMW_RET_ERROR;
+  }
+
+  dds_sample_info_t info;
+  while (dds_take(cdds_subscription->enth, loaned_message, &info, 1, 1) == 1) {
+    if (!info.valid_data) {
+      continue;
+    }
+    *taken = true;
+    if (message_info) {
+      message_info_from_sample_info(info, message_info);
+    }
+    return RMW_RET_OK;
+  }
+  *taken = false;
+  return RMW_RET_OK;
+}
+#elif defined DDS_HAS_SHM
+static rmw_ret_t rmw_take_loan_int(
+  const rmw_subscription_t * subscription,
+  void ** loaned_message,
+  bool * taken,
+  rmw_message_info_t * message_info)
+{
   RMW_CHECK_ARGUMENT_FOR_NULL(
     subscription, RMW_RET_INVALID_ARGUMENT);
   if (!subscription->can_loan_messages) {
@@ -3675,12 +3703,10 @@ static rmw_ret_t rmw_take_loan_int(
           return RMW_RET_ERROR;
         }
         *taken = true;
-#if CDDS_VERSION == CDDS_VERSION_0_10
         // doesn't allocate, but initialise the allocator to free the chunk later when the loan
         // is returned
         dds_data_allocator_init(
           cdds_subscription->enth, &cdds_subscription->data_allocator);
-#endif
         // set the loaned chunk to null, so that the  loaned chunk is not release in
         // rmw_serdata_free(), but will be released when
         // `rmw_return_loaned_message_from_subscription()` is called
@@ -3706,15 +3732,22 @@ static rmw_ret_t rmw_take_loan_int(
   }
   *taken = false;
   return RMW_RET_OK;
+}
 #else
+static rmw_ret_t rmw_take_loan_int(
+  const rmw_subscription_t * subscription,
+  void ** loaned_message,
+  bool * taken,
+  rmw_message_info_t * message_info)
+{
   static_cast<void>(subscription);
   static_cast<void>(loaned_message);
   static_cast<void>(taken);
   static_cast<void>(message_info);
   RMW_SET_ERROR_MSG("rmw_take_loaned_message not implemented for rmw_cyclonedds_cpp");
   return RMW_RET_UNSUPPORTED;
-#endif
 }
+#endif
 
 extern "C" rmw_ret_t rmw_take(
   const rmw_subscription_t * subscription, void * ros_message,
@@ -3790,11 +3823,10 @@ extern "C" rmw_ret_t rmw_take_loaned_message_with_info(
   return rmw_take_loan_int(subscription, loaned_message, taken, message_info);
 }
 
-static rmw_ret_t return_loaned_message_from_subscription_int(
+extern "C" rmw_ret_t rmw_return_loaned_message_from_subscription(
   const rmw_subscription_t * subscription,
   void * loaned_message)
 {
-#ifdef DDS_HAS_SHM
   RMW_CHECK_ARGUMENT_FOR_NULL(
     subscription, RMW_RET_INVALID_ARGUMENT);
   if (!subscription->can_loan_messages) {
@@ -3814,26 +3846,17 @@ static rmw_ret_t return_loaned_message_from_subscription_int(
 
   // if the subscription allow loaning
   if (cdds_subscription->is_loaning_available) {
+#if CDDS_VERSION > CDDS_VERSION_0_10 || defined DDS_HAS_SHM
     return fini_and_free_sample(cdds_subscription, loaned_message);
+#else
+    RMW_SET_ERROR_MSG("rmw_return_loaned_message_from_subscription not implemented for rmw_cyclonedds_cpp");
+    return RMW_RET_UNSUPPORTED;
+#endif
   } else {
     RMW_SET_ERROR_MSG("returning loan for a non fixed type is not allowed");
     return RMW_RET_ERROR;
   }
   return RMW_RET_OK;
-#else
-  (void) subscription;
-  (void) loaned_message;
-  RMW_SET_ERROR_MSG(
-    "rmw_return_loaned_message_from_subscription not implemented for rmw_cyclonedds_cpp");
-  return RMW_RET_UNSUPPORTED;
-#endif
-}
-
-extern "C" rmw_ret_t rmw_return_loaned_message_from_subscription(
-  const rmw_subscription_t * subscription,
-  void * loaned_message)
-{
-  return return_loaned_message_from_subscription_int(subscription, loaned_message);
 }
 
 
