@@ -260,15 +260,32 @@ inline void deserialize_field<std::wstring>(
   }
 }
 
+enum class DeserializeMode {
+  Sample,
+  Key
+};
+
 template<typename MembersType>
-bool TypeSupport<MembersType>::deserializeROSmessage(
-  cycdeser & deser, const MembersType * members, void * ros_message)
+static bool deserializeROSmessage_impl(
+  cycdeser & deser, const MembersType * members, void * ros_message, DeserializeMode mode)
 {
   assert(members);
   assert(ros_message);
 
+  bool only_key = false;
+  switch (mode) {
+    case DeserializeMode::Sample:
+      break;
+    case DeserializeMode::Key:
+      only_key = members->has_any_key_member_;
+      break;
+  }
+
   for (uint32_t i = 0; i < members->member_count_; ++i) {
     const auto * member = members->members_ + i;
+    if (only_key && !member->is_key_) {
+      continue;
+    }
     void * field = static_cast<char *>(ros_message) + member->offset_;
     switch (member->type_id_) {
       case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_BOOL:
@@ -316,7 +333,7 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
         {
           auto sub_members = (const MembersType *)member->members_->data;
           if (!member->is_array_) {
-            deserializeROSmessage(deser, sub_members, field);
+            deserializeROSmessage_impl(deser, sub_members, field, mode);
           } else {
             size_t array_size = 0;
 
@@ -332,8 +349,8 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
               return false;
             }
             for (size_t index = 0; index < array_size; ++index) {
-              deserializeROSmessage(
-                deser, sub_members, member->get_function(field, index));
+              deserializeROSmessage_impl(
+                deser, sub_members, member->get_function(field, index), mode);
             }
           }
         }
@@ -344,6 +361,280 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
   }
 
   return true;
+}
+
+template<typename MembersType>
+bool TypeSupport<MembersType>::deserializeROSmessage(
+  cycdeser & deser, bool key_only, const MembersType * members, void * ros_message)
+{
+  return deserializeROSmessage_impl(
+    deser, members, ros_message,
+    key_only ? DeserializeMode::Key : DeserializeMode::Sample);
+}
+
+template<typename T>
+void skip_field(
+  const rosidl_typesupport_introspection_cpp::MessageMember * member,
+  cycdeser & deser)
+{
+  if (!member->is_array_) {
+    deser.skip<T, 1>();
+  } else if (member->array_size_ && !member->is_upper_bound_) {
+    deser.skipA<T>(member->array_size_);
+  } else {
+    deser.skip<T, 0>();
+  }
+}
+
+template<>
+inline void skip_field<std::string>(
+  const rosidl_typesupport_introspection_cpp::MessageMember * member,
+  cycdeser & deser)
+{
+  uint32_t n;
+  if (!member->is_array_) {
+    n = 1;
+  } else if (member->array_size_ && !member->is_upper_bound_) {
+    n = member->array_size_;
+  } else {
+    n = deser.deserialize_len(1);
+  }
+  for (size_t i = 0; i < n; i++) {
+    deser.skip<std::string, 1>();
+  }
+}
+
+template<>
+inline void skip_field<std::wstring>(
+  const rosidl_typesupport_introspection_cpp::MessageMember * member,
+  cycdeser & deser)
+{
+  uint32_t n;
+  if (!member->is_array_) {
+    n = 1;
+  } else if (member->array_size_ && !member->is_upper_bound_) {
+    n = member->array_size_;
+  } else {
+    n = deser.deserialize_len(1);
+  }
+  for (size_t i = 0; i < n; i++) {
+    deser.skip<std::wstring, 1>();
+  }
+}
+
+template<typename T>
+void skip_field(
+  const rosidl_typesupport_introspection_c__MessageMember * member,
+  cycdeser & deser)
+{
+  if (!member->is_array_) {
+    deser.skip<T, 1>();
+  } else if (member->array_size_ && !member->is_upper_bound_) {
+    deser.skipA<T>(member->array_size_);
+  } else {
+    deser.skip<T, 0>();
+  }
+}
+
+template<>
+inline void skip_field<std::string>(
+  const rosidl_typesupport_introspection_c__MessageMember * member,
+  cycdeser & deser)
+{
+  uint32_t n;
+  if (!member->is_array_) {
+    n = 1;
+  } else if (member->array_size_ && !member->is_upper_bound_) {
+    n = member->array_size_;
+  } else {
+    n = deser.deserialize_len(1);
+  }
+  for (size_t i = 0; i < n; i++) {
+    deser.skip<std::string, 1>();
+  }
+}
+
+template<>
+inline void skip_field<std::wstring>(
+  const rosidl_typesupport_introspection_c__MessageMember * member,
+  cycdeser & deser)
+{
+  uint32_t n;
+  if (!member->is_array_) {
+    n = 1;
+  } else if (member->array_size_ && !member->is_upper_bound_) {
+    n = member->array_size_;
+  } else {
+    n = deser.deserialize_len(1);
+  }
+  for (size_t i = 0; i < n; i++) {
+    deser.skip<std::wstring, 1>();
+  }
+}
+
+enum class ExtractkeyMode {
+  Sample,
+  Key,
+  Skip
+};
+
+template<typename MembersType>
+static bool deserializekeyROSmessage_impl(
+  cycdeser & deser, const MembersType * members, void * ros_message, ExtractkeyMode mode)
+{
+  assert(members);
+  assert(ros_message);
+
+  bool only_key = false;
+  switch (mode) {
+    case ExtractkeyMode::Sample:
+    case ExtractkeyMode::Skip:
+      break;
+    case ExtractkeyMode::Key:
+      only_key = members->has_any_key_member_;
+      break;
+  }
+
+  for (uint32_t i = 0; i < members->member_count_; ++i) {
+    const auto * member = members->members_ + i;
+    void * field = static_cast<char *>(ros_message) + member->offset_;
+    if (mode == ExtractkeyMode::Skip || (only_key && !member->is_key_)) {
+      switch (member->type_id_) {
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_BOOL:
+          skip_field<bool>(member, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_BYTE:
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT8:
+          skip_field<uint8_t>(member, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_CHAR:
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT8:
+          skip_field<char>(member, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT32:
+          skip_field<float>(member, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT64:
+          skip_field<double>(member, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT16:
+          skip_field<int16_t>(member, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT16:
+          skip_field<uint16_t>(member, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT32:
+          skip_field<int32_t>(member, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT32:
+          skip_field<uint32_t>(member, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT64:
+          skip_field<int64_t>(member, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT64:
+          skip_field<uint64_t>(member, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING:
+          skip_field<std::string>(member, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_WSTRING:
+          skip_field<std::wstring>(member, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE:
+          {
+            auto sub_members = (const MembersType *)member->members_->data;
+            size_t n;
+            if (!member->is_array_) {
+              n = 1;
+            } else if (member->array_size_ && !member->is_upper_bound_) {
+              n = member->array_size_;
+            } else {
+              n = deser.deserialize_len(1);
+            }
+            for (size_t i = 0; i < n; i++) {
+              deserializekeyROSmessage_impl(deser, sub_members, field, ExtractkeyMode::Skip);
+            }
+          }
+          break;
+        default:
+          throw std::runtime_error("unknown type");
+      }
+    } else {
+      switch (member->type_id_) {
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_BOOL:
+          deserialize_field<bool>(member, field, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_BYTE:
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT8:
+          deserialize_field<uint8_t>(member, field, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_CHAR:
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT8:
+          deserialize_field<char>(member, field, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT32:
+          deserialize_field<float>(member, field, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT64:
+          deserialize_field<double>(member, field, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT16:
+          deserialize_field<int16_t>(member, field, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT16:
+          deserialize_field<uint16_t>(member, field, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT32:
+          deserialize_field<int32_t>(member, field, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT32:
+          deserialize_field<uint32_t>(member, field, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT64:
+          deserialize_field<int64_t>(member, field, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT64:
+          deserialize_field<uint64_t>(member, field, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING:
+          deserialize_field<std::string>(member, field, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_WSTRING:
+          deserialize_field<std::wstring>(member, field, deser);
+          break;
+        case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE:
+          {
+            auto sub_members = (const MembersType *)member->members_->data;
+            size_t n;
+            if (!member->is_array_) {
+              n = 1;
+            } else if (member->array_size_ && !member->is_upper_bound_) {
+              n = member->array_size_;
+            } else {
+              n = deser.deserialize_len(1);
+            }
+            for (size_t i = 0; i < n; i++) {
+              deserializekeyROSmessage_impl(deser, sub_members, field, mode);
+            }
+          }
+          break;
+        default:
+          throw std::runtime_error("unknown type");
+      }
+    }
+  }
+
+  return true;
+}
+
+template<typename MembersType>
+bool TypeSupport<MembersType>::deserializekeyROSmessage(
+  cycdeser & deser, bool key_only, const MembersType * members, void * ros_message)
+{
+  return deserializekeyROSmessage_impl(
+    deser, members, ros_message,
+    key_only ? ExtractkeyMode::Key : ExtractkeyMode::Sample);
 }
 
 template<typename M, typename T>
@@ -364,17 +655,31 @@ void print_field(const M * member, cycprint & deser, T & dummy)
 }
 
 template<typename MembersType>
-bool TypeSupport<MembersType>::printROSmessage(
-  cycprint & deser, const MembersType * members)
+static bool printROSmessage_impl(
+  cycprint & deser, const MembersType * members, DeserializeMode mode)
 {
   assert(members);
+  
+  bool needs_comma = false;
+  bool only_key = false;
+  switch (mode) {
+    case DeserializeMode::Sample:
+      break;
+    case DeserializeMode::Key:
+      only_key = members->has_any_key_member_;
+      break;
+  }
 
   deser.print_constant("{");
   for (uint32_t i = 0; i < members->member_count_; ++i) {
-    if (i != 0) {
+    const auto * member = members->members_ + i;
+    if (only_key && !member->is_key_) {
+      continue;
+    }
+    if (needs_comma) {
       deser.print_constant(",");
     }
-    const auto * member = members->members_ + i;
+    needs_comma = true;
     switch (member->type_id_) {
       case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_BOOL:
         {bool dummy; print_field(member, deser, dummy);}
@@ -421,7 +726,7 @@ bool TypeSupport<MembersType>::printROSmessage(
         {
           auto sub_members = (const MembersType *)member->members_->data;
           if (!member->is_array_) {
-            printROSmessage(deser, sub_members);
+            printROSmessage_impl(deser, sub_members, mode);
           } else {
             size_t array_size = 0;
             if (member->array_size_ && !member->is_upper_bound_) {
@@ -431,7 +736,7 @@ bool TypeSupport<MembersType>::printROSmessage(
             }
             deser.print_constant("{");
             for (size_t index = 0; index < array_size; ++index) {
-              printROSmessage(deser, sub_members);
+              printROSmessage_impl(deser, sub_members, mode);
             }
             deser.print_constant("}");
           }
@@ -447,8 +752,17 @@ bool TypeSupport<MembersType>::printROSmessage(
 }
 
 template<typename MembersType>
+bool TypeSupport<MembersType>::printROSmessage(
+  cycprint & deser, bool key_only, const MembersType * members)
+{
+  return printROSmessage_impl(
+    deser, members,
+    key_only ? DeserializeMode::Key : DeserializeMode::Sample);
+}
+
+template<typename MembersType>
 bool TypeSupport<MembersType>::deserializeROSmessage(
-  cycdeser & deser, void * ros_message,
+  cycdeser & deser, bool key_only, void * ros_message,
   std::function<void(cycdeser &)> prefix)
 {
   assert(ros_message);
@@ -457,12 +771,38 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
     prefix(deser);
   }
 
-  if (members_->member_count_ != 0) {
-    TypeSupport::deserializeROSmessage(deser, members_, ros_message);
-  } else {
-    uint8_t dump = 0;
-    deser >> dump;
-    (void)dump;
+  if (!key_only || members_->has_any_key_member_) {
+    if (members_->member_count_ != 0) {
+      TypeSupport::deserializeROSmessage(deser, key_only, members_, ros_message);
+    } else {
+      uint8_t dump = 0;
+      deser >> dump;
+      (void)dump;
+    }
+  }
+
+  return true;
+}
+
+template<typename MembersType>
+bool TypeSupport<MembersType>::deserializekeyROSmessage(
+  cycdeser & deser, bool key_only, void * ros_message,
+  std::function<void(cycdeser &)> prefix)
+{
+  assert(ros_message);
+
+  if (prefix) {
+    prefix(deser);
+  }
+
+  if (!key_only || members_->has_any_key_member_) {
+    if (members_->member_count_ != 0) {
+      TypeSupport::deserializekeyROSmessage(deser, key_only, members_, ros_message);
+    } else {
+      uint8_t dump = 0;
+      deser >> dump;
+      (void)dump;
+    }
   }
 
   return true;
@@ -470,7 +810,7 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
 
 template<typename MembersType>
 bool TypeSupport<MembersType>::printROSmessage(
-  cycprint & prt,
+  cycprint & prt, bool key_only,
   std::function<void(cycprint &)> prefix)
 {
   if (prefix) {
@@ -479,12 +819,14 @@ bool TypeSupport<MembersType>::printROSmessage(
     prt.print_constant(",");
   }
 
-  if (members_->member_count_ != 0) {
-    TypeSupport::printROSmessage(prt, members_);
-  } else {
-    uint8_t dump = 0;
-    prt >> dump;
-    (void)dump;
+  if (!key_only || members_->has_any_key_member_) {
+    if (members_->member_count_ != 0) {
+      TypeSupport::printROSmessage(prt, key_only, members_);
+    } else {
+      uint8_t dump = 0;
+      prt >> dump;
+      (void)dump;
+    }
   }
 
   if (prefix) {

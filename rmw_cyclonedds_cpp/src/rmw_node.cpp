@@ -1905,7 +1905,7 @@ extern "C" rmw_ret_t rmw_deserialize(
       auto members =
         static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(ts->data);
       MessageTypeSupport_c msgts(members);
-      ok = msgts.deserializeROSmessage(sd, ros_message, nullptr);
+      ok = msgts.deserializeROSmessage(sd, false, ros_message, nullptr);
     } else {
       if ((ts =
         get_message_typesupport_handle(
@@ -1914,7 +1914,7 @@ extern "C" rmw_ret_t rmw_deserialize(
         auto members =
           static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(ts->data);
         MessageTypeSupport_cpp msgts(members);
-        ok = msgts.deserializeROSmessage(sd, ros_message, nullptr);
+        ok = msgts.deserializeROSmessage(sd, false, ros_message, nullptr);
       } else {
         RMW_SET_ERROR_MSG("rmw_serialize: type support trouble");
         return RMW_RET_ERROR;
@@ -2051,7 +2051,7 @@ extern "C" rmw_ret_t rmw_publish_serialized_message(
   TRACETOOLS_TRACEPOINT(rmw_publish, (const void *)publisher, serialized_message, tstamp);
 
   struct ddsi_serdata * d = serdata_rmw_from_serialized_message(
-    pub->sertype, serialized_message->buffer, serialized_message->buffer_length);
+    pub->sertype, SDK_DATA, serialized_message->buffer, serialized_message->buffer_length);
   d->timestamp.v = tstamp;
   d->statusinfo = 0;
 
@@ -2487,6 +2487,30 @@ static bool is_type_self_contained(const rosidl_message_type_support_t * type_su
   }
 }
 
+static bool is_type_with_key(const rosidl_message_type_support_t * type_supports)
+{
+  auto ts = get_message_typesupport_handle(
+    type_supports,
+    rosidl_typesupport_introspection_cpp::typesupport_identifier);
+  if (ts != nullptr) {   // CPP typesupport
+    auto members = static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(
+      ts->data);
+    return members->has_any_key_member_;
+  } else {
+    ts = get_message_typesupport_handle(
+      type_supports,
+      rosidl_typesupport_introspection_c__identifier);
+    if (ts != nullptr) {  // C typesupport
+      auto members = static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(
+        ts->data);
+      return members->has_any_key_member_;
+    } else {
+      RMW_SET_ERROR_MSG("Non supported type-supported");
+      return false;
+    }
+  }
+}
+
 static CddsPublisher * create_cdds_publisher(
   dds_entity_t dds_ppant, dds_entity_t dds_pub,
   const rosidl_message_type_support_t * type_supports,
@@ -2507,14 +2531,16 @@ static CddsPublisher * create_cdds_publisher(
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
   bool is_fixed_type = is_type_self_contained(type_support);
+  bool is_keyed_type = is_type_with_key(type_support);
   uint32_t sample_size = static_cast<uint32_t>(rmw_cyclonedds_cpp::get_message_size(type_support));
 
   auto sertype = create_sertype(
     type_support->typesupport_identifier,
+    type_support,
     create_message_type_support(type_support->data, type_support->typesupport_identifier),
     false,
     rmw_cyclonedds_cpp::make_message_value_type(type_supports),
-    sample_size, is_fixed_type);
+    sample_size, is_fixed_type, is_keyed_type);
   create_msg_dds_dynamic_type(type_support->typesupport_identifier, type_support->data, dds_ppant,
     sertype);
   struct ddsi_sertype * stact = nullptr;
@@ -3005,14 +3031,16 @@ static CddsSubscription * create_cdds_subscription(
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
   bool is_fixed_type = is_type_self_contained(type_support);
+  bool is_keyed_type = is_type_with_key(type_support);
   uint32_t sample_size = static_cast<uint32_t>(rmw_cyclonedds_cpp::get_message_size(type_support));
 
   auto sertype = create_sertype(
     type_support->typesupport_identifier,
+    type_support,
     create_message_type_support(type_support->data, type_support->typesupport_identifier),
     false,
     rmw_cyclonedds_cpp::make_message_value_type(type_supports),
-    sample_size, is_fixed_type);
+    sample_size, is_fixed_type, is_keyed_type);
   create_msg_dds_dynamic_type(type_support->typesupport_identifier, type_support->data, dds_ppant,
     sertype);
   topic = create_topic(dds_ppant, fqtopic_name.c_str(), sertype);
@@ -5134,14 +5162,14 @@ static rmw_ret_t rmw_init_cs(
     pubtopic_name = make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", qos_policies);
 
     pub_st = create_sertype(
-      type_support->typesupport_identifier, pub_type_support, true,
-      std::move(pub_msg_ts), 0U, false
+      type_support->typesupport_identifier, nullptr, pub_type_support, true,
+      std::move(pub_msg_ts), 0U, false, false
     );
     create_res_dds_dynamic_type(type_support->typesupport_identifier, type_support->data,
       node->context->impl->ppant, pub_st);
     sub_st = create_sertype(
-      type_support->typesupport_identifier, sub_type_support, true,
-      std::move(sub_msg_ts), 0U, false
+      type_support->typesupport_identifier, nullptr, sub_type_support, true,
+      std::move(sub_msg_ts), 0U, false, false
     );
     create_req_dds_dynamic_type(type_support->typesupport_identifier, type_support->data,
       node->context->impl->ppant, sub_st);
@@ -5162,14 +5190,14 @@ static rmw_ret_t rmw_init_cs(
     subtopic_name = make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", qos_policies);
 
     pub_st = create_sertype(
-      type_support->typesupport_identifier, pub_type_support, true,
-      std::move(pub_msg_ts), 0U, false
+      type_support->typesupport_identifier, nullptr, pub_type_support, true,
+      std::move(pub_msg_ts), 0U, false, false
     );
     create_req_dds_dynamic_type(type_support->typesupport_identifier, type_support->data,
       node->context->impl->ppant, pub_st);
     sub_st = create_sertype(
-      type_support->typesupport_identifier, sub_type_support, true,
-      std::move(sub_msg_ts), 0U, false
+      type_support->typesupport_identifier, nullptr, sub_type_support, true,
+      std::move(sub_msg_ts), 0U, false, false
     );
     create_res_dds_dynamic_type(type_support->typesupport_identifier, type_support->data,
       node->context->impl->ppant, sub_st);

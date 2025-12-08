@@ -108,10 +108,13 @@ class TypeSupport
 {
 public:
   bool deserializeROSmessage(
-    cycdeser & deser, void * ros_message,
+    cycdeser & deser, bool key_only, void * ros_message,
+    std::function<void(cycdeser &)> prefix = nullptr);
+  bool deserializekeyROSmessage(
+    cycdeser & deser, bool key_only, void * ros_message,
     std::function<void(cycdeser &)> prefix = nullptr);
   bool printROSmessage(
-    cycprint & deser,
+    cycprint & deser, bool key_only,
     std::function<void(cycprint &)> prefix = nullptr);
   std::string getName();
   bool is_type_self_contained();
@@ -127,9 +130,11 @@ protected:
 
 private:
   bool deserializeROSmessage(
-    cycdeser & deser, const MembersType * members, void * ros_message);
+   cycdeser & deser, bool key_only, const MembersType * members, void * ros_message);
+  bool deserializekeyROSmessage(
+   cycdeser & deser, bool key_only, const MembersType * members, void * ros_message);
   bool printROSmessage(
-    cycprint & deser, const MembersType * members);
+    cycprint & deser, bool key_only, const MembersType * members);
   bool is_type_self_contained(const MembersType * members);
 };
 

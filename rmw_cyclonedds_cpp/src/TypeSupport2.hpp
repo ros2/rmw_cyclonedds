@@ -175,16 +175,21 @@ struct Member
   const char * name;
   const AnyValueType * value_type;
   size_t member_offset;
+  bool is_key;
 };
 
 class StructValueType : public AnyValueType
 {
+protected:
+  bool m_has_keys;
+
 public:
   ROSIDL_TypeKind type_kind() const {return ROSIDL_TypeKind::MESSAGE;}
   size_t sizeof_type() const final {return sizeof_struct();}
   virtual size_t sizeof_struct() const = 0;
   virtual size_t n_members() const = 0;
   virtual const Member * get_member(size_t) const = 0;
+  bool has_keys() const {return m_has_keys;}
   EValueType e_value_type() const final {return EValueType::StructValueType;}
 };
 

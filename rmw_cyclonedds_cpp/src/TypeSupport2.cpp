@@ -149,6 +149,7 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
   const rosidl_typesupport_introspection_c__MessageMembers * impl)
 : impl{impl}, m_members{}, m_inner_value_types{}
 {
+  bool has_keys = false;
   for (size_t index = 0; index < impl->member_count_; index++) {
     auto member_impl = impl->members_[index];
 
@@ -182,19 +183,25 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
     } else {
       member_value_type = make_value_type<ROSIDLC_SpanSequenceValueType>(element_value_type);
     }
+    if (member_impl.is_key_) {
+      has_keys = true;
+    }
     m_members.push_back(
       Member{
         member_impl.name_,
         member_value_type,
         member_impl.offset_,
+        .is_key=member_impl.is_key_,
       });
   }
+  m_has_keys = has_keys;
 }
 
 ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
   const rosidl_typesupport_introspection_cpp::MessageMembers * impl)
 : impl(impl)
 {
+  bool has_keys = false;
   for (size_t index = 0; index < impl->member_count_; index++) {
     auto member_impl = impl->members_[index];
 
@@ -228,12 +235,17 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
       member_value_type = make_value_type<CallbackSpanSequenceValueType>(
         element_value_type, member_impl.size_function, member_impl.get_const_function);
     }
+    if (member_impl.is_key_) {
+      has_keys = true;
+    }
     m_members.push_back(
       Member {
         member_impl.name_,
         member_value_type,
         member_impl.offset_,
+        .is_key=member_impl.is_key_,
       });
   }
+  m_has_keys = has_keys;
 }
 }  // namespace rmw_cyclonedds_cpp

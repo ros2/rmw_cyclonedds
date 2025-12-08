@@ -124,6 +124,12 @@ enum class EncodingVersion
   CDR1,
 };
 
+enum class SerializeMode
+{
+  Sample,
+  Key
+};
+
 class CDRWriter : public BaseCDRWriter
 {
 public:
@@ -174,12 +180,12 @@ public:
       switch (t->e_value_type()) {
         case EValueType::PrimitiveValueType: {
             auto tt = static_cast<const PrimitiveValueType *>(t);
-            result = is_trivially_serialized(align, *tt);
+            result = is_trivially_serialized(align, *tt, SerializeMode::Sample);
           }
           break;
         case EValueType::ArrayValueType: {
             auto tt = static_cast<const ArrayValueType *>(t);
-            result = compute_trivially_serialized(align, *tt);
+            result = compute_trivially_serialized(align, *tt, SerializeMode::Sample);
             register_serializable_type(tt->element_value_type());
           }
           break;
@@ -188,7 +194,7 @@ public:
             for (size_t i = 0; i < tt->n_members(); i++) {
               register_serializable_type(tt->get_member(i)->value_type);
             }
-            result = is_trivially_serialized(align, *tt);
+            result = is_trivially_serialized(align, *tt, SerializeMode::Sample);
           }
           break;
         case EValueType::SpanSequenceValueType: {
@@ -207,25 +213,48 @@ public:
       }
     }
   }
+
   size_t get_serialized_size(const void * data) const override
   {
     SizeCursor cursor;
 
-    serialize_top_level(&cursor, data);
+    serialize_top_level(&cursor, data, SerializeMode::Sample);
+    return cursor.offset();
+  }
+
+  size_t get_serialized_key_size(const void * data) const override
+  {
+    SizeCursor cursor;
+
+    serialize_top_level(&cursor, data, SerializeMode::Key);
     return cursor.offset();
   }
 
   void serialize(void * dest, const void * data) const override
   {
     DataCursor cursor(dest);
-    serialize_top_level(&cursor, data);
+    serialize_top_level(&cursor, data, SerializeMode::Sample);
+  }
+
+  void serialize_key(void * dest, const void * data) const override
+  {
+    DataCursor cursor(dest);
+    serialize_top_level(&cursor, data, SerializeMode::Key);
   }
 
   size_t get_serialized_size(
     const cdds_request_wrapper_t & request) const override
   {
     SizeCursor cursor;
-    serialize_top_level(&cursor, request);
+    serialize_top_level(&cursor, request, SerializeMode::Sample);
+    return cursor.offset();
+  }
+
+  size_t get_serialized_key_size(
+    const cdds_request_wrapper_t & request) const override
+  {
+    SizeCursor cursor;
+    serialize_top_level(&cursor, request, SerializeMode::Key);
     return cursor.offset();
   }
 
@@ -233,11 +262,18 @@ public:
     void * dest, const cdds_request_wrapper_t & request) const override
   {
     DataCursor cursor(dest);
-    serialize_top_level(&cursor, request);
+    serialize_top_level(&cursor, request, SerializeMode::Sample);
+  }
+
+  void serialize_key(
+    void * dest, const cdds_request_wrapper_t & request) const override
+  {
+    DataCursor cursor(dest);
+    serialize_top_level(&cursor, request, SerializeMode::Key);
   }
 
   void serialize_top_level(
-    CDRCursor * cursor, const void * data) const
+    CDRCursor * cursor, const void * data, SerializeMode mode) const
   {
     put_rtps_header(cursor);
 
@@ -245,11 +281,13 @@ public:
       cursor->rebase(+4);
     }
 
-    if (m_root_value_type->n_members() == 0 && eversion == EncodingVersion::CDR_Legacy) {
-      char dummy = '\0';
-      cursor->put_bytes(&dummy, 1);
-    } else {
-      serialize(cursor, data, m_root_value_type.get());
+    if (mode != SerializeMode::Key || m_root_value_type.get()->has_keys()) {
+      if (m_root_value_type->n_members() == 0 && eversion == EncodingVersion::CDR_Legacy) {
+        char dummy = '\0';
+        cursor->put_bytes(&dummy, 1); // FIXME: why?
+      } else {
+        serialize(cursor, data, m_root_value_type.get(), mode);
+      }
     }
 
     if (eversion == EncodingVersion::CDR_Legacy) {
@@ -258,16 +296,19 @@ public:
   }
 
   void serialize_top_level(
-    CDRCursor * cursor, const cdds_request_wrapper_t & request) const
+    CDRCursor * cursor, const cdds_request_wrapper_t & request, SerializeMode mode) const
   {
     put_rtps_header(cursor);
     if (eversion == EncodingVersion::CDR_Legacy) {
       cursor->rebase(+4);
     }
-    cursor->put_bytes(&request.header.guid, sizeof(request.header.guid));
-    cursor->put_bytes(&request.header.seq, sizeof(request.header.seq));
 
-    serialize(cursor, request.data, m_root_value_type.get());
+    if (mode != SerializeMode::Key || m_root_value_type.get()->has_keys()) {
+      cursor->put_bytes(&request.header.guid, sizeof(request.header.guid));
+      cursor->put_bytes(&request.header.seq, sizeof(request.header.seq));
+
+      serialize(cursor, request.data, m_root_value_type.get(), mode);
+    }
 
     if (eversion == EncodingVersion::CDR_Legacy) {
       cursor->rebase(-4);
@@ -333,8 +374,9 @@ protected:
     }
   }
 
-  bool is_trivially_serialized(size_t align, const StructValueType & p) const
+  bool is_trivially_serialized(size_t align, const StructValueType & p, SerializeMode mode) const
   {
+    static_cast<void>(mode);
     align %= max_align;
 
     size_t offset = align;
@@ -343,7 +385,7 @@ protected:
       if (m->member_offset != offset - align) {
         return false;
       }
-      if (!compute_trivially_serialized(offset % max_align, m->value_type)) {
+      if (!compute_trivially_serialized(offset % max_align, m->value_type, mode)) {
         return false;
       }
       offset += m->value_type->sizeof_type();
@@ -352,8 +394,9 @@ protected:
     return offset == align + p.sizeof_struct();
   }
 
-  bool is_trivially_serialized(size_t align, const PrimitiveValueType & v) const
+  bool is_trivially_serialized(size_t align, const PrimitiveValueType & v, SerializeMode mode) const
   {
+    static_cast<void>(mode);
     align %= max_align;
 
     // Value of 0 implies it is not a primitive, which should not happen and is checked elsewhere
@@ -365,49 +408,61 @@ protected:
     return v.sizeof_type() == get_cdr_size_of_primitive(v.type_kind());
   }
 
-  bool lookup_many_trivially_serialized(size_t align, const AnyValueType * evt) const
+  bool lookup_many_trivially_serialized(size_t align, const AnyValueType * evt, SerializeMode mode) const
   {
     align %= max_align;
     // CLEVERNESS ALERT
     // we take advantage of the fact that if something is aligned at offset A and at offset A+N
     // then the alignment requirement of its elements divides A+k*N for all k
-    return lookup_trivially_serialized(align, evt) &&
-           lookup_trivially_serialized((align + evt->sizeof_type()) % max_align, evt);
+    return lookup_trivially_serialized(align, evt, mode) &&
+           lookup_trivially_serialized((align + evt->sizeof_type()) % max_align, evt, mode);
   }
 
-  bool compute_trivially_serialized(size_t align, const ArrayValueType & v) const
+  bool compute_trivially_serialized(size_t align, const ArrayValueType & v, SerializeMode mode) const
   {
     auto evt = v.element_value_type();
     align %= max_align;
     // CLEVERNESS ALERT
     // we take advantage of the fact that if something is aligned at offset A and at offset A+N
     // then the alignment requirement of its elements divides A+k*N for all k
-    return compute_trivially_serialized(align, evt) &&
-           compute_trivially_serialized((align + evt->sizeof_type()) % max_align, evt);
+    return compute_trivially_serialized(align, evt, mode) &&
+           compute_trivially_serialized((align + evt->sizeof_type()) % max_align, evt, mode);
   }
 
   /// Returns true if a memcpy is all it takes to serialize this value
-  bool lookup_trivially_serialized(size_t align, const AnyValueType * p) const
+  bool lookup_trivially_serialized(size_t align, const AnyValueType * p, SerializeMode mode) const
   {
-    CacheKey key{align % max_align, p};
-    return trivially_serialized_cache.at(key);
+    switch (mode) {
+      case SerializeMode::Key:
+        return false;
+      case SerializeMode::Sample:
+        CacheKey key{align % max_align, p};
+        return trivially_serialized_cache.at(key);
+    }
   }
 
   /// Returns true if a memcpy is all it takes to serialize this value
-  bool compute_trivially_serialized(size_t align, const AnyValueType * p) const
+  bool compute_trivially_serialized(size_t align, const AnyValueType * p, SerializeMode mode) const
   {
     align %= max_align;
 
     bool result;
     switch (p->e_value_type()) {
       case EValueType::PrimitiveValueType:
-        result = is_trivially_serialized(align, *static_cast<const PrimitiveValueType *>(p));
+        result = is_trivially_serialized(align, *static_cast<const PrimitiveValueType *>(p), mode);
         break;
       case EValueType::StructValueType:
-        result = is_trivially_serialized(align, *static_cast<const StructValueType *>(p));
+        switch (mode) {
+          case SerializeMode::Key:
+            result = false;
+            break;
+          case SerializeMode::Sample:
+            result = is_trivially_serialized(align, *static_cast<const StructValueType *>(p), mode);
+            break;
+        }
         break;
       case EValueType::ArrayValueType:
-        result = compute_trivially_serialized(align, *static_cast<const ArrayValueType *>(p));
+        result = compute_trivially_serialized(align, *static_cast<const ArrayValueType *>(p), mode);
         break;
       case EValueType::U8StringValueType:
       case EValueType::U16StringValueType:
@@ -429,8 +484,9 @@ protected:
     return sizeof_ < max_align ? sizeof_ : max_align;
   }
 
-  void serialize(CDRCursor * cursor, const void * data, const PrimitiveValueType & value_type) const
+  void serialize(CDRCursor * cursor, const void * data, const PrimitiveValueType & value_type, SerializeMode mode) const
   {
+    static_cast<void>(mode);
     cursor->align(get_cdr_alignof_primitive(value_type.type_kind()));
     size_t n_bytes = get_cdr_size_of_primitive(value_type.type_kind());
 
@@ -470,8 +526,9 @@ protected:
     }
   }
 
-  void serialize(CDRCursor * cursor, const void * data, const U8StringValueType & value_type) const
+  void serialize(CDRCursor * cursor, const void * data, const U8StringValueType & value_type, SerializeMode mode) const
   {
+    static_cast<void>(mode);
     auto str = value_type.data(data);
     serialize_u32(cursor, str.size() + 1);
     cursor->put_bytes(str.data(), str.size());
@@ -479,8 +536,9 @@ protected:
     cursor->put_bytes(&terminator, 1);
   }
 
-  void serialize(CDRCursor * cursor, const void * data, const U16StringValueType & value_type) const
+  void serialize(CDRCursor * cursor, const void * data, const U16StringValueType & value_type, SerializeMode mode) const
   {
+    static_cast<void>(mode);
     auto str = value_type.data(data);
     if (eversion == EncodingVersion::CDR_Legacy) {
       serialize_u32(cursor, str.size());
@@ -497,26 +555,27 @@ protected:
     }
   }
 
-  void serialize(CDRCursor * cursor, const void * data, const ArrayValueType & value_type) const
+  void serialize(CDRCursor * cursor, const void * data, const ArrayValueType & value_type, SerializeMode mode) const
   {
     serialize_many(
-      cursor, value_type.get_data(data), value_type.array_size(), value_type.element_value_type());
+      cursor, value_type.get_data(data), value_type.array_size(), value_type.element_value_type(), mode);
   }
 
   void serialize(
     CDRCursor * cursor, const void * data,
-    const SpanSequenceValueType & value_type) const
+    const SpanSequenceValueType & value_type, SerializeMode mode) const
   {
     size_t count = value_type.sequence_size(data);
     serialize_u32(cursor, count);
     serialize_many(
-      cursor, value_type.sequence_contents(data), count, value_type.element_value_type());
+            cursor, value_type.sequence_contents(data), count, value_type.element_value_type(), mode);
   }
 
   void serialize(
     CDRCursor * cursor, const void * data,
-    const BoolVectorValueType & value_type) const
+    const BoolVectorValueType & value_type, SerializeMode mode) const
   {
+    static_cast<void>(mode);
     size_t count = value_type.size(data);
     serialize_u32(cursor, count);
     if (cursor->ignores_data()) {
@@ -529,32 +588,32 @@ protected:
     }
   }
 
-  void serialize(CDRCursor * cursor, const void * data, const AnyValueType * value_type) const
+  void serialize(CDRCursor * cursor, const void * data, const AnyValueType * value_type, SerializeMode mode) const
   {
-    if (lookup_trivially_serialized(cursor->offset(), value_type)) {
+    if (lookup_trivially_serialized(cursor->offset(), value_type, mode)) {
       cursor->put_bytes(data, value_type->sizeof_type());
     } else {
 //      value_type->apply([&](const auto & vt) {return serialize(cursor, data, vt);});
       if (auto s = dynamic_cast<const PrimitiveValueType *>(value_type)) {
-        return serialize(cursor, data, *s);
+        return serialize(cursor, data, *s, mode);
       }
       if (auto s = dynamic_cast<const U8StringValueType *>(value_type)) {
-        return serialize(cursor, data, *s);
+        return serialize(cursor, data, *s, mode);
       }
       if (auto s = dynamic_cast<const U16StringValueType *>(value_type)) {
-        return serialize(cursor, data, *s);
+        return serialize(cursor, data, *s, mode);
       }
       if (auto s = dynamic_cast<const StructValueType *>(value_type)) {
-        return serialize(cursor, data, *s);
+        return serialize(cursor, data, *s, mode);
       }
       if (auto s = dynamic_cast<const ArrayValueType *>(value_type)) {
-        return serialize(cursor, data, *s);
+        return serialize(cursor, data, *s, mode);
       }
       if (auto s = dynamic_cast<const SpanSequenceValueType *>(value_type)) {
-        return serialize(cursor, data, *s);
+        return serialize(cursor, data, *s, mode);
       }
       if (auto s = dynamic_cast<const BoolVectorValueType *>(value_type)) {
-        return serialize(cursor, data, *s);
+        return serialize(cursor, data, *s, mode);
       }
       unreachable();
     }
@@ -562,7 +621,7 @@ protected:
 
   void serialize_many(
     CDRCursor * cursor, const void * data, size_t count,
-    const AnyValueType * vt) const
+    const AnyValueType * vt, SerializeMode mode) const
   {
     // nothing to do; not even alignment
     if (count == 0) {
@@ -570,7 +629,7 @@ protected:
     }
 
     // Serialize the first element.
-    serialize(cursor, data, vt);
+    serialize(cursor, data, vt, mode);
 
     // If the value type is primitive, we are now aligned.
     // It might be that the first element is not trivially serialized but the rest are;
@@ -582,27 +641,43 @@ protected:
       return;
     }
 
-    if (lookup_many_trivially_serialized(cursor->offset(), vt)) {
+    if (lookup_many_trivially_serialized(cursor->offset(), vt, mode)) {
       size_t value_size = vt->sizeof_type();
       cursor->put_bytes(data, count * value_size);
       return;
     } else {
       for (size_t i = 0; i < count; i++) {
         auto element = byte_offset(data, i * vt->sizeof_type());
-        serialize(cursor, element, vt);
+        serialize(cursor, element, vt, mode);
       }
     }
   }
 
   void serialize(
     CDRCursor * cursor, const void * struct_data,
-    const StructValueType & struct_info) const
+    const StructValueType & struct_info,
+    SerializeMode mode) const
   {
+    bool only_key = false;
+    switch (mode) {
+      case SerializeMode::Sample:
+        break;
+      case SerializeMode::Key:
+        // 1. top-level, Key, has_keys = false: should not serialize anything
+        // 2. top-level, Key, has_keys = true:  serialize only fields marked as key
+        // 3. not top-level, Key, has_keys = false: serialize everything
+        // 4. not top-level, Key, has_keys = true:  serialize only fields marked as key
+        // Case 1 is taken care of by serialize_top_level()
+        only_key = struct_info.has_keys();
+        break;
+    }
     for (size_t i = 0; i < struct_info.n_members(); i++) {
       auto member_info = struct_info.get_member(i);
+      if (only_key && !member_info->is_key)
+        continue;
       auto value_type = member_info->value_type;
       auto member_data = byte_offset(struct_data, member_info->member_offset);
-      serialize(cursor, member_data, value_type);
+      serialize(cursor, member_data, value_type, mode);
     }
   }
 };

@@ -242,6 +242,37 @@ public:
   {
     deserializeA(x.data(), x.size());
   }
+
+  template< class T, size_t N, typename = std::enable_if<std::is_arithmetic<T>::value> >
+  inline void skip()
+  {
+    uint32_t n = (N > 0) ? N : deserialize_len(sizeof(T));
+    if (n > 0) {
+      align(sizeof(T));
+      validate_size(N, sizeof(T));
+      pos += N * sizeof(T);
+    }
+  }
+
+  template<>
+  inline void skip<std::string, 1>()
+  {
+    skip<char, 0>();
+  }
+  template<>
+  inline void skip<std::wstring, 1>()
+  {
+    skip<wchar_t, 0>();
+  }
+  template< class T, typename = std::enable_if<std::is_arithmetic<T>::value> >
+  inline void skipA(size_t n)
+  {
+    if (n > 0) {
+      align(sizeof(T));
+      validate_size(n, sizeof(T));
+      pos += n * sizeof(T);
+    }
+  }
 };
 
 class cycprint : cycdeserbase

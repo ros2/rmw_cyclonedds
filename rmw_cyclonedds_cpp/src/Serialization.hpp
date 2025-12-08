@@ -27,9 +27,13 @@ class BaseCDRWriter
 {
 public:
   virtual size_t get_serialized_size(const void * data) const = 0;
+  virtual size_t get_serialized_key_size(const void * data) const = 0;
   virtual void serialize(void * dest, const void * data) const = 0;
+  virtual void serialize_key(void * dest, const void * data) const = 0;
   virtual size_t get_serialized_size(const cdds_request_wrapper_t & request) const = 0;
+  virtual size_t get_serialized_key_size(const cdds_request_wrapper_t & request) const = 0;
   virtual void serialize(void * dest, const cdds_request_wrapper_t & request) const = 0;
+  virtual void serialize_key(void * dest, const cdds_request_wrapper_t & request) const = 0;
   virtual ~BaseCDRWriter() = default;
 };
 
