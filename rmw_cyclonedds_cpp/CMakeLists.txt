@@ -83,7 +83,8 @@ add_library(rmw_cyclonedds_cpp
   src/deserialization_exception.cpp
   src/Serialization.cpp
   src/TypeSupport2.cpp
-  src/TypeSupport.cpp)
+  src/TypeSupport.cpp
+  src/dyntype_helper.c)
 
 configure_file("src/cdds_version.hpp.in" "src/cdds_version.hpp")
 target_include_directories(rmw_cyclonedds_cpp PRIVATE ${CMAKE_BINARY_DIR}/src)

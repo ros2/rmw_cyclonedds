@@ -47,6 +47,8 @@
 #include "dds/ddsi/ddsi_typelib.h"
 #endif
 
+#include "dyntype_helper.h"
+
 // When non-zero throw an exception when dynamic type construction fails.  Right now, it
 // should handle everything but WStrings fine, but those are part of the test suite.
 //
@@ -898,45 +900,6 @@ inline std::string create_type_name(const void * untyped_members)
 }
 
 #if DDS_HAS_TYPELIB
-dds_dynamic_type_descriptor_t get_dynamic_type_descriptor_prim(
-  dds_dynamic_type_kind_t kind, const char *name, uint32_t num_bounds, const uint32_t *bounds,
-  dds_dynamic_type_kind_t type)
-{
-  dds_dynamic_type_descriptor_t desc{};
-  desc.kind = kind;
-  desc.name = name;
-  desc.num_bounds = num_bounds;
-  desc.bounds = bounds;
-  desc.element_type = DDS_DYNAMIC_TYPE_SPEC_PRIM(type);
-  return desc;
-}
-
-dds_dynamic_type_descriptor_t get_dynamic_type_descriptor(
-  dds_dynamic_type_kind_t kind, const char *name, uint32_t num_bounds, const uint32_t *bounds,
-  dds_dynamic_type_t type)
-{
-  dds_dynamic_type_descriptor_t desc{};
-  desc.kind = kind;
-  desc.name = name;
-  desc.num_bounds = num_bounds;
-  desc.bounds = bounds;
-  desc.element_type = DDS_DYNAMIC_TYPE_SPEC(type);
-  return desc;
-}
-
-dds_dynamic_member_descriptor_t get_dynamic_member_descriptor_prim(
-  dds_dynamic_type_kind_t type, const char *name)
-{
-  return DDS_DYNAMIC_MEMBER_PRIM(type, name);
-}
-
-dds_dynamic_member_descriptor_t get_dynamic_member_descriptor(
-  dds_dynamic_type_t ddt, const char *name)
-{
-  return DDS_DYNAMIC_MEMBER(ddt, name);
-}
-
-
 template<typename MemberType>
 static void dynamic_type_add_array_prim(
   dds_dynamic_type_t * dstruct, dds_entity_t dds_ppant, const MemberType * member,
@@ -1179,6 +1142,7 @@ static bool construct_dds_dynamic_type(
   return true;
 }
 #endif
+
 void create_msg_dds_dynamic_type(
   const char * type_support_identifier, const void * untyped_members,
   dds_entity_t dds_ppant, struct sertype_rmw * st)
