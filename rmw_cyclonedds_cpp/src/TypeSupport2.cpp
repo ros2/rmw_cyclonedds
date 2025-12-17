@@ -43,6 +43,8 @@ public:
   static constexpr TypeGenerator gen = TypeGenerator::ROSIDL_C;
   explicit ROSIDLC_StructValueType(const rosidl_typesupport_introspection_c__MessageMembers * impl);
   size_t sizeof_struct() const override {return impl->size_of_;}
+  size_t cdrsizeof_struct() const override {throw std::logic_error("not implemented");}
+  size_t cdralignof_struct() const override {throw std::logic_error("not implemented");}
   size_t n_members() const override {return impl->member_count_;}
   const Member * get_member(size_t index) const override {return &m_members.at(index);}
 };
@@ -66,6 +68,8 @@ public:
   explicit ROSIDLCPP_StructValueType(
     const rosidl_typesupport_introspection_cpp::MessageMembers * impl);
   size_t sizeof_struct() const override {return impl->size_of_;}
+  size_t cdrsizeof_struct() const override {throw std::logic_error("not implemented");}
+  size_t cdralignof_struct() const override {throw std::logic_error("not implemented");}
   size_t n_members() const override {return impl->member_count_;}
   const Member * get_member(size_t index) const final {return &m_members.at(index);}
 };
@@ -179,9 +183,15 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
         element_value_type, member_impl.array_size_);
     } else if (member_impl.size_function) {
       member_value_type = make_value_type<CallbackSpanSequenceValueType>(
-        element_value_type, member_impl.size_function, member_impl.get_const_function);
+              element_value_type,
+              member_impl.size_function,
+              member_impl.get_const_function,
+              member_impl.get_function,
+              [member_impl](void *p, size_t s){
+                if (!member_impl.resize_function(p, s)) { throw; }
+              });
     } else {
-      member_value_type = make_value_type<ROSIDLC_SpanSequenceValueType>(element_value_type);
+      member_value_type = make_value_type<ROSIDLC_SpanSequenceValueType>(element_value_type, member_impl.resize_function);
     }
     if (member_impl.is_key_) {
       has_keys = true;
@@ -233,7 +243,7 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
       member_value_type = make_value_type<BoolVectorValueType>();
     } else {
       member_value_type = make_value_type<CallbackSpanSequenceValueType>(
-        element_value_type, member_impl.size_function, member_impl.get_const_function);
+        element_value_type, member_impl.size_function, member_impl.get_const_function, member_impl.get_function, member_impl.resize_function);
     }
     if (member_impl.is_key_) {
       has_keys = true;

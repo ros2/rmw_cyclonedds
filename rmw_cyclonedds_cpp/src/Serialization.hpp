@@ -22,22 +22,36 @@
 
 namespace rmw_cyclonedds_cpp
 {
+  enum class SampleOrKey {
+    Sample,
+    Key
+  };
 
-class BaseCDRWriter
-{
-public:
-  virtual size_t get_serialized_size(const void * data) const = 0;
-  virtual size_t get_serialized_key_size(const void * data) const = 0;
-  virtual void serialize(void * dest, const void * data) const = 0;
-  virtual void serialize_key(void * dest, const void * data) const = 0;
-  virtual size_t get_serialized_size(const cdds_request_wrapper_t & request) const = 0;
-  virtual size_t get_serialized_key_size(const cdds_request_wrapper_t & request) const = 0;
-  virtual void serialize(void * dest, const cdds_request_wrapper_t & request) const = 0;
-  virtual void serialize_key(void * dest, const cdds_request_wrapper_t & request) const = 0;
-  virtual ~BaseCDRWriter() = default;
-};
+  enum class SampleOrRequest {
+    Sample,
+    Request
+  };
 
-std::unique_ptr<BaseCDRWriter> make_cdr_writer(std::unique_ptr<StructValueType> value_type);
+  class BaseCDRWriter
+  {
+  public:
+    virtual size_t get_serialized_size(const void * data, SampleOrKey what) const = 0;
+    virtual void serialize(void * dest, const void * data, SampleOrKey what) const = 0;
+    virtual ~BaseCDRWriter() = default;
+  };
+
+  std::unique_ptr<BaseCDRWriter> make_cdr_writer(const StructValueType * value_type, SampleOrRequest variant);
+
+  class BaseCDRReader
+  {
+  public:
+    virtual void deserialize(void * dest, const void * cdr, size_t cdrsize, SampleOrKey what) const = 0;
+    virtual void extractkey(std::vector<byte>& dest, const void * cdr, size_t cdrsize, SampleOrKey what) const = 0;
+
+    virtual ~BaseCDRReader() = default;
+  };
+
+  std::unique_ptr<BaseCDRReader> make_cdr_reader(const StructValueType * value_type, SampleOrRequest variant);
 }  // namespace rmw_cyclonedds_cpp
 
 #endif  // SERIALIZATION_HPP_

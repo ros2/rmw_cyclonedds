@@ -33,6 +33,7 @@ extern "C" {
 namespace rmw_cyclonedds_cpp
 {
   class BaseCDRWriter;
+  class BaseCDRReader;
 }
 
 struct CddsTypeSupport
@@ -46,7 +47,9 @@ struct sertype_rmw : ddsi_sertype
 {
   CddsTypeSupport type_support;
   bool is_request_header;
+  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type;
   std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRWriter> cdr_writer;
+  std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRReader> cdr_reader;
   bool is_fixed;
   std::mutex serialize_lock;
 #if DDS_HAS_TYPELIB
