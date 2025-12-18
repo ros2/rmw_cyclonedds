@@ -45,6 +45,7 @@ public:
   size_t sizeof_struct() const override {return impl->size_of_;}
   size_t cdrsizeof_struct() const override {throw std::logic_error("not implemented");}
   size_t cdralignof_struct() const override {throw std::logic_error("not implemented");}
+  TypeGenerator type_generator() const override {return gen;}
   size_t n_members() const override {return impl->member_count_;}
   const Member * get_member(size_t index) const override {return &m_members.at(index);}
 };
@@ -70,6 +71,7 @@ public:
   size_t sizeof_struct() const override {return impl->size_of_;}
   size_t cdrsizeof_struct() const override {throw std::logic_error("not implemented");}
   size_t cdralignof_struct() const override {throw std::logic_error("not implemented");}
+  TypeGenerator type_generator() const override {return gen;}
   size_t n_members() const override {return impl->member_count_;}
   const Member * get_member(size_t index) const final {return &m_members.at(index);}
 };
@@ -154,6 +156,7 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
 : impl{impl}, m_members{}, m_inner_value_types{}
 {
   bool has_keys = false;
+  bool is_self_contained = true;
   for (size_t index = 0; index < impl->member_count_; index++) {
     auto member_impl = impl->members_[index];
 
@@ -196,6 +199,9 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
     if (member_impl.is_key_) {
       has_keys = true;
     }
+    if (!member_value_type->is_self_contained()) {
+      is_self_contained = false;
+    }
     m_members.push_back(
       Member{
         member_impl.name_,
@@ -205,6 +211,7 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
       });
   }
   m_has_keys = has_keys;
+  m_is_self_contained = is_self_contained;
 }
 
 ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
@@ -212,6 +219,7 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
 : impl(impl)
 {
   bool has_keys = false;
+  bool is_self_contained = true;
   for (size_t index = 0; index < impl->member_count_; index++) {
     auto member_impl = impl->members_[index];
 
@@ -248,6 +256,9 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
     if (member_impl.is_key_) {
       has_keys = true;
     }
+    if (!member_value_type->is_self_contained()) {
+      is_self_contained = false;
+    }
     m_members.push_back(
       Member {
         member_impl.name_,
@@ -257,5 +268,6 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
       });
   }
   m_has_keys = has_keys;
+  m_is_self_contained = is_self_contained;
 }
 }  // namespace rmw_cyclonedds_cpp

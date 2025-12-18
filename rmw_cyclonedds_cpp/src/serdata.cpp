@@ -37,9 +37,6 @@
 #include "dds/ddsc/dds_psmx.h"
 #endif
 #include "rmw/error_handling.h"
-#include "MessageTypeSupport.hpp"
-#include "ServiceTypeSupport.hpp"
-#include "serdes.hpp"
 #include "dds/ddsrt/mh3.h"
 
 #if DDS_HAS_TYPELIB
@@ -55,93 +52,7 @@
 // all.
 #define THROW_ON_DYNAMIC_TYPE_ERROR 0
 
-using TypeSupport_c =
-  rmw_cyclonedds_cpp::TypeSupport<rosidl_typesupport_introspection_c__MessageMembers>;
-using TypeSupport_cpp =
-  rmw_cyclonedds_cpp::TypeSupport<rosidl_typesupport_introspection_cpp::MessageMembers>;
-using MessageTypeSupport_c =
-  rmw_cyclonedds_cpp::MessageTypeSupport<rosidl_typesupport_introspection_c__MessageMembers>;
-using MessageTypeSupport_cpp =
-  rmw_cyclonedds_cpp::MessageTypeSupport<rosidl_typesupport_introspection_cpp::MessageMembers>;
-using RequestTypeSupport_c = rmw_cyclonedds_cpp::RequestTypeSupport<
-  rosidl_typesupport_introspection_c__ServiceMembers,
-  rosidl_typesupport_introspection_c__MessageMembers>;
-using RequestTypeSupport_cpp = rmw_cyclonedds_cpp::RequestTypeSupport<
-  rosidl_typesupport_introspection_cpp::ServiceMembers,
-  rosidl_typesupport_introspection_cpp::MessageMembers>;
-using ResponseTypeSupport_c = rmw_cyclonedds_cpp::ResponseTypeSupport<
-  rosidl_typesupport_introspection_c__ServiceMembers,
-  rosidl_typesupport_introspection_c__MessageMembers>;
-using ResponseTypeSupport_cpp = rmw_cyclonedds_cpp::ResponseTypeSupport<
-  rosidl_typesupport_introspection_cpp::ServiceMembers,
-  rosidl_typesupport_introspection_cpp::MessageMembers>;
-
 using namespace rmw_cyclonedds_cpp;
-
-static bool using_introspection_c_typesupport(const char * typesupport_identifier)
-{
-  return strcmp(
-    typesupport_identifier,
-    rosidl_typesupport_introspection_c__identifier) == 0;
-}
-
-static bool using_introspection_cpp_typesupport(const char * typesupport_identifier)
-{
-  return strcmp(
-    typesupport_identifier,
-    rosidl_typesupport_introspection_cpp::typesupport_identifier) == 0;
-}
-
-void * create_message_type_support(
-  const void * untyped_members,
-  const char * typesupport_identifier)
-{
-  if (using_introspection_c_typesupport(typesupport_identifier)) {
-    auto members =
-      static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(untyped_members);
-    return new MessageTypeSupport_c(members);
-  } else if (using_introspection_cpp_typesupport(typesupport_identifier)) {
-    auto members =
-      static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(untyped_members);
-    return new MessageTypeSupport_cpp(members);
-  }
-  RMW_SET_ERROR_MSG("Unknown typesupport identifier");
-  return nullptr;
-}
-
-void * create_request_type_support(
-  const void * untyped_members,
-  const char * typesupport_identifier)
-{
-  if (using_introspection_c_typesupport(typesupport_identifier)) {
-    auto members =
-      static_cast<const rosidl_typesupport_introspection_c__ServiceMembers *>(untyped_members);
-    return new RequestTypeSupport_c(members);
-  } else if (using_introspection_cpp_typesupport(typesupport_identifier)) {
-    auto members =
-      static_cast<const rosidl_typesupport_introspection_cpp::ServiceMembers *>(untyped_members);
-    return new RequestTypeSupport_cpp(members);
-  }
-  RMW_SET_ERROR_MSG("Unknown typesupport identifier");
-  return nullptr;
-}
-
-void * create_response_type_support(
-  const void * untyped_members,
-  const char * typesupport_identifier)
-{
-  if (using_introspection_c_typesupport(typesupport_identifier)) {
-    auto members =
-      static_cast<const rosidl_typesupport_introspection_c__ServiceMembers *>(untyped_members);
-    return new ResponseTypeSupport_c(members);
-  } else if (using_introspection_cpp_typesupport(typesupport_identifier)) {
-    auto members =
-      static_cast<const rosidl_typesupport_introspection_cpp::ServiceMembers *>(untyped_members);
-    return new ResponseTypeSupport_cpp(members);
-  }
-  RMW_SET_ERROR_MSG("Unknown typesupport identifier");
-  return nullptr;
-}
 
 void serdata_rmw::resize(size_t requested_size)
 {
@@ -214,8 +125,6 @@ static void serdata_rmw_set_key_from_ser(serdata_rmw *d)
       std::vector<byte> key;
       type->cdr_reader->extractkey(key, d->data(), d->size(), (d->kind == SDK_DATA) ? SampleOrKey::Sample : SampleOrKey::Key);
       d->set_key(key.size(), key.data());
-    } catch (rmw_cyclonedds_cpp::Exception & e) {
-      RMW_SET_ERROR_MSG(e.what());
     } catch (std::runtime_error & e) {
       RMW_SET_ERROR_MSG(e.what());
     }
@@ -640,9 +549,6 @@ static size_t serdata_rmw_print(
         return typed_typesupport->printROSmessage(sd, d->kind != SDK_DATA, prefix);
       }
     }
-  } catch (rmw_cyclonedds_cpp::Exception & e) {
-    RMW_SET_ERROR_MSG(e.what());
-    return false;
   } catch (std::runtime_error & e) {
     RMW_SET_ERROR_MSG(e.what());
     return false;
@@ -706,14 +612,6 @@ static void sertype_rmw_free(struct ddsi_sertype * tpcmn)
 {
   struct sertype_rmw * tp = static_cast<struct sertype_rmw *>(tpcmn);
   ddsi_sertype_fini(tpcmn);
-  if (tp->type_support.type_support_) {
-    if (using_introspection_c_typesupport(tp->type_support.typesupport_identifier_)) {
-      delete static_cast<TypeSupport_c *>(tp->type_support.type_support_);
-    } else if (using_introspection_cpp_typesupport(tp->type_support.typesupport_identifier_)) {
-      delete static_cast<TypeSupport_cpp *>(tp->type_support.type_support_);
-    }
-    tp->type_support.type_support_ = NULL;
-  }
 #if DDS_HAS_TYPELIB
   ddsrt_free((void *)tp->type_information.data);
   ddsrt_free((void *)tp->type_mapping.data);
@@ -766,10 +664,7 @@ bool sertype_rmw_equal(
   if (a->is_request_header != b->is_request_header) {
     return false;
   }
-  if (strcmp(
-      a->type_support.typesupport_identifier_,
-      b->type_support.typesupport_identifier_) != 0)
-  {
+  if (a->message_type->type_generator() != b->message_type->type_generator()) {
     return false;
   }
   return true;
@@ -779,10 +674,9 @@ uint32_t sertype_rmw_hash(const struct ddsi_sertype * tpcmn)
 {
   const struct sertype_rmw * tp = static_cast<const struct sertype_rmw *>(tpcmn);
   uint32_t h2 = static_cast<uint32_t>(std::hash<bool>{}(tp->is_request_header));
-  uint32_t h1 =
-    static_cast<uint32_t>(std::hash<std::string>{}(
-      std::string(
-        tp->type_support.typesupport_identifier_)));
+  // FIXME: there's got to be an easier way
+  auto gen = static_cast<std::underlying_type<decltype(tp->message_type->type_generator())>::type>(tp->message_type->type_generator());
+  uint32_t h1 = static_cast<uint32_t>(std::hash<decltype(gen)>{}(gen));
   return h1 ^ h2;
 }
 
@@ -946,57 +840,19 @@ static const struct ddsi_sertype_ops sertype_rmw_ops = {
   sertype_serialize_into
 };
 
-static std::string get_type_name(const char * type_support_identifier, void * type_support)
-{
-  if (using_introspection_c_typesupport(type_support_identifier)) {
-    auto typed_typesupport = static_cast<MessageTypeSupport_c *>(type_support);
-    return typed_typesupport->getName();
-  } else if (using_introspection_cpp_typesupport(type_support_identifier)) {
-    auto typed_typesupport = static_cast<MessageTypeSupport_cpp *>(type_support);
-    return typed_typesupport->getName();
-  } else {
-    return "absent";
-  }
-}
-
-template<typename MembersType>
-ROSIDL_TYPESUPPORT_INTROSPECTION_CPP_LOCAL
-inline std::string create_type_name(const void * untyped_members)
-{
-  auto members = static_cast<const MembersType *>(untyped_members);
-  if (!members) {
-    RMW_SET_ERROR_MSG("members handle is null");
-    return "";
-  }
-
-  std::ostringstream ss;
-  std::string message_namespace(members->message_namespace_);
-  std::string message_name(members->message_name_);
-
-  if (!message_namespace.empty()) {
-    // Find and replace C namespace separator with C++, in case this is using C typesupport
-    message_namespace = std::regex_replace(message_namespace, std::regex("__"), "::");
-    ss << message_namespace << "::";
-  }
-
-  ss << "dds_::" << message_name << "_";
-  return ss.str();
-}
-
 struct sertype_rmw * create_sertype(
-  const char *type_support_identifier,
-  const rosidl_message_type_support_t * rosidl_message_type_support,
-  void * type_support, bool is_request_header,
-  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type,
-  const uint32_t sample_size, const bool is_fixed_type,
-  const bool is_keyed_type)
+  const std::string type_name,
+  bool is_request_header,
+  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type)
 {
   struct sertype_rmw * st = new struct sertype_rmw;
-  std::string type_name = get_type_name(type_support_identifier, type_support);
+  const uint32_t sample_size = message_type->sizeof_type();
+  const bool is_self_contained = message_type->is_self_contained();
+  const bool is_keyed_type = message_type->has_keys();
 #if CDDS_VERSION > CDDS_VERSION_0_10
   const uint32_t flags = 0;
   dds_data_type_properties_t props = 0;
-  if (is_fixed_type) {
+  if (is_self_contained) {
     props |= DDS_DATA_TYPE_IS_MEMCPY_SAFE;
   }
   if (is_keyed_type) {
@@ -1011,7 +867,7 @@ struct sertype_rmw * create_sertype(
   if (!is_keyed_type) {
     flags |= DDSI_SERTYPE_FLAG_TOPICKIND_NO_KEY;
   }
-  if (is_fixed_type) {
+  if (is_self_contained) {
     flags |= DDSI_SERTYPE_FLAG_FIXED_SIZE;
   }
   ddsi_sertype_init_flags(
@@ -1023,9 +879,6 @@ struct sertype_rmw * create_sertype(
   st->iox_size = sample_size;
 #endif // DDS_HAS_SHM
 #endif // CDDS_VERSION > CDDS_VERSION_0_10
-  st->type_support.typesupport_identifier_ = type_support_identifier;
-  st->type_support.type_support_ = type_support;
-  st->type_support.rosidl_message_type_support_ = rosidl_message_type_support;
   st->is_request_header = is_request_header;
   st->message_type = std::move(message_type);
   const auto variant = is_request_header ? SampleOrRequest::Request : SampleOrRequest::Sample;

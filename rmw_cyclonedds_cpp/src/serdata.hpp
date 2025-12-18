@@ -36,16 +36,8 @@ namespace rmw_cyclonedds_cpp
   class BaseCDRReader;
 }
 
-struct CddsTypeSupport
-{
-  void * type_support_;
-  const char * typesupport_identifier_;
-  const rosidl_message_type_support_t * rosidl_message_type_support_;
-};
-
 struct sertype_rmw : ddsi_sertype
 {
-  CddsTypeSupport type_support;
   bool is_request_header;
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type;
   std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRWriter> cdr_writer;
@@ -91,25 +83,10 @@ typedef struct cdds_request_wrapper
   void * data;
 } cdds_request_wrapper_t;
 
-void * create_message_type_support(
-  const void * untyped_members,
-  const char * typesupport_identifier);
-void * create_request_type_support(
-  const void * untyped_members,
-  const char * typesupport_identifier);
-void * create_response_type_support(
-  const void * untyped_members,
-  const char * typesupport_identifier);
-
 struct sertype_rmw * create_sertype(
-  const char * type_support_identifier,
-  const rosidl_message_type_support_t * rosidl_message_type_support,
-  void * type_support, bool is_request_header,
-  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type_support,
-  const uint32_t sample_size = 0U,
-  const bool is_fixed_type = false,
-  const bool is_keyed_type = false
-);
+  const std::string type_name,
+  bool is_request_header,
+  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type_support);
 
 struct ddsi_serdata * serdata_rmw_from_serialized_message(
   const struct ddsi_sertype * typecmn,

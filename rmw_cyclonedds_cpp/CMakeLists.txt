@@ -76,14 +76,11 @@ add_library(rmw_cyclonedds_cpp
   src/rmw_get_network_flow_endpoints.cpp
   src/rmw_node.cpp
   src/serdata.cpp
-  src/serdes.cpp
   src/u16string.cpp
-  src/exception.cpp
   src/demangle.cpp
-  src/deserialization_exception.cpp
   src/Serialization.cpp
   src/TypeSupport2.cpp
-  src/TypeSupport.cpp
+  src/type_name.cpp
   src/dyntype.cpp
   src/dyntype_helper.c)
 

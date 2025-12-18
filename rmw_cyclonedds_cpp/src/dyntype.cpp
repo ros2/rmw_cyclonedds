@@ -15,12 +15,13 @@
 
 #include <cstring>
 #include <string>
+#include <regex>
+#include <sstream>
 
 #include "dds/dds.h"
 #include "dyntype.hpp"
 
 #include "rmw/error_handling.h"
-#include "MessageTypeSupport.hpp"
 
 #if DDS_HAS_TYPELIB
 #include "dds/ddsrt/string.h"

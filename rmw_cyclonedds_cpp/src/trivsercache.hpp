@@ -19,7 +19,7 @@
 
 #ifndef NOMINMAX
 #define NOMINMAX
-#include "TypeSupport_impl.hpp"
+
 #include <dds/ddsi/ddsi_xqos.h>
 #endif
 

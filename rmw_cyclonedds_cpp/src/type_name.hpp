@@ -1,4 +1,4 @@
-// Copyright 2016 Proyectos y Sistemas de Mantenimiento SL (eProsima).
+// Copyright 2019 ADLINK Technology
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,32 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#ifndef TYPE_NAME_HPP_
+#define TYPE_NAME_HPP_
 
-#include "exception.hpp"
+#include <string>
 
-using rmw_cyclonedds_cpp::Exception;
+#include "rosidl_runtime_c/message_type_support_struct.h"
+#include "rosidl_runtime_c/service_type_support_struct.h"
 
-Exception::Exception(const char * const & message)
-: m_message(message)
-{
-}
+std::string get_message_type_name(const rosidl_message_type_support_t * type_support);
+std::string get_request_type_name(const rosidl_service_type_support_t * type_support);
+std::string get_response_type_name(const rosidl_service_type_support_t * type_support);
 
-Exception::Exception(const Exception & ex)
-: m_message(ex.m_message)
-{
-}
-
-Exception & Exception::operator=(const Exception & ex)
-{
-  m_message = ex.m_message;
-  return *this;
-}
-
-Exception::~Exception() throw()
-{
-}
-
-const char * Exception::what() const throw()
-{
-  return m_message.c_str();
-}
+#endif  // TYPE_NAME_HPP_

@@ -16,7 +16,7 @@
 // TODO(dan@digilabs.io): Move this closer to where Windows.h/Windef.h is included
 #ifndef NOMINMAX
 #define NOMINMAX
-#include "TypeSupport_impl.hpp"
+
 #include <dds/ddsi/ddsi_xqos.h>
 #endif
 

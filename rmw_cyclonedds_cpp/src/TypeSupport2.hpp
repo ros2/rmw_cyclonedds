@@ -17,13 +17,10 @@
 #include <cassert>
 #include <functional>
 #include <memory>
-#include <regex>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "bytewise.hpp"
-#include "exception.hpp"
 #include "rosidl_runtime_c/string_functions.h"
 #include "rosidl_runtime_c/u16string_functions.h"
 #include "rosidl_typesupport_introspection_c/identifier.h"
@@ -36,6 +33,21 @@
 
 namespace rmw_cyclonedds_cpp
 {
+  /// Stub for code that should never be reachable by design.
+  /// If it is possible to reach the code due to bad data or other runtime conditions,
+  /// use a runtime_error instead
+  [[noreturn]] inline void unreachable()
+  {
+#if defined(__has_builtin)
+#if __has_builtin(__builtin_unreachable)
+    __builtin_unreachable();
+#endif
+#elif (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 5))
+    __builtin_unreachable();
+#endif
+    throw std::logic_error("This code should be unreachable.");
+  }
+
 struct AnyValueType;
 
 /// contiguous storage objects
@@ -168,6 +180,8 @@ struct AnyValueType
   // represents the logical value type and supports the 'apply' function
   virtual EValueType e_value_type() const = 0;
 
+  virtual bool is_self_contained() const = 0;
+
   // faster alternative to dynamic cast
   template<typename UnaryFunction>
   auto apply(UnaryFunction f) const;
@@ -188,16 +202,19 @@ class StructValueType : public AnyValueType
 {
 protected:
   bool m_has_keys;
+  bool m_is_self_contained;
 
 public:
   ROSIDL_TypeKind type_kind() const {return ROSIDL_TypeKind::MESSAGE;}
   size_t sizeof_type() const final {return sizeof_struct();}
   size_t cdrsizeof_type() const final {return cdrsizeof_struct();}
   size_t cdralignof_type() const final {return cdralignof_struct();}
+  bool is_self_contained() const final {return m_is_self_contained;}
   virtual size_t sizeof_struct() const = 0;
   virtual size_t cdrsizeof_struct() const = 0;
   virtual size_t cdralignof_struct() const = 0;
   virtual size_t n_members() const = 0;
+  virtual TypeGenerator type_generator() const = 0;
   virtual const Member * get_member(size_t) const = 0;
   bool has_keys() const {return m_has_keys;}
   EValueType e_value_type() const final {return EValueType::StructValueType;}
@@ -208,6 +225,7 @@ class ArrayValueType : public AnyValueType
 protected:
   const AnyValueType * m_element_value_type;
   size_t m_size;
+  bool m_is_self_contained;
 
 public:
   ArrayValueType(const AnyValueType * element_value_type, size_t size)
@@ -218,6 +236,7 @@ public:
   size_t sizeof_type() const final {return m_size * m_element_value_type->sizeof_type();}
   size_t cdrsizeof_type() const final {return sizeof_type();}
   size_t cdralignof_type() const final {return m_element_value_type->cdralignof_type();}
+  bool is_self_contained() const final {return m_is_self_contained;}
   size_t array_size() const {return m_size;}
   const void * get_data(const void * ptr_to_array) const {return ptr_to_array;}
   void * get_data(void * ptr_to_array) const {return ptr_to_array;}
@@ -230,6 +249,7 @@ public:
   using AnyValueType::sizeof_type;
   using AnyValueType::cdrsizeof_type;
   using AnyValueType::cdralignof_type;
+  bool is_self_contained() const final {return false;}
   virtual const AnyValueType * element_value_type() const = 0;
   virtual size_t sequence_size(const void * ptr_to_sequence) const = 0;
   virtual const void * sequence_contents(const void * ptr_to_sequence) const = 0;
@@ -423,6 +443,7 @@ struct PrimitiveValueType : public AnyValueType
         return 0;
     }
   }
+  bool is_self_contained() const final {return true;}
   size_t cdralignof_type() const final {return cdrsizeof_type();}
   EValueType e_value_type() const override {return EValueType::PrimitiveValueType;}
 };
@@ -446,6 +467,7 @@ public:
   size_t sizeof_type() const override {return sizeof(std::vector<bool>);}
   size_t cdrsizeof_type() const override {throw std::logic_error("not implemented");}
   size_t cdralignof_type() const override {throw std::logic_error("not implemented");}
+  bool is_self_contained() const final {return false;}
 
   static const AnyValueType * element_value_type()
   {
@@ -484,6 +506,7 @@ public:
   virtual TypedSpan<char_traits::char_type> data(void *) const = 0;
   virtual TypedSpan<const char_traits::char_type> data(const void *) const = 0;
   virtual void assign(void *, const TypedSpan<const char_traits::char_type>&) const = 0;
+  bool is_self_contained() const final {return false;}
   EValueType e_value_type() const final {return EValueType::U8StringValueType;}
 };
 
@@ -494,6 +517,7 @@ public:
   virtual TypedSpan<char_traits::char_type> data(void *) const = 0;
   virtual TypedSpan<const char_traits::char_type> data(const void *) const = 0;
   virtual void assign(void *, const TypedSpan<const char_traits::char_type>&) const = 0;
+  bool is_self_contained() const final {return false;}
   EValueType e_value_type() const final {return EValueType::U16StringValueType;}
 };
 
