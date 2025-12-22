@@ -27,6 +27,8 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <iostream>
+#include <sstream>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -397,26 +399,14 @@ protected:
     const StructValueType & struct_info,
     SampleOrKey what) const
   {
-    bool only_key = false;
-    switch (what) {
-      case SampleOrKey::Sample:
-        break;
-      case SampleOrKey::Key:
-        // 1. top-level, Key, has_keys = false: should not serialize anything
-        // 2. top-level, Key, has_keys = true:  serialize only fields marked as key
-        // 3. not top-level, Key, has_keys = false: serialize everything
-        // 4. not top-level, Key, has_keys = true:  serialize only fields marked as key
-        // Case 1 is taken care of by serialize_top_level()
-        only_key = struct_info.has_keys();
-        break;
-    }
+    bool all_fields = (what != SampleOrKey::Key || !struct_info.has_keys());
     for (size_t i = 0; i < struct_info.n_members(); i++) {
       auto member_info = struct_info.get_member(i);
-      if (only_key && !member_info->is_key)
-        continue;
-      auto value_type = member_info->value_type;
-      auto member_src = byte_offset(struct_src, member_info->member_offset);
-      serialize(dst, member_src, value_type, what);
+      if (all_fields || member_info->is_key) {
+        auto value_type = member_info->value_type;
+        auto member_src = byte_offset(struct_src, member_info->member_offset);
+        serialize(dst, member_src, value_type, what);
+      }
     }
   }
 };
@@ -516,8 +506,10 @@ public:
 
   void deserialize(void * dst, const void * cdr, size_t cdrsize, SampleOrKey what) const override
   {
-    DeserializeCursor cursor(cdr, cdrsize);
-    deserialize_top_level(cursor, dst, what);
+    if (what != SampleOrKey::Key || m_root_value_type->has_keys()) {
+      DeserializeCursor cursor(cdr, cdrsize);
+      deserialize_top_level(cursor, dst, what);
+    }
   }
 
   void extractkey(std::vector<byte>& dst, const void * cdr, size_t cdrsize, SampleOrKey what) const override
@@ -525,6 +517,30 @@ public:
     DeserializeCursor rdcursor(cdr, cdrsize);
     ByteVectorCursor wrcursor(dst);
     extractkey_top_level(rdcursor, wrcursor, what);
+  }
+
+  size_t print(char * dst, size_t dstsize, const void * cdr, size_t cdrsize, SampleOrKey what) const override
+  {
+    if (dstsize == 0)
+      return 0;
+    if (what == SampleOrKey::Key && !m_root_value_type->has_keys())
+    {
+      dst[0] = '\0';
+      return 0;
+    }
+    DeserializeCursor rdcursor(cdr, cdrsize);
+    std::ostringstream dststream;
+    print_top_level(rdcursor, dststream, what, dstsize);
+    auto dststring = dststream.str();
+    if (dststring.size() < dstsize - 1) {
+      std::memcpy(dst, dststring.data(), dststring.size());
+      dst[dststring.size()] = '\0';
+      return dststring.size();
+    } else {
+      std::memcpy(dst, dststring.data(), dstsize - 1);
+      dst[dstsize - 1] = '\0';
+      return dstsize - 1;
+    }
   }
 
 protected:
@@ -561,6 +577,33 @@ protected:
 
   void extractkey_top_level(ReadCursor& src, WriteCursor& dst, SampleOrKey what) const
   {
+    // nothing to extract if type has no keys
+    if (!m_root_value_type->has_keys())
+      return;
+
+    unsigned char const * const rtps_header = src.advance(4);
+    src.rebase(+4);
+    // don't care about options, only allow CDR_BE, CDR_LE
+    if (rtps_header[0] != 0 || rtps_header[1] > 1) {
+      throw std::runtime_error("CDR deserialization: unrecognized header");
+    }
+    const bool needs_bswap = (rtps_header[1] == 0) == (native_endian() == endian::little);
+    const unsigned char rtps_header_native[] = { 0, (native_endian() == endian::little) ? 1 : 0, 0, 0 };
+    dst.put_bytes(rtps_header_native, 4);
+    dst.rebase(+4);
+    if (what == SampleOrKey::Sample && m_variant == SampleOrRequest::Request) {
+      src.advance(8);
+    }
+    // key-to-key transformation is needed when byteswapping
+    // the top-level type has keys and so "all_fields_are_key" will be false
+    ExtractKeyMode kmode = (what == SampleOrKey::Key) ? ExtractKeyMode::Key : ExtractKeyMode::Sample;
+    extractkey_maybe_bswap(src, dst, m_root_value_type, kmode, needs_bswap);
+    dst.rebase(-4);
+    src.rebase(-4);
+  }
+
+  void print_top_level(ReadCursor& src, std::ostream& dst, SampleOrKey what, size_t limit) const
+  {
     unsigned char const * const rtps_header = src.advance(4);
     src.rebase(+4);
     // don't care about options, only allow CDR_BE, CDR_LE
@@ -569,18 +612,12 @@ protected:
     }
     const bool needs_bswap = (rtps_header[1] == 0) == (native_endian() == endian::little);
     if (what == SampleOrKey::Sample && m_variant == SampleOrRequest::Request) {
-      src.advance(8);
+      const auto u64 = PrimitiveValueType(ROSIDL_TypeKind::UINT64);
+      print_maybe_bswap(src, dst, &u64, what, limit, needs_bswap);
+      print_maybe_bswap(src, dst, &u64, what, limit, needs_bswap);
     }
     if (what == SampleOrKey::Sample || m_root_value_type->has_keys()) {
-      ExtractKeyMode kmode = ExtractKeyMode::Sample;
-      switch (what) {
-        case SampleOrKey::Sample:
-          break;
-        case SampleOrKey::Key:
-          kmode = ExtractKeyMode::Key;
-          break;
-      }
-      extractkey_maybe_bswap(src, dst, m_root_value_type, kmode, needs_bswap);
+      print_maybe_bswap(src, dst, m_root_value_type, what, limit, needs_bswap);
     }
     src.rebase(-4);
   }
@@ -750,26 +787,14 @@ protected:
     const StructValueType & struct_info,
     SampleOrKey what) const
   {
-    bool only_key = false;
-    switch (what) {
-      case SampleOrKey::Sample:
-        break;
-      case SampleOrKey::Key:
-        // 1. top-level, Key, has_keys = false: should not serialize anything
-        // 2. top-level, Key, has_keys = true:  serialize only fields marked as key
-        // 3. not top-level, Key, has_keys = false: serialize everything
-        // 4. not top-level, Key, has_keys = true:  serialize only fields marked as key
-        // Case 1 is taken care of by serialize_top_level()
-        only_key = struct_info.has_keys();
-        break;
-    }
+    bool all_fields = (what != SampleOrKey::Key || !struct_info.has_keys());
     for (size_t i = 0; i < struct_info.n_members(); i++) {
       auto member_info = struct_info.get_member(i);
-      if (only_key && !member_info->is_key)
-        continue;
-      auto value_type = member_info->value_type;
-      auto member_dst = struct_dst + member_info->member_offset;
-      deserialize<needs_bswap>(src, member_dst, value_type, what);
+      if (all_fields || member_info->is_key) {
+        auto value_type = member_info->value_type;
+        auto member_dst = struct_dst + member_info->member_offset;
+        deserialize<needs_bswap>(src, member_dst, value_type, what);
+      }
     }
   }
 
@@ -975,27 +1000,24 @@ protected:
     const StructValueType & struct_info,
     ExtractKeyMode mode) const
   {
-    bool only_key = false;
-    switch (mode) {
-      case ExtractKeyMode::Sample:
-      case ExtractKeyMode::Skip:
-        break;
-      case ExtractKeyMode::Key:
-        // 1. top-level, Key, has_keys = false: should not serialize anything
-        // 2. top-level, Key, has_keys = true:  serialize only fields marked as key
-        // 3. not top-level, Key, has_keys = false: serialize everything
-        // 4. not top-level, Key, has_keys = true:  serialize only fields marked as key
-        // Case 1 is taken care of by serialize_top_level()
-        only_key = struct_info.has_keys();
-        break;
-    }
+    bool all_fields_are_key = !struct_info.has_keys();
     for (size_t i = 0; i < struct_info.n_members(); i++) {
       auto member_info = struct_info.get_member(i);
       auto value_type = member_info->value_type;
-      if (mode == ExtractKeyMode::Skip || (only_key && !member_info->is_key)) {
-        extractkey<needs_bswap>(src, dst, value_type, ExtractKeyMode::Skip);
-      } else {
-        extractkey<needs_bswap>(src, dst, value_type, mode);
+      switch (mode) {
+        case ExtractKeyMode::Skip:
+          extractkey<needs_bswap>(src, dst, value_type, mode);
+          break;
+        case ExtractKeyMode::Key:
+          if (member_info->is_key || all_fields_are_key)
+            extractkey<needs_bswap>(src, dst, value_type, mode);
+          break;
+        case ExtractKeyMode::Sample:
+          if (member_info->is_key || all_fields_are_key)
+            extractkey<needs_bswap>(src, dst, value_type, mode);
+          else
+            extractkey<needs_bswap>(src, dst, value_type, ExtractKeyMode::Skip);
+          break;
       }
     }
   }
@@ -1003,16 +1025,12 @@ protected:
   template<bool needs_bswap>
   void extractkey(ReadCursor& src, WriteCursor& dst, const AnyValueType * value_type, ExtractKeyMode mode) const
   {
-    if (!needs_bswap && mode != ExtractKeyMode::Key &&
-        tsc.lookup_trivially_serialized(src.offset(), value_type)) {
+    if (mode == ExtractKeyMode::Skip && tsc.lookup_trivially_serialized(src.offset(), value_type)) {
+      // Optimise for skipping non-key fields
       const size_t sz = value_type->sizeof_type();
-      auto srcdata = src.advance(sz);
-      if (mode != ExtractKeyMode::Skip) {
-        dst.align(value_type->cdralignof_type());
-        dst.put_bytes(srcdata, sz);
-      }
+      static_cast<void>(src.advance(sz));
     } else {
-//      value_type->apply([&](const auto & vt) {return extractkey(src, dst, vt);});
+//      value_type->apply([&](const auto & vt) {return extractkey(src, dst, vt, mode);});
       if (auto s = dynamic_cast<const PrimitiveValueType *>(value_type)) {
         return extractkey<needs_bswap>(src, dst, *s, mode);
       }
@@ -1044,6 +1062,181 @@ protected:
       extractkey<true>(src, dst, value_type, mode);
     else
       extractkey<false>(src, dst, value_type, mode);
+  }
+
+  template<bool needs_bswap>
+  void print(ReadCursor& src, std::ostream& dst, const PrimitiveValueType & value_type, SampleOrKey, size_t) const
+  {
+    src.align(value_type.cdralignof_type());
+    const unsigned char *srcdata = src.advance(value_type.cdrsizeof_type());
+    union {
+      unsigned char buf[8];
+      double d;
+      uint64_t u;
+    } tmp;
+    std::memcpy(tmp.buf, srcdata, value_type.cdrsizeof_type());
+    if (needs_bswap) {
+      switch (value_type.cdrsizeof_type()) {
+        case 2: bswapN<2>(tmp.buf); break;
+        case 4: bswapN<4>(tmp.buf); break;
+        case 8: bswapN<8>(tmp.buf); break;
+      }
+    }
+    switch (value_type.type_kind()) {
+      case ROSIDL_TypeKind::CHAR:
+        dst << "'" << std::string(reinterpret_cast<char *>(tmp.buf), 1) << "'";
+        break;
+      case ROSIDL_TypeKind::BOOLEAN:
+        dst << (tmp.buf[0] ? "true" : "false");
+        break;
+      case ROSIDL_TypeKind::OCTET:
+      case ROSIDL_TypeKind::UINT8:
+        dst << static_cast<uint32_t>(*reinterpret_cast<uint8_t *>(tmp.buf));
+        break;
+      case ROSIDL_TypeKind::INT8:
+        dst << static_cast<int32_t>(*reinterpret_cast<int8_t *>(tmp.buf));
+        break;
+      case ROSIDL_TypeKind::WCHAR:
+      case ROSIDL_TypeKind::UINT16:
+        dst << static_cast<uint32_t>(*reinterpret_cast<uint16_t *>(tmp.buf));
+        break;
+      case ROSIDL_TypeKind::INT16:
+        dst << static_cast<int32_t>(*reinterpret_cast<int16_t *>(tmp.buf));
+        break;
+      case ROSIDL_TypeKind::UINT32:
+        dst << *reinterpret_cast<uint32_t *>(tmp.buf);
+        break;
+      case ROSIDL_TypeKind::INT32:
+        dst << *reinterpret_cast<int32_t *>(tmp.buf);
+        break;
+      case ROSIDL_TypeKind::FLOAT:
+        dst << *reinterpret_cast<float *>(tmp.buf);
+        break;
+      case ROSIDL_TypeKind::UINT64:
+        dst << *reinterpret_cast<uint64_t *>(tmp.buf);
+        break;
+      case ROSIDL_TypeKind::INT64:
+        dst << *reinterpret_cast<int64_t *>(tmp.buf);
+        break;
+      case ROSIDL_TypeKind::DOUBLE:
+        dst << *reinterpret_cast<double *>(tmp.buf);
+        break;
+      case ROSIDL_TypeKind::STRING:
+      case ROSIDL_TypeKind::WSTRING:
+      case ROSIDL_TypeKind::MESSAGE:
+        unreachable();
+    }
+  }
+
+  template<bool needs_bswap>
+  void print(ReadCursor& src, std::ostream& dst, const U8StringValueType &, SampleOrKey, size_t) const
+  {
+    uint32_t size;
+    deserialize_u32<needs_bswap>(src, &size);
+    if (size == 0)
+      throw std::runtime_error("CDR deserialization: size-0 string");
+    using type = const std::char_traits<char>::char_type;
+    const TypedSpan<type> srcdata{reinterpret_cast<type *>(src.advance(size)), size};
+    if (srcdata.data()[size - 1] != '\0')
+      throw std::runtime_error("CDR deserialization: unterminated string");
+    dst << "\"" << std::string(srcdata.data(), size - 1) << "\"";
+  }
+
+  template<bool needs_bswap>
+  void print(ReadCursor& src, std::ostream& dst, const U16StringValueType &, SampleOrKey, size_t) const
+  {
+    uint32_t size;
+    deserialize_u32<needs_bswap>(src, &size);
+    if (size % 2)
+      throw std::runtime_error("CDR deserialization: odd number of bytes in wstring");
+    static_cast<void>(src.advance(size));
+    dst << std::string("(wstring)");
+  }
+
+  template<bool needs_bswap>
+  void print_many(ReadCursor& src, std::ostream& dst, size_t count, const AnyValueType * vt, SampleOrKey what, size_t limit) const
+  {
+    dst << "{";
+    for (size_t i = 0; i < count; i++) {
+      const auto pos = dst.tellp();
+      if (pos < 0 || static_cast<size_t>(pos) > limit)
+        return;
+      if (i > 0) dst << ",";
+      print<needs_bswap>(src, dst, vt, what, limit);
+    }
+    dst << "}";
+  }
+
+  template<bool needs_bswap>
+  void print(ReadCursor& src, std::ostream& dst, const ArrayValueType & value_type, SampleOrKey what, size_t limit) const
+  {
+    print_many<needs_bswap>(src, dst, value_type.array_size(), value_type.element_value_type(), what, limit);
+  }
+
+  template<bool needs_bswap>
+  void print(
+    ReadCursor& src, std::ostream& dst,
+    const SpanSequenceValueType & value_type, SampleOrKey what, size_t limit) const
+  {
+    uint32_t count;
+    deserialize_u32<needs_bswap>(src, &count);
+    print_many<needs_bswap>(src, dst, count, value_type.element_value_type(), what, limit);
+  }
+
+  template<bool needs_bswap>
+  void print(
+    ReadCursor& src, std::ostream& dst,
+    const BoolVectorValueType & value_type, SampleOrKey what, size_t limit) const
+  {
+    const auto vt = PrimitiveValueType(ROSIDL_TypeKind::BOOLEAN);
+    uint32_t count;
+    deserialize_u32<needs_bswap>(src, &count);
+    print_many<needs_bswap>(src, dst, count, value_type.element_value_type(), what, limit);
+  }
+
+  template<bool needs_bswap>
+  void print(
+    ReadCursor& src, std::ostream& dst,
+    const StructValueType & struct_info,
+    SampleOrKey what, size_t limit) const
+  {
+    bool all_fields = (what != SampleOrKey::Key || !struct_info.has_keys());
+    bool first = true;
+    for (size_t i = 0; i < struct_info.n_members(); i++) {
+      const auto pos = dst.tellp();
+      if (pos < 0 || static_cast<size_t>(pos) > limit)
+        return;
+      auto member_info = struct_info.get_member(i);
+      if (member_info->is_key || all_fields) {
+        if (first) {
+          dst << "{";
+          first = false;
+        } else {
+          dst << ",";
+        }
+        auto value_type = member_info->value_type;
+        print<needs_bswap>(src, dst, value_type, what, limit);
+      }
+    }
+    if (!first) {
+      dst << "}";
+    }
+  }
+
+  template<bool needs_bswap>
+  void print(ReadCursor& src, std::ostream& dst, const AnyValueType * value_type, SampleOrKey what, size_t limit) const
+  {
+    value_type->apply([&](const auto & vt) {
+      return print<needs_bswap>(src, dst, vt, what, limit);
+    });
+  }
+
+  void print_maybe_bswap(ReadCursor& src, std::ostream& dst, const AnyValueType * value_type, SampleOrKey what, size_t limit, bool needs_bswap) const
+  {
+    if (needs_bswap)
+      print<true>(src, dst, value_type, what, limit);
+    else
+      print<false>(src, dst, value_type, what, limit);
   }
 };
 

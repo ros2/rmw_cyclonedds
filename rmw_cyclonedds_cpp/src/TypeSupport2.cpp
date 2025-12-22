@@ -24,6 +24,8 @@
 
 namespace rmw_cyclonedds_cpp
 {
+const PrimitiveValueType primitive_value_type_boolean = PrimitiveValueType(ROSIDL_TypeKind::BOOLEAN);
+
 class ROSIDLC_StructValueType : public StructValueType
 {
   const rosidl_typesupport_introspection_c__MessageMembers * impl;

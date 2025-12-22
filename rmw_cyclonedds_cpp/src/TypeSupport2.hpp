@@ -448,6 +448,8 @@ struct PrimitiveValueType : public AnyValueType
   EValueType e_value_type() const override {return EValueType::PrimitiveValueType;}
 };
 
+extern const PrimitiveValueType primitive_value_type_boolean;
+
 class BoolVectorValueType : public AnyValueType
 {
 protected:
@@ -461,7 +463,7 @@ protected:
     return static_cast<std::vector<bool> *>(ptr_to_sequence);
   }
 
-  static std::unique_ptr<PrimitiveValueType> s_element_value_type;
+  std::unique_ptr<PrimitiveValueType> s_element_value_type;
 
 public:
   size_t sizeof_type() const override {return sizeof(std::vector<bool>);}
@@ -469,12 +471,9 @@ public:
   size_t cdralignof_type() const override {throw std::logic_error("not implemented");}
   bool is_self_contained() const final {return false;}
 
-  static const AnyValueType * element_value_type()
+  const AnyValueType * element_value_type() const
   {
-    if (!s_element_value_type) {
-      s_element_value_type = std::make_unique<PrimitiveValueType>(ROSIDL_TypeKind::BOOLEAN);
-    }
-    return s_element_value_type.get();
+    return &primitive_value_type_boolean;
   }
 
   std::vector<bool>::const_iterator begin(const void * ptr_to_sequence) const

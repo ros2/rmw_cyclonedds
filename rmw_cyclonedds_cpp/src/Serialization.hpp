@@ -47,6 +47,7 @@ namespace rmw_cyclonedds_cpp
   public:
     virtual void deserialize(void * dest, const void * cdr, size_t cdrsize, SampleOrKey what) const = 0;
     virtual void extractkey(std::vector<byte>& dest, const void * cdr, size_t cdrsize, SampleOrKey what) const = 0;
+    virtual size_t print(char * dst, size_t dstsize, const void * cdr, size_t cdrsize, SampleOrKey what) const =  0;
 
     virtual ~BaseCDRReader() = default;
   };

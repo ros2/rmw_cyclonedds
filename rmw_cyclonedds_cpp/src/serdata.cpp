@@ -513,59 +513,24 @@ static bool serdata_rmw_untyped_to_sample(
 static size_t serdata_rmw_print(
   const struct ddsi_sertype * tpcmn, const struct ddsi_serdata * dcmn, char * buf, size_t bufsize)
 {
-#if 0
   auto d = static_cast<const serdata_rmw *>(dcmn);
-  const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(tpcmn);
-
-  try {
-    if (!type->is_request_header) {
-      serdata_rmw_serialize_into_on_demand(const_cast<serdata_rmw *>(d));
-      cycprint sd(buf, bufsize, d->data(), d->size());
-      if (using_introspection_c_typesupport(type->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(type->type_support.type_support_);
-        return typed_typesupport->printROSmessage(sd, d->kind != SDK_DATA);
-      } else if (using_introspection_cpp_typesupport(type->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_cpp *>(type->type_support.type_support_);
-        return typed_typesupport->printROSmessage(sd, d->kind != SDK_DATA);
-      }
-    } else {
-      /* The "prefix" lambda is there to inject the service invocation header data into the CDR
-        stream -- I haven't checked how it is done in the official RMW implementations, so it is
-        probably incompatible. */
-      cdds_request_wrapper_t wrap;
-      auto prefix = [&wrap](cycprint & ser) {
-          ser >> wrap.header.guid; ser.print_constant(","); ser >> wrap.header.seq;
-        };
-      cycprint sd(buf, bufsize, d->data(), d->size());
-      if (using_introspection_c_typesupport(type->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_c *>(type->type_support.type_support_);
-        return typed_typesupport->printROSmessage(sd, d->kind != SDK_DATA, prefix);
-      } else if (using_introspection_cpp_typesupport(type->type_support.typesupport_identifier_)) {
-        auto typed_typesupport =
-          static_cast<MessageTypeSupport_cpp *>(type->type_support.type_support_);
-        return typed_typesupport->printROSmessage(sd, d->kind != SDK_DATA, prefix);
-      }
+  auto type = static_cast<const struct sertype_rmw *>(tpcmn);
+  if (bufsize > 10) {
+    char *b = buf;
+    *b++ = '[';
+    for (size_t i = 0; i < d->keysize() && static_cast<size_t>(b - buf) < bufsize - 10; i++) {
+      snprintf (b, 3, "%02x", static_cast<unsigned char *>(d->key())[i]);
+      b += 2;
     }
-  } catch (std::runtime_error & e) {
-    RMW_SET_ERROR_MSG(e.what());
-    return false;
+    *b++ = ']';
+    *b++ = ' ';
+    bufsize -= b - buf;
+    buf = b;
   }
-  return false;
-#else
-  static_cast<void>(tpcmn);
-  static_cast<void>(dcmn);
-  if (bufsize > 1) {
-    buf[0] = '?'; buf[1] = '\0';
-    return 1;
-  }
-  if (bufsize > 0) {
-    buf[0] = '\0';
-  }
-  return 0;
-#endif
+  if (d->type != nullptr)
+    return type->cdr_reader->print(buf, bufsize, d->data(), d->size(), (d->kind == SDK_DATA) ? SampleOrKey::Sample : SampleOrKey::Key);
+  else
+    return type->cdr_reader->print(buf, bufsize, d->key(), d->keysize(), SampleOrKey::Key);
 }
 
 static void serdata_rmw_get_keyhash(
