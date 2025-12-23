@@ -97,6 +97,15 @@ serdata_rmw::serdata_rmw(const ddsi_sertype * type, ddsi_serdata_kind kind)
   ddsi_serdata_init(this, type, kind);
 }
 
+static bool type_contains_keys (struct ddsi_sertype const * t)
+{
+#if CDDS_VERSION > CDDS_VERSION_0_10
+  return t->data_type_props & DDS_DATA_TYPE_CONTAINS_KEY;
+#else
+  return !t->typekind_no_key;
+#endif
+}
+
 static bool serdata_rmw_eqkey(const struct ddsi_serdata * va, const struct ddsi_serdata * vb)
 {
   auto a = static_cast<const serdata_rmw *>(va);
@@ -108,7 +117,7 @@ static bool serdata_rmw_eqkey(const struct ddsi_serdata * va, const struct ddsi_
 static void serdata_rmw_set_key_from_sample(serdata_rmw *d, const void *sample)
 {
   auto * type = static_cast<const struct sertype_rmw *>(d->type);
-  if (type->data_type_props & DDS_DATA_TYPE_CONTAINS_KEY) {
+  if (type_contains_keys(type)) {
     const size_t keysize = type->cdr_writer->get_serialized_size(sample, SampleOrKey::Key);
     auto key = std::make_unique<byte[]>(keysize);
     type->cdr_writer->serialize(key.get(), sample, SampleOrKey::Key);
@@ -119,7 +128,7 @@ static void serdata_rmw_set_key_from_sample(serdata_rmw *d, const void *sample)
 static void serdata_rmw_set_key_from_ser(serdata_rmw *d)
 {
   auto type = static_cast<const struct sertype_rmw *>(d->type);
-  if (type->data_type_props & DDS_DATA_TYPE_CONTAINS_KEY)
+  if (type_contains_keys(type))
   {
     try {
       std::vector<byte> key;
@@ -134,8 +143,6 @@ static void serdata_rmw_set_key_from_ser(serdata_rmw *d)
 static void serdata_rmw_serialize_into(serdata_rmw * d, const void * sample)
 {
   auto type = static_cast<const struct sertype_rmw *>(d->type);
-  if (type->is_request_header) {
-  }
   try {
     const auto cdrmode = (d->kind == SDK_DATA) ? SampleOrKey::Sample : SampleOrKey::Key;
     size_t sz = type->cdr_writer->get_serialized_size(sample, cdrmode);
@@ -539,7 +546,7 @@ static void serdata_rmw_get_keyhash(
 {
   static_cast<void>(d);
   static_cast<void>(force_md5);
-  if (!(d->type->data_type_props & DDS_DATA_TYPE_CONTAINS_KEY)) {
+  if (!type_contains_keys(d->type)) {
     memset(buf, 0, sizeof (*buf));
   } else {
     /* FIXME: implement this for when someone forces key hash generation in the config or

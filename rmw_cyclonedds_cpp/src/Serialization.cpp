@@ -625,13 +625,26 @@ protected:
   template<size_t sz> static void bswapN(void *) {};
   template<> void bswapN<1>(void *) { };
   template<> void bswapN<2>(void *x) {
-    auto u = reinterpret_cast<uint16_t *>(x); *u = ddsrt_bswap2u(*u);
+    auto u = reinterpret_cast<uint16_t *>(x);
+    *u = static_cast<uint16_t>((*u >> 8) | (*u << 8));
   }
   template<> void bswapN<4>(void *x) {
-    auto u = reinterpret_cast<uint32_t *>(x); *u = ddsrt_bswap4u(*u);
+    auto u = reinterpret_cast<uint32_t *>(x);
+    *u = ((*u >> 24) |
+          ((*u & 0x00ff0000) >> 8) |
+          ((*u & 0x0000ff00) << 8) |
+          (*u << 24));
   }
   template<> void bswapN<8>(void *x) {
-    auto u = reinterpret_cast<uint64_t *>(x); *u = ddsrt_bswap8u(*u);
+    auto u = reinterpret_cast<uint64_t *>(x);
+    *u = ((*u >> 56) |
+          ((*u & 0x00ff000000000000) >> 40) |
+          ((*u & 0x0000ff0000000000) >> 24) |
+          ((*u & 0x000000ff00000000) >> 8) |
+          ((*u & 0x00000000ff000000) << 8) |
+          ((*u & 0x0000000000ff0000) << 24) |
+          ((*u & 0x000000000000ff00) << 40) |
+          (*u << 56));
   }
   
   template<bool needs_bswap, size_t sizeof_type>
