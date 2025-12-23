@@ -770,7 +770,7 @@ extern "C" rmw_ret_t rmw_init_options_init(
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(init_options, RMW_RET_INVALID_ARGUMENT);
   RCUTILS_CHECK_ALLOCATOR(&allocator, return RMW_RET_INVALID_ARGUMENT);
-  if (NULL != init_options->implementation_identifier) {
+  if (nullptr != init_options->implementation_identifier) {
     RMW_SET_ERROR_MSG("expected zero-initialized init_options");
     return RMW_RET_INVALID_ARGUMENT;
   }
@@ -780,7 +780,7 @@ extern "C" rmw_ret_t rmw_init_options_init(
   init_options->impl = nullptr;
   init_options->discovery_options = rmw_get_zero_initialized_discovery_options(),
   init_options->domain_id = RMW_DEFAULT_DOMAIN_ID;
-  init_options->enclave = NULL;
+  init_options->enclave = nullptr;
   init_options->security_options = rmw_get_zero_initialized_security_options();
   return rmw_discovery_options_init(&(init_options->discovery_options), 0, &allocator);
 }
@@ -789,14 +789,14 @@ extern "C" rmw_ret_t rmw_init_options_copy(const rmw_init_options_t * src, rmw_i
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(src, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_ARGUMENT_FOR_NULL(dst, RMW_RET_INVALID_ARGUMENT);
-  if (NULL == src->implementation_identifier) {
+  if (nullptr == src->implementation_identifier) {
     RMW_SET_ERROR_MSG("expected initialized src");
     return RMW_RET_INVALID_ARGUMENT;
   }
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
     init options copy, src->implementation_identifier,
     eclipse_cyclonedds_identifier, return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
-  if (NULL != dst->implementation_identifier) {
+  if (nullptr != dst->implementation_identifier) {
     RMW_SET_ERROR_MSG("expected zero-initialized dst");
     return RMW_RET_INVALID_ARGUMENT;
   }
@@ -804,7 +804,7 @@ extern "C" rmw_ret_t rmw_init_options_copy(const rmw_init_options_t * src, rmw_i
 
   rmw_init_options_t tmp = *src;
   rmw_ret_t ret;
-  if (src->enclave != NULL) {
+  if (src->enclave != nullptr) {
     ret = rmw_enclave_options_copy(src->enclave, allocator, &tmp.enclave);
     if (RMW_RET_OK != ret) {
       return ret;
@@ -825,7 +825,7 @@ extern "C" rmw_ret_t rmw_init_options_copy(const rmw_init_options_t * src, rmw_i
 extern "C" rmw_ret_t rmw_init_options_fini(rmw_init_options_t * init_options)
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(init_options, RMW_RET_INVALID_ARGUMENT);
-  if (NULL == init_options->implementation_identifier) {
+  if (nullptr == init_options->implementation_identifier) {
     RMW_SET_ERROR_MSG("expected initialized init_options");
     return RMW_RET_INVALID_ARGUMENT;
   }
@@ -836,7 +836,7 @@ extern "C" rmw_ret_t rmw_init_options_fini(rmw_init_options_t * init_options)
   RCUTILS_CHECK_ALLOCATOR(allocator, return RMW_RET_INVALID_ARGUMENT);
 
   rmw_ret_t ret;
-  if (init_options->enclave != NULL) {
+  if (init_options->enclave != nullptr) {
     ret = rmw_enclave_options_fini(init_options->enclave, allocator);
     if (ret != RMW_RET_OK) {
       return ret;
@@ -906,7 +906,7 @@ static void handle_DCPSParticipant(dds_entity_t reader, void * arg)
 {
   rmw_context_impl_t * impl = static_cast<rmw_context_impl_t *>(arg);
   dds_sample_info_t si;
-  void * raw = NULL;
+  void * raw = nullptr;
   while (dds_take(reader, &raw, &si, 1, 1) == 1) {
     auto s = static_cast<const dds_builtintopic_participant_t *>(raw);
     rmw_gid_t gid;
@@ -930,7 +930,7 @@ static void handle_builtintopic_endpoint(
   bool is_reader)
 {
   dds_sample_info_t si;
-  void * raw = NULL;
+  void * raw = nullptr;
   while (dds_take(reader, &raw, &si, 1, 1) == 1) {
     auto s = static_cast<const dds_builtintopic_endpoint_t *>(raw);
     rmw_gid_t gid;
@@ -1668,7 +1668,7 @@ extern "C" rmw_ret_t rmw_init(const rmw_init_options_t * options, rmw_context_t 
     options->enclave,
     "expected non-null enclave",
     return RMW_RET_INVALID_ARGUMENT);
-  if (NULL != context->implementation_identifier) {
+  if (nullptr != context->implementation_identifier) {
     RMW_SET_ERROR_MSG("expected a zero-initialized context");
     return RMW_RET_INVALID_ARGUMENT;
   }
@@ -4532,7 +4532,7 @@ extern "C" rmw_ret_t rmw_wait(
 
   ws->trigs.resize(ws->nelems + 1);
   const dds_time_t timeout =
-    (wait_timeout == NULL) ?
+    (wait_timeout == nullptr) ?
     DDS_NEVER :
     (dds_time_t) rmw_time_total_nsec(*wait_timeout);
   ws->trigs.resize(ws->nelems + 1);

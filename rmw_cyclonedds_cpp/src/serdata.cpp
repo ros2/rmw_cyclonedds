@@ -107,7 +107,7 @@ static bool serdata_rmw_eqkey(const struct ddsi_serdata * va, const struct ddsi_
 
 static void serdata_rmw_set_key_from_sample(serdata_rmw *d, const void *sample)
 {
-  const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(d->type);
+  auto * type = static_cast<const struct sertype_rmw *>(d->type);
   if (type->data_type_props & DDS_DATA_TYPE_CONTAINS_KEY) {
     const size_t keysize = type->cdr_writer->get_serialized_size(sample, SampleOrKey::Key);
     auto key = std::make_unique<byte[]>(keysize);
@@ -118,7 +118,7 @@ static void serdata_rmw_set_key_from_sample(serdata_rmw *d, const void *sample)
 
 static void serdata_rmw_set_key_from_ser(serdata_rmw *d)
 {
-  const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(d->type);
+  auto type = static_cast<const struct sertype_rmw *>(d->type);
   if (type->data_type_props & DDS_DATA_TYPE_CONTAINS_KEY)
   {
     try {
@@ -133,7 +133,7 @@ static void serdata_rmw_set_key_from_ser(serdata_rmw *d)
 
 static void serdata_rmw_serialize_into(serdata_rmw * d, const void * sample)
 {
-  const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(d->type);
+  auto type = static_cast<const struct sertype_rmw *>(d->type);
   if (type->is_request_header) {
   }
   try {
@@ -284,7 +284,7 @@ static std::unique_ptr<serdata_rmw> serdata_rmw_from_sample_unique(
   const void * sample)
 {
   try {
-    const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(typecmn);
+    auto type = static_cast<const struct sertype_rmw *>(typecmn);
     auto d = std::make_unique<serdata_rmw>(type, kind);
     serdata_rmw_set_key_from_sample(d.get(), sample);
     serdata_rmw_serialize_into(d.get(), sample);
@@ -330,7 +330,7 @@ static struct ddsi_serdata * serdata_rmw_from_loaned_sample(
     loaned_sample = the loaned buffer in use
     will_require_cdr = whether we will need the CDR (or a highly likely to need it)
   */
-  const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(typecmn);
+  auto type = static_cast<const struct sertype_rmw *>(typecmn);
 
   assert(sample == loaned_sample->sample_ptr);
   assert(loaned_sample->metadata->sample_state ==
@@ -381,7 +381,7 @@ static bool loaned_sample_state_to_serdata_kind(
 static struct ddsi_serdata * serdata_rmw_from_psmx(
   const struct ddsi_sertype * typecmn, dds_loaned_sample_t *loaned_sample)
 {
-  const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(typecmn);
+  auto type = static_cast<const struct sertype_rmw *>(typecmn);
   struct dds_psmx_metadata * const md = loaned_sample->metadata;
   enum ddsi_serdata_kind kind;
   if (!loaned_sample_state_to_serdata_kind (md->sample_state, kind)) {
@@ -422,7 +422,7 @@ static struct ddsi_serdata * serdata_rmw_from_iox(
   enum  ddsi_serdata_kind kind, void * sub, void * iox_buffer)
 {
   try {
-    const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(typecmn);
+    auto type = static_cast<const struct sertype_rmw *>(typecmn);
     auto d = std::make_unique<serdata_rmw>(type, kind);
     d->iox_chunk = iox_buffer;
     d->iox_subscriber = sub;
@@ -575,7 +575,7 @@ static const struct ddsi_serdata_ops serdata_rmw_ops = {
 
 static void sertype_rmw_free(struct ddsi_sertype * tpcmn)
 {
-  struct sertype_rmw * tp = static_cast<struct sertype_rmw *>(tpcmn);
+  auto tp = static_cast<struct sertype_rmw *>(tpcmn);
   ddsi_sertype_fini(tpcmn);
 #if DDS_HAS_TYPELIB
   ddsrt_free((void *)tp->type_information.data);
@@ -624,8 +624,8 @@ bool sertype_rmw_equal(
 {
   /* A bit of a guess: types with the same name & type name are really the same if they have
      the same type support identifier as well */
-  const struct sertype_rmw * a = static_cast<const struct sertype_rmw *>(acmn);
-  const struct sertype_rmw * b = static_cast<const struct sertype_rmw *>(bcmn);
+  auto a = static_cast<const struct sertype_rmw *>(acmn);
+  auto b = static_cast<const struct sertype_rmw *>(bcmn);
   if (a->is_request_header != b->is_request_header) {
     return false;
   }
@@ -637,7 +637,7 @@ bool sertype_rmw_equal(
 
 uint32_t sertype_rmw_hash(const struct ddsi_sertype * tpcmn)
 {
-  const struct sertype_rmw * tp = static_cast<const struct sertype_rmw *>(tpcmn);
+  auto tp = static_cast<const struct sertype_rmw *>(tpcmn);
   uint32_t h2 = static_cast<uint32_t>(std::hash<bool>{}(tp->is_request_header));
   // FIXME: there's got to be an easier way
   auto gen = static_cast<std::underlying_type<decltype(tp->message_type->type_generator())>::type>(tp->message_type->type_generator());
@@ -647,7 +647,7 @@ uint32_t sertype_rmw_hash(const struct ddsi_sertype * tpcmn)
 
 static size_t sertype_get_serialized_size_impl(const struct ddsi_sertype * d, const void * sample)
 {
-  const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(d);
+  auto type = static_cast<const struct sertype_rmw *>(d);
   size_t serialized_size = 0;
   try {
     // ROS 2 doesn't really support keys, so only data is handled
@@ -664,7 +664,7 @@ static bool sertype_serialize_into_impl(
   const void * sample,
   void * dst_buffer)
 {
-  const struct sertype_rmw * type = static_cast<const struct sertype_rmw *>(d);
+  auto type = static_cast<const struct sertype_rmw *>(d);
   try {
     type->cdr_writer->serialize(dst_buffer, sample, SampleOrKey::Sample);
   } catch (std::exception & e) {
@@ -724,11 +724,11 @@ bool sertype_serialize_into(
 static ddsi_typeid_t * sertype_rmw_typeid(const struct ddsi_sertype * d, ddsi_typeid_kind_t kind)
 {
   assert(d);
-  const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(d);
+  auto tp = static_cast<const struct sertype_rmw *>(d);
   ddsi_typeinfo_t *type_info = ddsi_typeinfo_deser(
       tp->type_information.data, tp->type_information.sz);
-  if (type_info == NULL) {
-    return NULL;
+  if (type_info == nullptr) {
+    return nullptr;
   }
   ddsi_typeid_t *type_id = ddsi_typeinfo_typeid(type_info, kind);
 
@@ -740,14 +740,14 @@ static ddsi_typeid_t * sertype_rmw_typeid(const struct ddsi_sertype * d, ddsi_ty
 static ddsi_typemap_t * sertype_rmw_typemap(const struct ddsi_sertype * d)
 {
   assert(d);
-  const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(d);
+  auto tp = static_cast<const struct sertype_rmw *>(d);
   return ddsi_typemap_deser (tp->type_mapping.data, tp->type_mapping.sz);
 }
 
 static ddsi_typeinfo_t * sertype_rmw_typeinfo(const struct ddsi_sertype * d)
 {
   assert(d);
-  const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(d);
+  auto tp = static_cast<const struct sertype_rmw *>(d);
   return ddsi_typeinfo_deser (tp->type_information.data, tp->type_information.sz);
 }
 
@@ -756,8 +756,8 @@ static struct ddsi_sertype * sertype_rmw_derive_sertype(
   dds_data_representation_id_t data_representation,
   dds_type_consistency_enforcement_qospolicy_t tce_qos)
 {
-  const struct sertype_rmw *tp = static_cast<const struct sertype_rmw *>(base_sertype);
-  struct sertype_rmw *derived_sertype = NULL;
+  auto tp = static_cast<const struct sertype_rmw *>(base_sertype);
+  struct sertype_rmw *derived_sertype = nullptr;
 
   assert(base_sertype);
 
