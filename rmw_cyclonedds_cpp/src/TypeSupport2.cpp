@@ -169,10 +169,10 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
         element_value_type = m_inner_value_types.back().get();
         break;
       case ROSIDL_TypeKind::STRING:
-        element_value_type = make_value_type<ROSIDLC_StringValueType>();
+        element_value_type = make_value_type<ROSIDLC_StringValueType>(UINT32_MAX - 1);
         break;
       case ROSIDL_TypeKind::WSTRING:
-        element_value_type = make_value_type<ROSIDLC_WStringValueType>();
+        element_value_type = make_value_type<ROSIDLC_WStringValueType>(UINT32_MAX / 2);
         break;
       default:
         element_value_type =
@@ -189,6 +189,7 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
     } else if (member_impl.size_function) {
       member_value_type = make_value_type<CallbackSpanSequenceValueType>(
               element_value_type,
+              member_impl.is_upper_bound_ ? member_impl.array_size_ : UINT32_MAX,
               member_impl.size_function,
               member_impl.get_const_function,
               member_impl.get_function,
@@ -196,7 +197,7 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
                 if (!member_impl.resize_function(p, s)) { throw; }
               });
     } else {
-      member_value_type = make_value_type<ROSIDLC_SpanSequenceValueType>(element_value_type, member_impl.resize_function);
+      member_value_type = make_value_type<ROSIDLC_SpanSequenceValueType>(element_value_type, member_impl.is_upper_bound_ ? member_impl.array_size_ : UINT32_MAX, member_impl.resize_function);
     }
     if (member_impl.is_key_) {
       has_keys = true;
@@ -232,10 +233,10 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
         element_value_type = m_inner_value_types.back().get();
         break;
       case ROSIDL_TypeKind::STRING:
-        element_value_type = make_value_type<ROSIDLCPP_StringValueType>();
+        element_value_type = make_value_type<ROSIDLCPP_StringValueType>(UINT32_MAX - 1);
         break;
       case ROSIDL_TypeKind::WSTRING:
-        element_value_type = make_value_type<ROSIDLCPP_U16StringValueType>();
+        element_value_type = make_value_type<ROSIDLCPP_U16StringValueType>(UINT32_MAX / 2);
         break;
       default:
         element_value_type =
@@ -250,10 +251,10 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
       member_value_type = make_value_type<ArrayValueType>(
         element_value_type, member_impl.array_size_);
     } else if (ROSIDL_TypeKind(member_impl.type_id_) == ROSIDL_TypeKind::BOOLEAN) {
-      member_value_type = make_value_type<BoolVectorValueType>();
+      member_value_type = make_value_type<BoolVectorValueType>(member_impl.is_upper_bound_ ? member_impl.array_size_ : UINT32_MAX);
     } else {
       member_value_type = make_value_type<CallbackSpanSequenceValueType>(
-        element_value_type, member_impl.size_function, member_impl.get_const_function, member_impl.get_function, member_impl.resize_function);
+        element_value_type, member_impl.is_upper_bound_ ? member_impl.array_size_ : UINT32_MAX, member_impl.size_function, member_impl.get_const_function, member_impl.get_function, member_impl.resize_function);
     }
     if (member_impl.is_key_) {
       has_keys = true;

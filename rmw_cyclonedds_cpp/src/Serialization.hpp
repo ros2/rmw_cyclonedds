@@ -36,6 +36,9 @@ namespace rmw_cyclonedds_cpp
   {
   public:
     virtual size_t get_serialized_size(const void * data, SampleOrKey what) const = 0;
+    virtual size_t get_serialized_size_estimate(const void * data, SampleOrKey what) const = 0;
+    virtual size_t get_min_serialized_size(SampleOrKey what) const = 0; // includes 4 bytes encoding header
+    virtual size_t get_max_serialized_size(SampleOrKey what) const = 0; // includes 4 bytes encoding header, SIZE_MAX if unbounded
     virtual void serialize(void * dest, const void * data, SampleOrKey what) const = 0;
     virtual ~BaseCDRWriter() = default;
   };
@@ -47,6 +50,7 @@ namespace rmw_cyclonedds_cpp
   public:
     virtual void deserialize(void * dest, const void * cdr, size_t cdrsize, SampleOrKey what) const = 0;
     virtual void extractkey(std::vector<byte>& dest, const void * cdr, size_t cdrsize, SampleOrKey what) const = 0;
+    virtual void extractkey_be(std::vector<byte>& dst, const void * cdr, size_t cdrsize, SampleOrKey what) const = 0;
     virtual size_t print(char * dst, size_t dstsize, const void * cdr, size_t cdrsize, SampleOrKey what) const =  0;
 
     virtual ~BaseCDRReader() = default;
