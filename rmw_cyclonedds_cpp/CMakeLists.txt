@@ -84,6 +84,7 @@ add_library(rmw_cyclonedds_cpp
   src/Serialization.cpp
   src/TypeSupport2.cpp
   src/TypeSupport.cpp
+  src/dyntype.cpp
   src/dyntype_helper.c)
 
 configure_file("src/cdds_version.hpp.in" "src/cdds_version.hpp")

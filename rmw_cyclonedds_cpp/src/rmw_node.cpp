@@ -99,6 +99,7 @@
 #include "serdata.hpp"
 #include "demangle.hpp"
 
+#include "dyntype.hpp"
 
 using namespace std::literals::chrono_literals;
 
