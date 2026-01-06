@@ -4094,7 +4094,7 @@ extern "C" rmw_ret_t rmw_take_event(
         *taken = true;
         return RMW_RET_OK;
       }
-
+    case RMW_EVENT_INVALID:
     case RMW_EVENT_TYPE_MAX: {
         break;
       }
