@@ -43,7 +43,9 @@ static bool using_introspection_cpp_typesupport(const char * typesupport_identif
     rosidl_typesupport_introspection_cpp::typesupport_identifier) == 0;
 }
 
-static std::string get_type_name_impl(const std::string& ns, const std::string& n, const std::string& suffix)
+static std::string get_type_name_impl(
+  const std::string & ns, const std::string & n,
+  const std::string & suffix)
 {
   std::ostringstream ss;
   if (!ns.empty()) {
@@ -63,12 +65,16 @@ static std::string get_message_type_name_impl(MembersType * members)
 template<typename MembersType>
 static std::string get_request_type_name_impl(MembersType * members)
 {
-  return get_type_name_impl(members->service_namespace_, members->service_name_, std::string("Request_"));
+  return get_type_name_impl(
+    members->service_namespace_, members->service_name_,
+    std::string("Request_"));
 }
 template<typename MembersType>
 static std::string get_response_type_name_impl(MembersType * members)
 {
-  return get_type_name_impl(members->service_namespace_, members->service_name_, std::string("Response_"));
+  return get_type_name_impl(
+    members->service_namespace_, members->service_name_,
+    std::string("Response_"));
 }
 
 std::string get_message_type_name(const rosidl_message_type_support_t * type_support)

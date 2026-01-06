@@ -1,4 +1,5 @@
 // Copyright 2019 ADLINK Technology
+// Copyright 2025 ZettaScale Technology
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,7 +12,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "serdata.hpp"
 
 #include <cstring>
 #include <string>
@@ -20,6 +20,7 @@
 
 #include "dds/dds.h"
 #include "dyntype.hpp"
+#include "serdata.hpp"
 
 #include "rmw/error_handling.h"
 
@@ -28,20 +29,6 @@
 #include "dds/ddsrt/md5.h"
 #include "dyntype_helper.h"
 #endif
-
-static bool using_introspection_c_typesupport(const char * typesupport_identifier)
-{
-  return strcmp(
-    typesupport_identifier,
-    rosidl_typesupport_introspection_c__identifier) == 0;
-}
-
-static bool using_introspection_cpp_typesupport(const char * typesupport_identifier)
-{
-  return strcmp(
-    typesupport_identifier,
-    rosidl_typesupport_introspection_cpp::typesupport_identifier) == 0;
-}
 
 template<typename MembersType>
 ROSIDL_TYPESUPPORT_INTROSPECTION_CPP_LOCAL
@@ -69,6 +56,20 @@ std::string create_type_name(const void * untyped_members)
 
 #if DDS_HAS_TYPELIB
 
+static bool using_introspection_c_typesupport(const char * typesupport_identifier)
+{
+  return strcmp(
+    typesupport_identifier,
+    rosidl_typesupport_introspection_c__identifier) == 0;
+}
+
+static bool using_introspection_cpp_typesupport(const char * typesupport_identifier)
+{
+  return strcmp(
+    typesupport_identifier,
+    rosidl_typesupport_introspection_cpp::typesupport_identifier) == 0;
+}
+
 template<typename MemberType>
 static void dynamic_type_add_array_prim(
   dds_dynamic_type_t * dstruct, dds_entity_t dds_ppant, const MemberType * member,
@@ -79,19 +80,24 @@ static void dynamic_type_add_array_prim(
   if (member->array_size_) {
     uint32_t array_size = static_cast<uint32_t>(member->array_size_);
     if (!member->is_upper_bound_) {
-      ddt = dds_dynamic_type_create(dds_ppant,
+      ddt = dds_dynamic_type_create(
+        dds_ppant,
         get_dynamic_type_descriptor_prim(DDS_DYNAMIC_ARRAY, member->name_, 1, &array_size, type));
     } else {
-      ddt = dds_dynamic_type_create(dds_ppant,
-        get_dynamic_type_descriptor_prim(DDS_DYNAMIC_SEQUENCE, member->name_, 1, &array_size,
-        type));
+      ddt = dds_dynamic_type_create(
+        dds_ppant,
+        get_dynamic_type_descriptor_prim(
+          DDS_DYNAMIC_SEQUENCE, member->name_, 1, &array_size,
+          type));
     }
   } else {
-    ddt = dds_dynamic_type_create(dds_ppant,
-       get_dynamic_type_descriptor_prim(DDS_DYNAMIC_SEQUENCE, member->name_, 0, nullptr, type));
+    ddt = dds_dynamic_type_create(
+      dds_ppant,
+      get_dynamic_type_descriptor_prim(DDS_DYNAMIC_SEQUENCE, member->name_, 0, nullptr, type));
   }
 
-  dds_return_t ret = dds_dynamic_type_add_member(dstruct,
+  dds_return_t ret = dds_dynamic_type_add_member(
+    dstruct,
     get_dynamic_member_descriptor(ddt, member->name_));
   assert(ret == DDS_RETCODE_OK);
 }
@@ -106,18 +112,22 @@ static void dynamic_type_add_array(
   if (member->array_size_) {
     uint32_t array_size = static_cast<uint32_t>(member->array_size_);
     if (!member->is_upper_bound_) {
-      dseq = dds_dynamic_type_create(dds_ppant,
-       get_dynamic_type_descriptor(DDS_DYNAMIC_ARRAY, member->name_, 1, &array_size, ddt));
+      dseq = dds_dynamic_type_create(
+        dds_ppant,
+        get_dynamic_type_descriptor(DDS_DYNAMIC_ARRAY, member->name_, 1, &array_size, ddt));
     } else {
-      dseq = dds_dynamic_type_create(dds_ppant,
+      dseq = dds_dynamic_type_create(
+        dds_ppant,
         get_dynamic_type_descriptor(DDS_DYNAMIC_SEQUENCE, member->name_, 1, &array_size, ddt));
     }
   } else {
-    dseq = dds_dynamic_type_create(dds_ppant,
-     get_dynamic_type_descriptor(DDS_DYNAMIC_SEQUENCE, member->name_, 0, nullptr, ddt));
+    dseq = dds_dynamic_type_create(
+      dds_ppant,
+      get_dynamic_type_descriptor(DDS_DYNAMIC_SEQUENCE, member->name_, 0, nullptr, ddt));
   }
 
-  dds_return_t ret = dds_dynamic_type_add_member(dstruct,
+  dds_return_t ret = dds_dynamic_type_add_member(
+    dstruct,
     get_dynamic_member_descriptor(dseq, member->name_));
   assert(ret == DDS_RETCODE_OK);
 }
@@ -134,7 +144,8 @@ static void dynamic_type_add_member(
   assert(member->type_id_ != rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE);
 
   if (!member->is_array_) {
-    ret = dds_dynamic_type_add_member(dstruct,
+    ret = dds_dynamic_type_add_member(
+      dstruct,
       get_dynamic_member_descriptor_prim(type, member->name_));
     assert(ret == DDS_RETCODE_OK);
   } else {
@@ -146,14 +157,14 @@ static void dynamic_type_register(
   struct sertype_rmw * st, dds_dynamic_type_t dt,
   dds_entity_t dds_ppant)
 {
-  dds_typeinfo_t *type_info;
+  dds_typeinfo_t * type_info;
   auto rc = dds_dynamic_type_register(&dt, &type_info);
   if (rc != DDS_RETCODE_OK) {
     RMW_SET_ERROR_MSG("dds_dynamic_type_register failed to register type");
     goto fail_typeinfo;
   }
 
-  dds_topic_descriptor_t *desc;
+  dds_topic_descriptor_t * desc;
   rc = dds_create_topic_descriptor(
     DDS_FIND_SCOPE_GLOBAL, dds_ppant, type_info, 0, &desc);
   if (rc != DDS_RETCODE_OK) {
@@ -162,11 +173,13 @@ static void dynamic_type_register(
   }
 
   st->type_information.data =
-    static_cast<const unsigned char *>(ddsrt_memdup(desc->type_information.data,
-    desc->type_information.sz));
+    static_cast<const unsigned char *>(ddsrt_memdup(
+      desc->type_information.data,
+      desc->type_information.sz));
   st->type_information.sz = desc->type_information.sz;
-  st->type_mapping.data = static_cast<const unsigned char *>(ddsrt_memdup(desc->type_mapping.data,
-    desc->type_mapping.sz));
+  st->type_mapping.data = static_cast<const unsigned char *>(ddsrt_memdup(
+      desc->type_mapping.data,
+      desc->type_mapping.sz));
   st->type_mapping.sz = desc->type_mapping.sz;
 
   dds_delete_topic_descriptor(desc);
@@ -237,15 +250,18 @@ static bool construct_dds_dynamic_type(
           dds_dynamic_type_t ddt;
           if (member->string_upper_bound_) {
             uint32_t string_size = static_cast<uint32_t>(member->string_upper_bound_);
-            ddt = dds_dynamic_type_create(dds_ppant,
+            ddt = dds_dynamic_type_create(
+              dds_ppant,
               get_dynamic_type_descriptor(DDS_DYNAMIC_STRING8, nullptr, 1, &string_size, {}));
           } else {
-            ddt = dds_dynamic_type_create(dds_ppant,
+            ddt = dds_dynamic_type_create(
+              dds_ppant,
               get_dynamic_type_descriptor(DDS_DYNAMIC_STRING8, nullptr, 0, nullptr, {}));
           }
           if (!member->is_array_) {
-            ret = dds_dynamic_type_add_member(dstruct,
-            get_dynamic_member_descriptor(ddt, member->name_));
+            ret = dds_dynamic_type_add_member(
+              dstruct,
+              get_dynamic_member_descriptor(ddt, member->name_));
             assert(ret == DDS_RETCODE_OK);
           } else {
             dynamic_type_add_array(dstruct, dds_ppant, member, ddt);
@@ -258,15 +274,18 @@ static bool construct_dds_dynamic_type(
           dds_dynamic_type_t ddt;
           if (member->string_upper_bound_) {
             uint32_t string_size = static_cast<uint32_t>(member->string_upper_bound_);
-            ddt = dds_dynamic_type_create(dds_ppant,
+            ddt = dds_dynamic_type_create(
+              dds_ppant,
               get_dynamic_type_descriptor(DDS_DYNAMIC_STRING16, nullptr, 1, &string_size, {}));
           } else {
-            ddt = dds_dynamic_type_create(dds_ppant,
+            ddt = dds_dynamic_type_create(
+              dds_ppant,
               get_dynamic_type_descriptor(DDS_DYNAMIC_STRING16, nullptr, 0, nullptr, {}));
           }
           if (!member->is_array_) {
-            ret = dds_dynamic_type_add_member(dstruct,
-            get_dynamic_member_descriptor(ddt, member->name_));
+            ret = dds_dynamic_type_add_member(
+              dstruct,
+              get_dynamic_member_descriptor(ddt, member->name_));
             assert(ret == DDS_RETCODE_OK);
           } else {
             dynamic_type_add_array(dstruct, dds_ppant, member, ddt);
@@ -283,9 +302,11 @@ static bool construct_dds_dynamic_type(
 
           auto sub_members = static_cast<const MembersType *>(member->members_->data);
           dds_dynamic_type_t ddt;
-          ddt = dds_dynamic_type_create(dds_ppant,
-            get_dynamic_type_descriptor(DDS_DYNAMIC_STRUCTURE,
-          create_type_name<MembersType>(member->members_->data).c_str(), 0, nullptr, {}));
+          ddt = dds_dynamic_type_create(
+            dds_ppant,
+            get_dynamic_type_descriptor(
+              DDS_DYNAMIC_STRUCTURE,
+              create_type_name<MembersType>(member->members_->data).c_str(), 0, nullptr, {}));
 
           dds_dynamic_type_set_extensibility(&ddt, DDS_DYNAMIC_TYPE_EXT_FINAL);
 
@@ -295,8 +316,9 @@ static bool construct_dds_dynamic_type(
           }
 
           if (!member->is_array_) {
-            ret = dds_dynamic_type_add_member(dstruct,
-            get_dynamic_member_descriptor(ddt, member->name_));
+            ret = dds_dynamic_type_add_member(
+              dstruct,
+              get_dynamic_member_descriptor(ddt, member->name_));
             assert(ret == DDS_RETCODE_OK);
           } else {
             dynamic_type_add_array(dstruct, dds_ppant, member, ddt);
@@ -305,7 +327,8 @@ static bool construct_dds_dynamic_type(
           break;
         }
       default:
-        RMW_SET_ERROR_MSG((std::string("unknown type id ") +
+        RMW_SET_ERROR_MSG(
+          (std::string("unknown type id ") +
           std::to_string(member->type_id_)).c_str());
         return false;
     }
@@ -327,39 +350,41 @@ void create_msg_dds_dynamic_type(
   if (using_introspection_c_typesupport(type_support_identifier)) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_c__MessageMembers_s *>(untyped_members);
-    auto dstruct = dds_dynamic_type_create(dds_ppant,
-      get_dynamic_type_descriptor(DDS_DYNAMIC_STRUCTURE,
-      create_type_name<rosidl_typesupport_introspection_c__MessageMembers_s>(
-      untyped_members).c_str(), 0, nullptr, {}));
+    auto dstruct = dds_dynamic_type_create(
+      dds_ppant,
+      get_dynamic_type_descriptor(
+        DDS_DYNAMIC_STRUCTURE,
+        create_type_name<rosidl_typesupport_introspection_c__MessageMembers_s>(
+          untyped_members).c_str(), 0, nullptr, {}));
 
     dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
 
     if (construct_dds_dynamic_type(&dstruct, dds_ppant, members)) {
       dynamic_type_register(st, dstruct, dds_ppant);
-    }
+    } else {
 #if THROW_ON_DYNAMIC_TYPE_ERROR
-    else {
       throw std::runtime_error("construct_dds_dynamic_type failed");
-    }
 #endif
+    }
   } else if (using_introspection_cpp_typesupport(type_support_identifier)) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers_s *>(untyped_members);
-    auto dstruct = dds_dynamic_type_create(dds_ppant,
-      get_dynamic_type_descriptor(DDS_DYNAMIC_STRUCTURE,
-      create_type_name<rosidl_typesupport_introspection_cpp::MessageMembers_s>(
-      untyped_members).c_str(), 0, nullptr, {}));
+    auto dstruct = dds_dynamic_type_create(
+      dds_ppant,
+      get_dynamic_type_descriptor(
+        DDS_DYNAMIC_STRUCTURE,
+        create_type_name<rosidl_typesupport_introspection_cpp::MessageMembers_s>(
+          untyped_members).c_str(), 0, nullptr, {}));
 
     dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
 
     if (construct_dds_dynamic_type(&dstruct, dds_ppant, members)) {
       dynamic_type_register(st, dstruct, dds_ppant);
-    }
+    } else {
 #if THROW_ON_DYNAMIC_TYPE_ERROR
-    else {
       throw std::runtime_error("construct_dds_dynamic_type failed");
-    }
 #endif
+    }
   } else {
     throw std::runtime_error("create_dds_dynamic_type, unsupported typesupport");
   }
@@ -379,39 +404,41 @@ void create_req_dds_dynamic_type(
   if (using_introspection_c_typesupport(type_support_identifier)) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_c__ServiceMembers_s *>(untyped_members);
-    auto dstruct = dds_dynamic_type_create(dds_ppant,
-      get_dynamic_type_descriptor(DDS_DYNAMIC_STRUCTURE,
-      create_type_name<rosidl_typesupport_introspection_c__MessageMembers_s>(
-      untyped_members).c_str(), 0, nullptr, {}));
+    auto dstruct = dds_dynamic_type_create(
+      dds_ppant,
+      get_dynamic_type_descriptor(
+        DDS_DYNAMIC_STRUCTURE,
+        create_type_name<rosidl_typesupport_introspection_c__MessageMembers_s>(
+          untyped_members).c_str(), 0, nullptr, {}));
 
     dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
 
     if (construct_dds_dynamic_type(&dstruct, dds_ppant, members->request_members_)) {
       dynamic_type_register(st, dstruct, dds_ppant);
-    }
+    } else {
 #if THROW_ON_DYNAMIC_TYPE_ERROR
-    else {
       throw std::runtime_error("construct_dds_dynamic_type failed");
-    }
 #endif
+    }
   } else if (using_introspection_cpp_typesupport(type_support_identifier)) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_cpp::ServiceMembers_s *>(untyped_members);
-    auto dstruct = dds_dynamic_type_create(dds_ppant,
-      get_dynamic_type_descriptor(DDS_DYNAMIC_STRUCTURE,
-      create_type_name<rosidl_typesupport_introspection_cpp::MessageMembers_s>(
-      untyped_members).c_str(), 0, nullptr, {}));
+    auto dstruct = dds_dynamic_type_create(
+      dds_ppant,
+      get_dynamic_type_descriptor(
+        DDS_DYNAMIC_STRUCTURE,
+        create_type_name<rosidl_typesupport_introspection_cpp::MessageMembers_s>(
+          untyped_members).c_str(), 0, nullptr, {}));
 
     dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
 
     if (construct_dds_dynamic_type(&dstruct, dds_ppant, members->request_members_)) {
       dynamic_type_register(st, dstruct, dds_ppant);
-    }
+    } else {
 #if THROW_ON_DYNAMIC_TYPE_ERROR
-    else {
       throw std::runtime_error("construct_dds_dynamic_type failed");
-    }
 #endif
+    }
   } else {
     throw std::runtime_error("create_dds_dynamic_type, unsupported typesupport");
   }
@@ -431,38 +458,40 @@ void create_res_dds_dynamic_type(
   if (using_introspection_c_typesupport(type_support_identifier)) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_c__ServiceMembers_s *>(untyped_members);
-    auto dstruct = dds_dynamic_type_create(dds_ppant,
-     get_dynamic_type_descriptor(DDS_DYNAMIC_STRUCTURE,
-      create_type_name<rosidl_typesupport_introspection_c__MessageMembers_s>(
-      untyped_members).c_str(), 0, nullptr, {}));
+    auto dstruct = dds_dynamic_type_create(
+      dds_ppant,
+      get_dynamic_type_descriptor(
+        DDS_DYNAMIC_STRUCTURE,
+        create_type_name<rosidl_typesupport_introspection_c__MessageMembers_s>(
+          untyped_members).c_str(), 0, nullptr, {}));
 
     dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
 
     if (construct_dds_dynamic_type(&dstruct, dds_ppant, members->response_members_)) {
       dynamic_type_register(st, dstruct, dds_ppant);
-    }
+    } else {
 #if THROW_ON_DYNAMIC_TYPE_ERROR
-    else {
       throw std::runtime_error("construct_dds_dynamic_type failed");
-    }
 #endif
+    }
   } else if (using_introspection_cpp_typesupport(type_support_identifier)) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_cpp::ServiceMembers_s *>(untyped_members);
-    auto dstruct = dds_dynamic_type_create(dds_ppant,
-      get_dynamic_type_descriptor(DDS_DYNAMIC_STRUCTURE,
-      create_type_name<rosidl_typesupport_introspection_cpp::MessageMembers_s>(
-      untyped_members).c_str(), 0, nullptr, {}));
+    auto dstruct = dds_dynamic_type_create(
+      dds_ppant,
+      get_dynamic_type_descriptor(
+        DDS_DYNAMIC_STRUCTURE,
+        create_type_name<rosidl_typesupport_introspection_cpp::MessageMembers_s>(
+          untyped_members).c_str(), 0, nullptr, {}));
     dds_dynamic_type_set_extensibility(&dstruct, DDS_DYNAMIC_TYPE_EXT_FINAL);
 
     if (construct_dds_dynamic_type(&dstruct, dds_ppant, members->response_members_)) {
       dynamic_type_register(st, dstruct, dds_ppant);
-    }
+    } else {
 #if THROW_ON_DYNAMIC_TYPE_ERROR
-    else {
       throw std::runtime_error("construct_dds_dynamic_type failed");
-    }
 #endif
+    }
   } else {
     throw std::runtime_error("create_dds_dynamic_type, unsupported typesupport");
   }

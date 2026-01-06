@@ -32,8 +32,8 @@ extern "C" {
 
 namespace rmw_cyclonedds_cpp
 {
-  class BaseCDRWriter;
-  class BaseCDRReader;
+class BaseCDRWriter;
+class BaseCDRReader;
 }
 
 struct sertype_rmw : ddsi_sertype
@@ -67,8 +67,8 @@ public:
   void * data() const {return m_data.get();}
   size_t keysize() const {return m_keysize;}
   void * key() const {return m_key.get();}
-  void set_key(size_t keysize, std::unique_ptr<byte[]>& key);
-  void set_key(size_t size, const void *key);
+  void set_key(size_t keysize, std::unique_ptr<byte[]> & key);
+  void set_key(size_t size, const void * key);
 };
 
 typedef struct cdds_request_header

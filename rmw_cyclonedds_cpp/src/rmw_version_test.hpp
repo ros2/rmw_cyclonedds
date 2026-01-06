@@ -16,9 +16,9 @@
 
 /* True if the version of RMW is at least major.minor.patch */
 #define RMW_VERSION_GTE(major, minor, patch) ( \
-    major < RMW_VERSION_MAJOR || ( \
-      major == RMW_VERSION_MAJOR && ( \
-        minor < RMW_VERSION_MINOR || ( \
-          minor == RMW_VERSION_MINOR && patch <= RMW_VERSION_PATCH))))
+          major < RMW_VERSION_MAJOR || ( \
+            major == RMW_VERSION_MAJOR && ( \
+              minor < RMW_VERSION_MINOR || ( \
+                minor == RMW_VERSION_MINOR && patch <= RMW_VERSION_PATCH))))
 
 #endif  // RMW_VERSION_TEST_HPP_

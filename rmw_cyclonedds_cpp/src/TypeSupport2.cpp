@@ -24,7 +24,8 @@
 
 namespace rmw_cyclonedds_cpp
 {
-const PrimitiveValueType primitive_value_type_boolean = PrimitiveValueType(ROSIDL_TypeKind::BOOLEAN);
+const PrimitiveValueType primitive_value_type_boolean =
+  PrimitiveValueType(ROSIDL_TypeKind::BOOLEAN);
 
 class ROSIDLC_StructValueType : public StructValueType
 {
@@ -188,16 +189,19 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
         element_value_type, member_impl.array_size_);
     } else if (member_impl.size_function) {
       member_value_type = make_value_type<CallbackSpanSequenceValueType>(
-              element_value_type,
-              member_impl.is_upper_bound_ ? member_impl.array_size_ : UINT32_MAX,
-              member_impl.size_function,
-              member_impl.get_const_function,
-              member_impl.get_function,
-              [member_impl](void *p, size_t s){
-                if (!member_impl.resize_function(p, s)) { throw; }
-              });
+        element_value_type,
+        member_impl.is_upper_bound_ ? member_impl.array_size_ : UINT32_MAX,
+        member_impl.size_function,
+        member_impl.get_const_function,
+        member_impl.get_function,
+        [member_impl](void * p, size_t s){
+          if (!member_impl.resize_function(p, s)) {throw;}
+        });
     } else {
-      member_value_type = make_value_type<ROSIDLC_SpanSequenceValueType>(element_value_type, member_impl.is_upper_bound_ ? member_impl.array_size_ : UINT32_MAX, member_impl.resize_function);
+      member_value_type = make_value_type<ROSIDLC_SpanSequenceValueType>(
+        element_value_type,
+        member_impl.is_upper_bound_ ? member_impl.array_size_ : UINT32_MAX,
+        member_impl.resize_function);
     }
     if (member_impl.is_key_) {
       has_keys = true;
@@ -210,7 +214,7 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
         member_impl.name_,
         member_value_type,
         member_impl.offset_,
-        .is_key=member_impl.is_key_,
+        .is_key = member_impl.is_key_,
       });
   }
   m_has_keys = has_keys;
@@ -251,10 +255,15 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
       member_value_type = make_value_type<ArrayValueType>(
         element_value_type, member_impl.array_size_);
     } else if (ROSIDL_TypeKind(member_impl.type_id_) == ROSIDL_TypeKind::BOOLEAN) {
-      member_value_type = make_value_type<BoolVectorValueType>(member_impl.is_upper_bound_ ? member_impl.array_size_ : UINT32_MAX);
+      member_value_type =
+        make_value_type<BoolVectorValueType>(
+        member_impl.is_upper_bound_ ? member_impl.array_size_ :
+        UINT32_MAX);
     } else {
       member_value_type = make_value_type<CallbackSpanSequenceValueType>(
-        element_value_type, member_impl.is_upper_bound_ ? member_impl.array_size_ : UINT32_MAX, member_impl.size_function, member_impl.get_const_function, member_impl.get_function, member_impl.resize_function);
+        element_value_type, member_impl.is_upper_bound_ ? member_impl.array_size_ : UINT32_MAX,
+        member_impl.size_function, member_impl.get_const_function, member_impl.get_function,
+        member_impl.resize_function);
     }
     if (member_impl.is_key_) {
       has_keys = true;
@@ -267,7 +276,7 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
         member_impl.name_,
         member_value_type,
         member_impl.offset_,
-        .is_key=member_impl.is_key_,
+        .is_key = member_impl.is_key_,
       });
   }
   m_has_keys = has_keys;

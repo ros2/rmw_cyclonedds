@@ -24,22 +24,22 @@ extern "C" {
 
 #if DDS_HAS_TYPELIB
 dds_dynamic_type_descriptor_t get_dynamic_type_descriptor_prim(
-  dds_dynamic_type_kind_t kind, const char *name, uint32_t num_bounds, const uint32_t *bounds,
+  dds_dynamic_type_kind_t kind, const char * name, uint32_t num_bounds, const uint32_t * bounds,
   dds_dynamic_type_kind_t type);
 
 dds_dynamic_type_descriptor_t get_dynamic_type_descriptor(
-  dds_dynamic_type_kind_t kind, const char *name, uint32_t num_bounds, const uint32_t *bounds,
+  dds_dynamic_type_kind_t kind, const char * name, uint32_t num_bounds, const uint32_t * bounds,
   dds_dynamic_type_t type);
 
 dds_dynamic_member_descriptor_t get_dynamic_member_descriptor_prim(
-  dds_dynamic_type_kind_t type, const char *name);
+  dds_dynamic_type_kind_t type, const char * name);
 
 dds_dynamic_member_descriptor_t get_dynamic_member_descriptor(
-  dds_dynamic_type_t ddt, const char *name);
+  dds_dynamic_type_t ddt, const char * name);
 #endif
 
 #if defined (__cplusplus)
 }
 #endif
 
-#endif // DYNTYPE_HELPER_H_
+#endif  // DYNTYPE_HELPER_H_

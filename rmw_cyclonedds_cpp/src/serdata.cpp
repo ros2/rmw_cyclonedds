@@ -14,12 +14,12 @@
 #include "serdata.hpp"
 
 #include <cstring>
-#include <dds/ddsrt/md5.h>
 #include <memory>
 #include <regex>
 #include <sstream>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "dds/dds.h"
 #include "cdds_version.hpp"
@@ -39,6 +39,7 @@
 #endif
 #include "rmw/error_handling.h"
 #include "dds/ddsrt/mh3.h"
+#include "dds/ddsrt/md5.h"
 
 #if DDS_HAS_TYPELIB
 #include "dds/ddsrt/heap.h"
@@ -52,8 +53,6 @@
 // the integration with the DDS type system is missing just like when you don't do this at
 // all.
 #define THROW_ON_DYNAMIC_TYPE_ERROR 0
-
-using namespace rmw_cyclonedds_cpp;
 
 void serdata_rmw::resize(size_t requested_size)
 {
@@ -73,14 +72,14 @@ void serdata_rmw::resize(size_t requested_size)
   std::memset(byte_offset(m_data.get(), requested_size), '\0', n_pad_bytes);
 }
 
-void serdata_rmw::set_key(size_t keysize, std::unique_ptr<byte[]> &key)
+void serdata_rmw::set_key(size_t keysize, std::unique_ptr<byte[]> & key)
 {
   m_key.reset(key.release());
   m_keysize = keysize;
   hash = ddsrt_mh3(m_key.get(), keysize, type->serdata_basehash);
 }
 
-void serdata_rmw::set_key(size_t keysize, const void *key)
+void serdata_rmw::set_key(size_t keysize, const void * key)
 {
   if (!keysize) {
     m_keysize = 0;
@@ -98,7 +97,7 @@ serdata_rmw::serdata_rmw(const ddsi_sertype * type, ddsi_serdata_kind kind)
   ddsi_serdata_init(this, type, kind);
 }
 
-static bool type_contains_keys (struct ddsi_sertype const * t)
+static bool type_contains_keys(struct ddsi_sertype const * t)
 {
 #if CDDS_VERSION > CDDS_VERSION_0_10
   return t->data_type_props & DDS_DATA_TYPE_CONTAINS_KEY;
@@ -111,29 +110,33 @@ static bool serdata_rmw_eqkey(const struct ddsi_serdata * va, const struct ddsi_
 {
   auto a = static_cast<const serdata_rmw *>(va);
   auto b = static_cast<const serdata_rmw *>(vb);
-  return (a->keysize() == b->keysize() &&
-          (a->keysize() == 0 || std::memcmp(a->key(), b->key(), a->keysize()) == 0));
+  return a->keysize() == b->keysize() &&
+         (a->keysize() == 0 || std::memcmp(a->key(), b->key(), a->keysize()) == 0);
 }
 
-static void serdata_rmw_set_key_from_sample(serdata_rmw *d, const void *sample)
+static void serdata_rmw_set_key_from_sample(serdata_rmw * d, const void * sample)
 {
   auto * type = static_cast<const struct sertype_rmw *>(d->type);
   if (type_contains_keys(type)) {
-    const size_t keysize = type->cdr_writer->get_serialized_size(sample, SampleOrKey::Key);
+    const size_t keysize = type->cdr_writer->get_serialized_size(
+      sample,
+      rmw_cyclonedds_cpp::SampleOrKey::Key);
     auto key = std::make_unique<byte[]>(keysize);
-    type->cdr_writer->serialize(key.get(), sample, SampleOrKey::Key);
+    type->cdr_writer->serialize(key.get(), sample, rmw_cyclonedds_cpp::SampleOrKey::Key);
     d->set_key(keysize, key);
   }
 }
 
-static void serdata_rmw_set_key_from_ser(serdata_rmw *d)
+static void serdata_rmw_set_key_from_ser(serdata_rmw * d)
 {
   auto type = static_cast<const struct sertype_rmw *>(d->type);
-  if (type_contains_keys(type))
-  {
+  if (type_contains_keys(type)) {
     try {
       std::vector<byte> key;
-      type->cdr_reader->extractkey(key, d->data(), d->size(), (d->kind == SDK_DATA) ? SampleOrKey::Sample : SampleOrKey::Key);
+      type->cdr_reader->extractkey(
+        key, d->data(), d->size(),
+        (d->kind ==
+        SDK_DATA) ? rmw_cyclonedds_cpp::SampleOrKey::Sample : rmw_cyclonedds_cpp::SampleOrKey::Key);
       d->set_key(key.size(), key.data());
     } catch (std::runtime_error & e) {
       RMW_SET_ERROR_MSG(e.what());
@@ -145,7 +148,8 @@ static void serdata_rmw_serialize_into(serdata_rmw * d, const void * sample)
 {
   auto type = static_cast<const struct sertype_rmw *>(d->type);
   try {
-    const auto cdrmode = (d->kind == SDK_DATA) ? SampleOrKey::Sample : SampleOrKey::Key;
+    const auto cdrmode = (d->kind ==
+      SDK_DATA) ? rmw_cyclonedds_cpp::SampleOrKey::Sample : rmw_cyclonedds_cpp::SampleOrKey::Key;
     size_t sz = type->cdr_writer->get_serialized_size(sample, cdrmode);
     d->resize(sz);
     type->cdr_writer->serialize(d->data(), sample, cdrmode);
@@ -207,7 +211,7 @@ static void serdata_rmw_free(struct ddsi_serdata * dcmn)
   auto * d = static_cast<serdata_rmw *>(dcmn);
 #if CDDS_VERSION > CDDS_VERSION_0_10
   if (d->loan) {
-    dds_loaned_sample_unref (d->loan);
+    dds_loaned_sample_unref(d->loan);
   }
 #elif defined DDS_HAS_SHM
   if (d->iox_chunk && d->iox_subscriber) {
@@ -327,8 +331,8 @@ struct ddsi_serdata * serdata_rmw_from_serialized_message(
 
 #if CDDS_VERSION > CDDS_VERSION_0_10
 static struct ddsi_serdata * serdata_rmw_from_loaned_sample(
-  const struct ddsi_sertype *typecmn, enum ddsi_serdata_kind kind,
-  const char *sample, dds_loaned_sample_t *loaned_sample,
+  const struct ddsi_sertype * typecmn, enum ddsi_serdata_kind kind,
+  const char * sample, dds_loaned_sample_t * loaned_sample,
   bool will_require_cdr)
 {
   /*
@@ -341,7 +345,8 @@ static struct ddsi_serdata * serdata_rmw_from_loaned_sample(
   auto type = static_cast<const struct sertype_rmw *>(typecmn);
 
   assert(sample == loaned_sample->sample_ptr);
-  assert(loaned_sample->metadata->sample_state ==
+  assert(
+    loaned_sample->metadata->sample_state ==
     (kind == SDK_KEY ? DDS_LOANED_SAMPLE_STATE_RAW_KEY : DDS_LOANED_SAMPLE_STATE_RAW_DATA));
   assert(loaned_sample->metadata->cdr_identifier == DDSI_RTPS_SAMPLE_NATIVE);
   assert(loaned_sample->metadata->cdr_options == 0);
@@ -351,8 +356,8 @@ static struct ddsi_serdata * serdata_rmw_from_loaned_sample(
     // If serialization is/will be required, construct the serdata the normal way
     d = serdata_rmw_from_sample_unique(type, kind, sample);
   } else {
-    // If we know there is no neeed for the serialized representation (so only PSMX and "memcpy safe"),
-    // construct an empty serdata and stay away from the serializers
+    // If we know there is no neeed for the serialized representation (so only PSMX and
+    // "memcpy safe"), construct an empty serdata and stay away from the serializers
     d = std::make_unique<serdata_rmw>(type, kind);
     serdata_rmw_set_key_from_sample(d.get(), sample);
   }
@@ -387,24 +392,26 @@ static bool loaned_sample_state_to_serdata_kind(
 }
 
 static struct ddsi_serdata * serdata_rmw_from_psmx(
-  const struct ddsi_sertype * typecmn, dds_loaned_sample_t *loaned_sample)
+  const struct ddsi_sertype * typecmn, dds_loaned_sample_t * loaned_sample)
 {
   auto type = static_cast<const struct sertype_rmw *>(typecmn);
   struct dds_psmx_metadata * const md = loaned_sample->metadata;
   enum ddsi_serdata_kind kind;
-  if (!loaned_sample_state_to_serdata_kind (md->sample_state, kind)) {
+  if (!loaned_sample_state_to_serdata_kind(md->sample_state, kind)) {
     return nullptr;
   }
 
   switch (md->sample_state) {
     case DDS_LOANED_SAMPLE_STATE_UNITIALIZED:
-      assert (0);
+      assert(0);
       break;
     case DDS_LOANED_SAMPLE_STATE_SERIALIZED_KEY:
     case DDS_LOANED_SAMPLE_STATE_SERIALIZED_DATA:
       // for simplicity we copy the serialized data into the heap so we can rely on
       // existing code for making a serdata_rmw
-      return serdata_rmw_from_serialized_message(typecmn, kind, loaned_sample->sample_ptr, md->sample_size);
+      return serdata_rmw_from_serialized_message(
+        typecmn, kind, loaned_sample->sample_ptr,
+        md->sample_size);
     case DDS_LOANED_SAMPLE_STATE_RAW_KEY:
     case DDS_LOANED_SAMPLE_STATE_RAW_DATA:
       try {
@@ -467,15 +474,18 @@ static void serdata_rmw_to_ser_unref(struct ddsi_serdata * dcmn, const ddsrt_iov
   ddsi_serdata_unref(static_cast<serdata_rmw *>(dcmn));
 }
 
-static bool serdata_rmw_to_sample_impl(const sertype_rmw * type, const serdata_rmw * d, void * sample)
+static bool serdata_rmw_to_sample_impl(
+  const sertype_rmw * type, const serdata_rmw * d,
+  void * sample)
 {
-  const auto cdrmode = (d->kind == SDK_DATA) ? SampleOrKey::Sample : SampleOrKey::Key;
+  const auto cdrmode = (d->kind ==
+    SDK_DATA) ? rmw_cyclonedds_cpp::SampleOrKey::Sample : rmw_cyclonedds_cpp::SampleOrKey::Key;
   try {
     if (d->type != nullptr) {
       serdata_rmw_serialize_into_on_demand(const_cast<serdata_rmw *>(d));
       type->cdr_reader->deserialize(sample, d->data(), d->size(), cdrmode);
     } else {
-      assert (d->kind == SDK_KEY);
+      assert(d->kind == SDK_KEY);
       type->cdr_reader->deserialize(sample, d->key(), d->keysize(), cdrmode);
     }
   } catch (std::exception & e) {
@@ -493,7 +503,7 @@ static bool serdata_rmw_to_sample(
   auto tp = static_cast<const sertype_rmw *>(d->type);
   static_cast<void>(bufptr);
   static_cast<void>(buflim);
-  return serdata_rmw_to_sample_impl (tp, d, sample);
+  return serdata_rmw_to_sample_impl(tp, d, sample);
 }
 
 static struct ddsi_serdata * serdata_rmw_to_untyped(const struct ddsi_serdata * dcmn)
@@ -515,7 +525,24 @@ static bool serdata_rmw_untyped_to_sample(
   auto tp = static_cast<const sertype_rmw *>(type);
   static_cast<void>(bufptr);
   static_cast<void>(buflim);
-  return serdata_rmw_to_sample_impl (tp, d, sample);
+  return serdata_rmw_to_sample_impl(tp, d, sample);
+}
+
+static void snprintf_wrapper(char ** buf, size_t * bufsize, const char * fmt, ...)
+{
+  if (*bufsize > 0) {
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(*buf, *bufsize, fmt, ap);
+    va_end(ap);
+    if (n > 0) {
+      if (static_cast<size_t>(n) > *bufsize) {
+        n = static_cast<int>(*bufsize);
+      }
+      *buf += n;
+      *bufsize -= static_cast<size_t>(n);
+    }
+  }
 }
 
 static size_t serdata_rmw_print(
@@ -523,22 +550,28 @@ static size_t serdata_rmw_print(
 {
   auto d = static_cast<const serdata_rmw *>(dcmn);
   auto type = static_cast<const struct sertype_rmw *>(tpcmn);
-  if (bufsize > 10) {
-    char *b = buf;
-    *b++ = '[';
-    for (size_t i = 0; i < d->keysize() && static_cast<size_t>(b - buf) < bufsize - 10; i++) {
-      snprintf (b, 3, "%02x", static_cast<unsigned char *>(d->key())[i]);
-      b += 2;
-    }
-    *b++ = ']';
-    *b++ = ' ';
-    bufsize -= b - buf;
-    buf = b;
+  char * const init_buf = buf;
+  snprintf_wrapper(&buf, &bufsize, "[");
+  for (size_t i = 0; i < d->keysize() && bufsize > 0; i++) {
+    snprintf_wrapper(&buf, &bufsize, "%02x", static_cast<unsigned char *>(d->key())[i]);
   }
-  if (d->type != nullptr)
-    return type->cdr_reader->print(buf, bufsize, d->data(), d->size(), (d->kind == SDK_DATA) ? SampleOrKey::Sample : SampleOrKey::Key);
-  else
-    return type->cdr_reader->print(buf, bufsize, d->key(), d->keysize(), SampleOrKey::Key);
+  snprintf_wrapper(&buf, &bufsize, "] ");
+  const size_t init_len = static_cast<size_t>(buf - init_buf);
+  if (bufsize > 0) {
+    using rmw_cyclonedds_cpp::SampleOrKey;
+    auto what = (d->kind == SDK_DATA) ? SampleOrKey::Sample : SampleOrKey::Key;
+    if (d->type != nullptr) {
+      return init_len + type->cdr_reader->print(
+        buf, bufsize, d->data(), d->size(),
+        what);
+    } else {
+      return init_len + type->cdr_reader->print(
+        buf, bufsize, d->key(), d->keysize(),
+        what);
+    }
+  } else {
+    return init_len;
+  }
 }
 
 static void serdata_rmw_get_keyhash(
@@ -547,17 +580,23 @@ static void serdata_rmw_get_keyhash(
 {
   auto d = static_cast<const serdata_rmw *>(dcmn);
   auto type = static_cast<const sertype_rmw *>(d->type);
-  std::memset(buf, 0, sizeof (*buf));
+  std::memset(buf, 0, sizeof(*buf));
   if (type_contains_keys(d->type)) {
     std::vector<byte> key_be;
-    type->cdr_reader->extractkey_be(key_be, d->key(), d->keysize(), SampleOrKey::Key);
-    assert(key_be.size() > 4); // 4 bytes header and at least 1 byte key
-    if (type->cdr_writer->get_max_serialized_size(SampleOrKey::Key) <= 20 && !force_md5) {
+    type->cdr_reader->extractkey_be(
+      key_be, d->key(), d->keysize(),
+      rmw_cyclonedds_cpp::SampleOrKey::Key);
+    assert(key_be.size() > 4);  // 4 bytes header and at least 1 byte key
+    if (type->cdr_writer->get_max_serialized_size(rmw_cyclonedds_cpp::SampleOrKey::Key) <= 20 &&
+      !force_md5)
+    {
       std::memcpy(buf, key_be.data() + 4, key_be.size() - 4);
     } else {
       ddsrt_md5_state_t md5st;
       ddsrt_md5_init(&md5st);
-      ddsrt_md5_append(&md5st, reinterpret_cast<const ddsrt_md5_byte_t *>(key_be.data() + 4), key_be.size() - 4);
+      ddsrt_md5_append(
+        &md5st, reinterpret_cast<const ddsrt_md5_byte_t *>(key_be.data() + 4),
+        key_be.size() - 4);
       ddsrt_md5_finish(&md5st, buf->value);
     }
   }
@@ -593,8 +632,8 @@ static void sertype_rmw_free(struct ddsi_sertype * tpcmn)
   auto tp = static_cast<struct sertype_rmw *>(tpcmn);
   ddsi_sertype_fini(tpcmn);
 #if DDS_HAS_TYPELIB
-  ddsrt_free((void *)tp->type_information.data);
-  ddsrt_free((void *)tp->type_mapping.data);
+  ddsrt_free(const_cast<void *>(static_cast<const void *>(tp->type_information.data)));
+  ddsrt_free(const_cast<void *>(static_cast<const void *>(tp->type_mapping.data)));
 #endif
   delete tp;
 }
@@ -655,7 +694,9 @@ uint32_t sertype_rmw_hash(const struct ddsi_sertype * tpcmn)
   auto tp = static_cast<const struct sertype_rmw *>(tpcmn);
   uint32_t h2 = static_cast<uint32_t>(std::hash<bool>{}(tp->is_request_header));
   // FIXME: there's got to be an easier way
-  auto gen = static_cast<std::underlying_type<decltype(tp->message_type->type_generator())>::type>(tp->message_type->type_generator());
+  auto gen =
+    static_cast<std::underlying_type<decltype(tp->message_type->type_generator())>::type>(tp->
+    message_type->type_generator());
   uint32_t h1 = static_cast<uint32_t>(std::hash<decltype(gen)>{}(gen));
   return h1 ^ h2;
 }
@@ -666,7 +707,9 @@ static size_t sertype_get_serialized_size_impl(const struct ddsi_sertype * d, co
   size_t serialized_size = 0;
   try {
     // ROS 2 doesn't really support keys, so only data is handled
-    serialized_size = type->cdr_writer->get_serialized_size(sample, SampleOrKey::Sample);
+    serialized_size = type->cdr_writer->get_serialized_size(
+      sample,
+      rmw_cyclonedds_cpp::SampleOrKey::Sample);
   } catch (std::exception & e) {
     RMW_SET_ERROR_MSG(e.what());
   }
@@ -681,7 +724,7 @@ static bool sertype_serialize_into_impl(
 {
   auto type = static_cast<const struct sertype_rmw *>(d);
   try {
-    type->cdr_writer->serialize(dst_buffer, sample, SampleOrKey::Sample);
+    type->cdr_writer->serialize(dst_buffer, sample, rmw_cyclonedds_cpp::SampleOrKey::Sample);
   } catch (std::exception & e) {
     RMW_SET_ERROR_MSG(e.what());
   }
@@ -717,7 +760,7 @@ dds_return_t sertype_get_serialized_size(
   *enc_identifier = (native_endian() == endian::little) ? DDSI_RTPS_CDR_LE : DDSI_RTPS_CDR_BE;
   // Cyclone's including or excluding the CDR encoding header in the various situations is
   // painfully inconsistent ...
-  assert (serialized_size >= 4);
+  assert(serialized_size >= 4);
   *size = serialized_size - 4;
   return DDS_RETCODE_OK;
 }
@@ -740,12 +783,12 @@ static ddsi_typeid_t * sertype_rmw_typeid(const struct ddsi_sertype * d, ddsi_ty
 {
   assert(d);
   auto tp = static_cast<const struct sertype_rmw *>(d);
-  ddsi_typeinfo_t *type_info = ddsi_typeinfo_deser(
-      tp->type_information.data, tp->type_information.sz);
+  ddsi_typeinfo_t * type_info = ddsi_typeinfo_deser(
+    tp->type_information.data, tp->type_information.sz);
   if (type_info == nullptr) {
     return nullptr;
   }
-  ddsi_typeid_t *type_id = ddsi_typeinfo_typeid(type_info, kind);
+  ddsi_typeid_t * type_id = ddsi_typeinfo_typeid(type_info, kind);
 
   dds_free_typeinfo(type_info);
 
@@ -756,23 +799,23 @@ static ddsi_typemap_t * sertype_rmw_typemap(const struct ddsi_sertype * d)
 {
   assert(d);
   auto tp = static_cast<const struct sertype_rmw *>(d);
-  return ddsi_typemap_deser (tp->type_mapping.data, tp->type_mapping.sz);
+  return ddsi_typemap_deser(tp->type_mapping.data, tp->type_mapping.sz);
 }
 
 static ddsi_typeinfo_t * sertype_rmw_typeinfo(const struct ddsi_sertype * d)
 {
   assert(d);
   auto tp = static_cast<const struct sertype_rmw *>(d);
-  return ddsi_typeinfo_deser (tp->type_information.data, tp->type_information.sz);
+  return ddsi_typeinfo_deser(tp->type_information.data, tp->type_information.sz);
 }
 
 static struct ddsi_sertype * sertype_rmw_derive_sertype(
-  const struct ddsi_sertype *base_sertype,
+  const struct ddsi_sertype * base_sertype,
   dds_data_representation_id_t data_representation,
   dds_type_consistency_enforcement_qospolicy_t tce_qos)
 {
   auto tp = static_cast<const struct sertype_rmw *>(base_sertype);
-  struct sertype_rmw *derived_sertype = nullptr;
+  struct sertype_rmw * derived_sertype = nullptr;
 
   assert(base_sertype);
 
@@ -782,9 +825,9 @@ static struct ddsi_sertype * sertype_rmw_derive_sertype(
     derived_sertype = const_cast<struct sertype_rmw *>(tp);
   } else {
     derived_sertype = new struct sertype_rmw;
-    std::memcpy (derived_sertype, tp, sizeof (*derived_sertype));
-    ddsrt_atomic_st32 (&derived_sertype->flags_refc, 1);
-    derived_sertype->base_sertype = ddsi_sertype_ref (tp);
+    std::memcpy(derived_sertype, tp, sizeof(*derived_sertype));
+    ddsrt_atomic_st32(&derived_sertype->flags_refc, 1);
+    derived_sertype->base_sertype = ddsi_sertype_ref(tp);
     derived_sertype->serdata_ops = &serdata_rmw_ops;
     derived_sertype->allowed_data_representation = data_representation;
   }
@@ -842,7 +885,7 @@ struct sertype_rmw * create_sertype(
     static_cast<struct ddsi_sertype *>(st),
     type_name.c_str(), &sertype_rmw_ops, &serdata_rmw_ops,
     sample_size, props, DDS_DATA_REPRESENTATION_FLAG_XCDR1, flags);
-#else // CDDS_VERSION > CDDS_VERSION_0_10
+#else  // CDDS_VERSION > CDDS_VERSION_0_10
   uint32_t flags = 0;
   if (!is_keyed_type) {
     flags |= DDSI_SERTYPE_FLAG_TOPICKIND_NO_KEY;
@@ -857,11 +900,13 @@ struct sertype_rmw * create_sertype(
 #ifdef DDS_HAS_SHM
   // TODO(Sumanth) needs some API in cyclone to set this
   st->iox_size = sample_size;
-#endif // DDS_HAS_SHM
-#endif // CDDS_VERSION > CDDS_VERSION_0_10
+#endif  // DDS_HAS_SHM
+#endif  // CDDS_VERSION > CDDS_VERSION_0_10
   st->is_request_header = is_request_header;
   st->message_type = std::move(message_type);
-  const auto variant = is_request_header ? SampleOrRequest::Request : SampleOrRequest::Sample;
+  const auto variant =
+    is_request_header ? rmw_cyclonedds_cpp::SampleOrRequest::Request :
+    rmw_cyclonedds_cpp::SampleOrRequest::Sample;
   st->cdr_writer = rmw_cyclonedds_cpp::make_cdr_writer(st->message_type.get(), variant);
   st->cdr_reader = rmw_cyclonedds_cpp::make_cdr_reader(st->message_type.get(), variant);
 
