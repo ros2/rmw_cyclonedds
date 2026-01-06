@@ -14,6 +14,7 @@
 #include "serdata.hpp"
 
 #include <cstring>
+#include <dds/ddsrt/md5.h>
 #include <memory>
 #include <regex>
 #include <sstream>
@@ -541,17 +542,24 @@ static size_t serdata_rmw_print(
 }
 
 static void serdata_rmw_get_keyhash(
-  const struct ddsi_serdata * d, struct ddsi_keyhash * buf,
+  const struct ddsi_serdata * dcmn, struct ddsi_keyhash * buf,
   bool force_md5)
 {
-  static_cast<void>(d);
-  static_cast<void>(force_md5);
-  if (!type_contains_keys(d->type)) {
-    memset(buf, 0, sizeof (*buf));
-  } else {
-    /* FIXME: implement this for when someone forces key hash generation in the config or
-       enables DDS Security in a mode that requires "secure" keys */
-    abort ();
+  auto d = static_cast<const serdata_rmw *>(dcmn);
+  auto type = static_cast<const sertype_rmw *>(d->type);
+  std::memset(buf, 0, sizeof (*buf));
+  if (type_contains_keys(d->type)) {
+    std::vector<byte> key_be;
+    type->cdr_reader->extractkey_be(key_be, d->key(), d->keysize(), SampleOrKey::Key);
+    assert(key_be.size() > 4); // 4 bytes header and at least 1 byte key
+    if (type->cdr_writer->get_max_serialized_size(SampleOrKey::Key) <= 20 && !force_md5) {
+      std::memcpy(buf, key_be.data() + 4, key_be.size() - 4);
+    } else {
+      ddsrt_md5_state_t md5st;
+      ddsrt_md5_init(&md5st);
+      ddsrt_md5_append(&md5st, reinterpret_cast<const ddsrt_md5_byte_t *>(key_be.data() + 4), key_be.size() - 4);
+      ddsrt_md5_finish(&md5st, buf->value);
+    }
   }
 }
 
