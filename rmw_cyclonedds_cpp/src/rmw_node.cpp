@@ -486,22 +486,22 @@ static void dds_listener_callback(dds_entity_t entity, void * arg)
 }
 
 #define MAKE_DDS_EVENT_CALLBACK_FN(event_type, EVENT_TYPE) \
-        static void on_ ## event_type ## _fn( \
+  static void on_ ## event_type ## _fn( \
           dds_entity_t entity, \
           const dds_ ## event_type ## _status_t status, \
           void * arg) \
         { \
-          (void)status; \
-          (void)entity; \
+    (void)status; \
+    (void)entity; \
           auto data = static_cast<user_callback_data_t *>(arg); \
           std::lock_guard<std::mutex> guard(data->mutex); \
           auto cb = data->event_callback[DDS_ ## EVENT_TYPE ## _STATUS_ID]; \
           if (cb) { \
-            cb(data->event_data[DDS_ ## EVENT_TYPE ## _STATUS_ID], 1); \
+      cb(data->event_data[DDS_ ## EVENT_TYPE ## _STATUS_ID], 1); \
           } else { \
-            data->event_unread_count[DDS_ ## EVENT_TYPE ## _STATUS_ID]++; \
+      data->event_unread_count[DDS_ ## EVENT_TYPE ## _STATUS_ID]++; \
           } \
-        }
+  }
 
 // Define event callback functions
 MAKE_DDS_EVENT_CALLBACK_FN(requested_deadline_missed, REQUESTED_DEADLINE_MISSED)
@@ -1480,11 +1480,11 @@ rmw_context_impl_s::init(rmw_init_options_t * options, size_t domain_id)
     return RMW_RET_ERROR;
   }
   this->common.publish_callback = [](const rmw_publisher_t * pub, const void * msg) {
-    return rmw_publish(
+      return rmw_publish(
       pub,
       msg,
       nullptr);
-  };
+    };
 
   rmw_subscription_options_t subscription_options = rmw_get_default_subscription_options();
   subscription_options.ignore_local_publications = true;

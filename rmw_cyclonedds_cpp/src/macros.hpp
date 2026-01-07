@@ -19,18 +19,18 @@
 #include <string>
 
 #define SPECIALIZE_GENERIC_C_SEQUENCE(C_NAME, C_TYPE) \
-        template<> \
-        struct GenericCSequence<C_TYPE> \
-        { \
-          using type = rosidl_runtime_c__ ## C_NAME ## __Sequence; \
+  template<> \
+  struct GenericCSequence<C_TYPE> \
+  { \
+    using type = rosidl_runtime_c__ ## C_NAME ## __Sequence; \
  \
-          static void fini(type * array) { \
+    static void fini(type * array) { \
             rosidl_runtime_c__ ## C_NAME ## __Sequence__fini(array); \
-          } \
+    } \
  \
-          static bool init(type * array, size_t size) { \
-            return rosidl_runtime_c__ ## C_NAME ## __Sequence__init(array, size); \
-          } \
-        };
+    static bool init(type * array, size_t size) { \
+      return rosidl_runtime_c__ ## C_NAME ## __Sequence__init(array, size); \
+    } \
+  };
 
 #endif  // MACROS_HPP_

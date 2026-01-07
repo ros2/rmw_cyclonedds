@@ -27,7 +27,7 @@
 #if DDS_HAS_TYPELIB
 #include "dds/ddsrt/string.h"
 #include "dds/ddsrt/md5.h"
-#include "dyntype_helper.h"
+#include "dyntype_helper.hpp"
 #endif
 
 template<typename MembersType>

@@ -15,7 +15,7 @@
 #include <string.h>
 #include "dds/dds.h"
 #include "cdds_version.hpp"
-#include "dyntype_helper.h"
+#include "dyntype_helper.hpp"
 
 #if DDS_HAS_TYPELIB
 dds_dynamic_type_descriptor_t get_dynamic_type_descriptor_prim(

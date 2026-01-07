@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DYNTYPE_HELPER_H_
-#define DYNTYPE_HELPER_H_
+#ifndef DYNTYPE_HELPER_HPP_
+#define DYNTYPE_HELPER_HPP_
 
 #include "dds/dds.h"
 #include "cdds_version.hpp"
@@ -42,4 +42,4 @@ dds_dynamic_member_descriptor_t get_dynamic_member_descriptor(
 }
 #endif
 
-#endif  // DYNTYPE_HELPER_H_
+#endif  // DYNTYPE_HELPER_HPP_
