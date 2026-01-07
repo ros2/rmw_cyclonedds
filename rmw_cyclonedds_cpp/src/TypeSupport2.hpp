@@ -20,6 +20,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <stdexcept>
 
 #include "rosidl_runtime_c/string_functions.h"
 #include "rosidl_runtime_c/u16string_functions.h"
@@ -427,8 +428,9 @@ struct PrimitiveValueType : public AnyValueType
       case ROSIDL_TypeKind::STRING:
       case ROSIDL_TypeKind::WSTRING:
       case ROSIDL_TypeKind::MESSAGE:
-        unreachable();
+        break;
     }
+    unreachable();
   }
   size_t cdrsizeof_type() const final
   {
@@ -456,6 +458,7 @@ struct PrimitiveValueType : public AnyValueType
       case ROSIDL_TypeKind::MESSAGE:
         return 0;
     }
+    unreachable();
   }
   bool is_self_contained() const final {return true;}
   size_t cdralignof_type() const final {return cdrsizeof_type();}

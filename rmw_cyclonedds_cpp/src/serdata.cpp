@@ -814,27 +814,13 @@ static struct ddsi_sertype * sertype_rmw_derive_sertype(
   dds_data_representation_id_t data_representation,
   dds_type_consistency_enforcement_qospolicy_t tce_qos)
 {
-  auto tp = static_cast<const struct sertype_rmw *>(base_sertype);
-  struct sertype_rmw * derived_sertype = nullptr;
-
-  assert(base_sertype);
-
-  (void) tce_qos;
-
-  if (base_sertype->serdata_ops == &serdata_rmw_ops) {
-    derived_sertype = const_cast<struct sertype_rmw *>(tp);
-  } else {
-    derived_sertype = new struct sertype_rmw;
-    std::memcpy(derived_sertype, tp, sizeof(*derived_sertype));
-    ddsrt_atomic_st32(&derived_sertype->flags_refc, 1);
-    derived_sertype->base_sertype = ddsi_sertype_ref(tp);
-    derived_sertype->serdata_ops = &serdata_rmw_ops;
-    derived_sertype->allowed_data_representation = data_representation;
-  }
-
-  return (struct ddsi_sertype *) derived_sertype;
+  static_cast<void>(base_sertype);
+  static_cast<void>(data_representation);
+  static_cast<void>(tce_qos);
+  return nullptr;
 }
 #endif
+
 static const struct ddsi_sertype_ops sertype_rmw_ops = {
   ddsi_sertype_v0,
   nullptr,

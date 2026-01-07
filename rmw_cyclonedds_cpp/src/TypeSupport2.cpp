@@ -214,7 +214,7 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
         member_impl.name_,
         member_value_type,
         member_impl.offset_,
-        .is_key = member_impl.is_key_,
+        member_impl.is_key_
       });
   }
   m_has_keys = has_keys;
@@ -276,7 +276,7 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
         member_impl.name_,
         member_value_type,
         member_impl.offset_,
-        .is_key = member_impl.is_key_,
+        member_impl.is_key_
       });
   }
   m_has_keys = has_keys;
