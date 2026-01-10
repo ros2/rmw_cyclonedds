@@ -2222,6 +2222,7 @@ static dds_qos_t * create_readwrite_qos(
   }
   switch (qos_policies->reliability) {
     case RMW_QOS_POLICY_RELIABILITY_SYSTEM_DEFAULT:
+    case RMW_QOS_POLICY_RELIABILITY_BEST_AVAILABLE:
     case RMW_QOS_POLICY_RELIABILITY_RELIABLE:
       dds_qset_reliability(qos, DDS_RELIABILITY_RELIABLE, DDS_INFINITY);
       break;
@@ -2233,6 +2234,7 @@ static dds_qos_t * create_readwrite_qos(
   }
   switch (qos_policies->durability) {
     case RMW_QOS_POLICY_DURABILITY_SYSTEM_DEFAULT:
+    case RMW_QOS_POLICY_DURABILITY_BEST_AVAILABLE:
     case RMW_QOS_POLICY_DURABILITY_VOLATILE:
       dds_qset_durability(qos, DDS_DURABILITY_VOLATILE);
       break;
@@ -2270,8 +2272,14 @@ static dds_qos_t * create_readwrite_qos(
     case RMW_QOS_POLICY_LIVELINESS_AUTOMATIC:
       dds_qset_liveliness(qos, DDS_LIVELINESS_AUTOMATIC, ldur);
       break;
+    case RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_NODE: // Deprecated so we use MANUAL_BY_TOPIC instead
+      dds_qset_liveliness(qos, DDS_LIVELINESS_MANUAL_BY_TOPIC, ldur);
+      break;
     case RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC:
       dds_qset_liveliness(qos, DDS_LIVELINESS_MANUAL_BY_TOPIC, ldur);
+      break;
+    case RMW_QOS_POLICY_LIVELINESS_BEST_AVAILABLE:
+      dds_qset_liveliness(qos, DDS_LIVELINESS_AUTOMATIC, ldur);
       break;
     case RMW_QOS_POLICY_LIVELINESS_UNKNOWN:
       return nullptr;
@@ -2310,6 +2318,28 @@ static rmw_qos_policy_kind_t dds_qos_policy_to_rmw_qos_policy(dds_qos_policy_id_
       return RMW_QOS_POLICY_HISTORY;
     case DDS_LIFESPAN_QOS_POLICY_ID:
       return RMW_QOS_POLICY_LIFESPAN;
+    case DDS_INVALID_QOS_POLICY_ID:
+      return RMW_QOS_POLICY_INVALID;
+    case DDS_USERDATA_QOS_POLICY_ID:
+    case DDS_PRESENTATION_QOS_POLICY_ID:
+    case DDS_LATENCYBUDGET_QOS_POLICY_ID:
+    case DDS_OWNERSHIP_QOS_POLICY_ID:
+    case DDS_OWNERSHIPSTRENGTH_QOS_POLICY_ID:
+    case DDS_TIMEBASEDFILTER_QOS_POLICY_ID:
+    case DDS_PARTITION_QOS_POLICY_ID:
+    case DDS_DESTINATIONORDER_QOS_POLICY_ID:
+    case DDS_RESOURCELIMITS_QOS_POLICY_ID:
+    case DDS_ENTITYFACTORY_QOS_POLICY_ID:
+    case DDS_WRITERDATALIFECYCLE_QOS_POLICY_ID:
+    case DDS_READERDATALIFECYCLE_QOS_POLICY_ID:
+    case DDS_TOPICDATA_QOS_POLICY_ID:
+    case DDS_GROUPDATA_QOS_POLICY_ID:
+    case DDS_TRANSPORTPRIORITY_QOS_POLICY_ID:
+    case DDS_DURABILITYSERVICE_QOS_POLICY_ID:
+    case DDS_PROPERTY_QOS_POLICY_ID:
+    case DDS_TYPE_CONSISTENCY_ENFORCEMENT_QOS_POLICY_ID:
+    case DDS_DATA_REPRESENTATION_QOS_POLICY_ID:
+      return RMW_QOS_POLICY_INVALID;
   }
   return RMW_QOS_POLICY_INVALID;
 }
