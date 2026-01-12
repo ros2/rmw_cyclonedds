@@ -886,6 +886,8 @@ struct sertype_rmw * create_sertype(
 #ifdef DDS_HAS_SHM
   // TODO(Sumanth) needs some API in cyclone to set this
   st->iox_size = sample_size;
+#else
+  static_cast<void>(sample_size);
 #endif  // DDS_HAS_SHM
 #endif  // CDDS_VERSION > CDDS_VERSION_0_10
   st->is_request_header = is_request_header;
