@@ -182,6 +182,13 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
     }
 
     const AnyValueType * member_value_type;
+    if (member_impl.is_array_ && member_impl.array_size_ > UINT32_MAX) {
+      abort ();
+    }
+    uint32_t bound = UINT32_MAX;
+    if (member_impl.is_array_ && member_impl.array_size_ != 0 && member_impl.is_upper_bound_) {
+      bound = static_cast<uint32_t>(member_impl.array_size_);
+    }
     if (!member_impl.is_array_) {
       member_value_type = element_value_type;
     } else if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
@@ -190,7 +197,7 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
     } else if (member_impl.size_function) {
       member_value_type = make_value_type<CallbackSpanSequenceValueType>(
         element_value_type,
-        member_impl.is_upper_bound_ ? member_impl.array_size_ : UINT32_MAX,
+        bound,
         member_impl.size_function,
         member_impl.get_const_function,
         member_impl.get_function,
@@ -200,7 +207,7 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
     } else {
       member_value_type = make_value_type<ROSIDLC_SpanSequenceValueType>(
         element_value_type,
-        member_impl.is_upper_bound_ ? member_impl.array_size_ : UINT32_MAX,
+        bound,
         member_impl.resize_function);
     }
     if (member_impl.is_key_) {
@@ -249,6 +256,13 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
     }
 
     const AnyValueType * member_value_type;
+    if (member_impl.is_array_ && member_impl.array_size_ > UINT32_MAX) {
+      abort ();
+    }
+    uint32_t bound = UINT32_MAX;
+    if (member_impl.is_array_ && member_impl.array_size_ != 0 && member_impl.is_upper_bound_) {
+      bound = static_cast<uint32_t>(member_impl.array_size_);
+    }
     if (!member_impl.is_array_) {
       member_value_type = element_value_type;
     } else if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
@@ -257,11 +271,10 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
     } else if (ROSIDL_TypeKind(member_impl.type_id_) == ROSIDL_TypeKind::BOOLEAN) {
       member_value_type =
         make_value_type<BoolVectorValueType>(
-        member_impl.is_upper_bound_ ? member_impl.array_size_ :
-        UINT32_MAX);
+        bound);
     } else {
       member_value_type = make_value_type<CallbackSpanSequenceValueType>(
-        element_value_type, member_impl.is_upper_bound_ ? member_impl.array_size_ : UINT32_MAX,
+        element_value_type, bound,
         member_impl.size_function, member_impl.get_const_function, member_impl.get_function,
         member_impl.resize_function);
     }
