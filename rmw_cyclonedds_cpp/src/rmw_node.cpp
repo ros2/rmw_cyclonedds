@@ -2272,7 +2272,7 @@ static dds_qos_t * create_readwrite_qos(
     case RMW_QOS_POLICY_LIVELINESS_AUTOMATIC:
       dds_qset_liveliness(qos, DDS_LIVELINESS_AUTOMATIC, ldur);
       break;
-    case RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_NODE: // Deprecated so we use MANUAL_BY_TOPIC instead
+    case RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_NODE:  // Deprecated so we use MANUAL_BY_TOPIC instead
       dds_qset_liveliness(qos, DDS_LIVELINESS_MANUAL_BY_TOPIC, ldur);
       break;
     case RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC:
@@ -2371,7 +2371,6 @@ static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qo
         qos_policies->depth = 0;
         break;
     }
-
   }
 
   {
@@ -2389,7 +2388,6 @@ static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qo
         qos_policies->reliability = RMW_QOS_POLICY_RELIABILITY_RELIABLE;
         break;
     }
-
   }
 
   {
@@ -2409,7 +2407,6 @@ static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qo
       case DDS_DURABILITY_PERSISTENT:
         qos_policies->durability = RMW_QOS_POLICY_DURABILITY_UNKNOWN;
         break;
-        
     }
   }
 
