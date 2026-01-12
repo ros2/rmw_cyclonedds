@@ -91,7 +91,7 @@
 #include "cdds_version.hpp"
 #if CDDS_VERSION > CDDS_VERSION_0_10
 #include "dds/ddsc/dds_psmx.h"
-#elif defined DDS_HAS_SHM
+#else
 #include "dds/ddsc/dds_data_allocator.h"
 #include "dds/ddsc/dds_loan_api.h"
 #endif
