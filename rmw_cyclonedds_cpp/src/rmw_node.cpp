@@ -2272,9 +2272,6 @@ static dds_qos_t * create_readwrite_qos(
     case RMW_QOS_POLICY_LIVELINESS_AUTOMATIC:
       dds_qset_liveliness(qos, DDS_LIVELINESS_AUTOMATIC, ldur);
       break;
-    case RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_NODE:  // Deprecated so we use MANUAL_BY_TOPIC instead
-      dds_qset_liveliness(qos, DDS_LIVELINESS_MANUAL_BY_TOPIC, ldur);
-      break;
     case RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC:
       dds_qset_liveliness(qos, DDS_LIVELINESS_MANUAL_BY_TOPIC, ldur);
       break;
