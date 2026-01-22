@@ -2075,6 +2075,11 @@ extern "C" rmw_ret_t rmw_publish_loaned_message(
   rmw_publisher_allocation_t * allocation)
 {
 #if CDDS_VERSION > CDDS_VERSION_0_10
+  RCUTILS_CHECK_ARGUMENT_FOR_NULL(publisher, RMW_RET_INVALID_ARGUMENT);
+  if (!publisher->can_loan_messages) {
+    RMW_SET_ERROR_MSG("Loaning is not supported");
+    return RMW_RET_UNSUPPORTED;
+  }
   return rmw_publish(publisher, ros_message, allocation);
 #elif defined DDS_HAS_SHM
   static_cast<void>(allocation);
