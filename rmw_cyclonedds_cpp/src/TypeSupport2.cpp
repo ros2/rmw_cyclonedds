@@ -202,7 +202,7 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
         member_impl.get_const_function,
         member_impl.get_function,
         [member_impl](void * p, size_t s){
-          if (!member_impl.resize_function(p, s)) {throw;}
+          if (!member_impl.resize_function(p, s)) {throw std::bad_alloc();}
         });
     } else {
       member_value_type = make_value_type<ROSIDLC_SpanSequenceValueType>(
