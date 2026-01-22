@@ -138,7 +138,7 @@ static void serdata_rmw_set_key_from_ser(serdata_rmw * d)
         (d->kind ==
         SDK_DATA) ? rmw_cyclonedds_cpp::SampleOrKey::Sample : rmw_cyclonedds_cpp::SampleOrKey::Key);
       d->set_key(key.size(), key.data());
-    } catch (std::runtime_error & e) {
+    } catch (std::exception & e) {
       RMW_SET_ERROR_MSG(e.what());
     }
   }

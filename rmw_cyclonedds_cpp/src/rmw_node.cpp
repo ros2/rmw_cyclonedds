@@ -1923,7 +1923,7 @@ extern "C" rmw_ret_t rmw_deserialize(
       ros_message, serialized_message->buffer, serialized_message->buffer_length,
       rmw_cyclonedds_cpp::SampleOrKey::Sample);
     return RMW_RET_OK;
-  } catch (std::runtime_error & e) {
+  } catch (std::exception & e) {
     RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("rmw_serialize: %s", e.what());
   }
   return RMW_RET_ERROR;
