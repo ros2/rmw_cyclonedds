@@ -232,6 +232,14 @@ It is currently not possible to accurately check whether Shared Memory transfer 
 
 Another way to check whether Shared Memory is used is running the iceoryx introspection client, which allows tracking of various statistics of the iceoryx communication, Shared Memory utilization being one of them.
 
+### Optional receipts (copy vs zero-copy view)
+
+For debugging / profiling you can enable a lightweight receipt that reports, at process exit, how many times and how many bytes the RMW had to copy from a received shared-memory chunk into a heap buffer (vs. taking a zero-copy view).
+
+```console
+export RMW_CYCLONEDDS_SHM_RECEIPTS=1
+```
+
 ### Building the iceoryx introspection
 
 The introspection client is not build by default, so we need to do so manually.

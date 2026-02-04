@@ -62,12 +62,32 @@ protected:
   /* first two bytes of data is CDR encoding
      second two bytes are encoding options */
   std::unique_ptr<byte[]> m_data {nullptr};
+  // Optional: view into externally owned serialized bytes (e.g., iceoryx SHM chunk).
+  // When set, `data_ro()` points to this memory and `data()` stays null (read-only).
+  const byte * m_external_data {nullptr};
+  size_t m_external_size {0};
 
 public:
   serdata_rmw(const ddsi_sertype * type, ddsi_serdata_kind kind);
   void resize(size_t requested_size);
   size_t size() const {return m_size;}
+  // Writable data pointer (owned). Returns null when holding an external view.
   void * data() const {return m_data.get();}
+  // Read-only pointer to serialized bytes. May point into externally owned memory.
+  const void * data_ro() const {return m_external_data ? m_external_data : m_data.get();}
+  bool has_data_ro() const {return m_data != nullptr || m_external_data != nullptr;}
+  void set_external_view(const void * data, size_t size)
+  {
+    m_data.reset();
+    m_external_data = static_cast<const byte *>(data);
+    m_external_size = size;
+    m_size = size;
+  }
+  void clear_external_view()
+  {
+    m_external_data = nullptr;
+    m_external_size = 0;
+  }
 };
 
 typedef struct cdds_request_header
