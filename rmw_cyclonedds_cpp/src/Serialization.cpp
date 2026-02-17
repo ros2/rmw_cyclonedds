@@ -534,29 +534,7 @@ protected:
     if (lookup_trivially_serialized(cursor->offset(), value_type)) {
       cursor->put_bytes(data, value_type->sizeof_type());
     } else {
-//      value_type->apply([&](const auto & vt) {return serialize(cursor, data, vt);});
-      if (auto s = dynamic_cast<const PrimitiveValueType *>(value_type)) {
-        return serialize(cursor, data, *s);
-      }
-      if (auto s = dynamic_cast<const U8StringValueType *>(value_type)) {
-        return serialize(cursor, data, *s);
-      }
-      if (auto s = dynamic_cast<const U16StringValueType *>(value_type)) {
-        return serialize(cursor, data, *s);
-      }
-      if (auto s = dynamic_cast<const StructValueType *>(value_type)) {
-        return serialize(cursor, data, *s);
-      }
-      if (auto s = dynamic_cast<const ArrayValueType *>(value_type)) {
-        return serialize(cursor, data, *s);
-      }
-      if (auto s = dynamic_cast<const SpanSequenceValueType *>(value_type)) {
-        return serialize(cursor, data, *s);
-      }
-      if (auto s = dynamic_cast<const BoolVectorValueType *>(value_type)) {
-        return serialize(cursor, data, *s);
-      }
-      unreachable();
+      value_type->apply([&](const auto & vt) {return serialize(cursor, data, vt);});
     }
   }
 
