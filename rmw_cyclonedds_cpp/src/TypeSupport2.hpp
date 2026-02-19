@@ -394,7 +394,7 @@ public:
   EValueType e_value_type() const final {return EValueType::U16StringValueType;}
 };
 
-struct ROSIDLC_StringValueType : public U8StringValueType
+struct ROSIDLC_StringValueType final : public U8StringValueType
 {
 public:
   using type = rosidl_runtime_c__String;
@@ -416,7 +416,7 @@ public:
   size_t sizeof_type() const override {return sizeof(type);}
 };
 
-class ROSIDLC_WStringValueType : public U16StringValueType
+class ROSIDLC_WStringValueType final : public U16StringValueType
 {
 public:
   using type = rosidl_runtime_c__U16String;
@@ -434,7 +434,7 @@ public:
   size_t sizeof_type() const override {return sizeof(type);}
 };
 
-class ROSIDLCPP_StringValueType : public U8StringValueType
+class ROSIDLCPP_StringValueType final : public U8StringValueType
 {
 public:
   using type = std::string;
@@ -452,7 +452,7 @@ public:
   size_t sizeof_type() const override {return sizeof(type);}
 };
 
-class ROSIDLCPP_U16StringValueType : public U16StringValueType
+class ROSIDLCPP_U16StringValueType final : public U16StringValueType
 {
 public:
   using type = std::u16string;
