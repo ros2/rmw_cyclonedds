@@ -41,24 +41,24 @@
 
 namespace rmw_cyclonedds_cpp
 {
-template<size_t sz> static void bswapN(void *) {}
-template<> void bswapN<1>(void *) {}
-template<> void bswapN<2>(void * x)
+template<typename Type>
+static void bswap(Type *)
 {
-  auto u = reinterpret_cast<uint16_t *>(x);
+  static_assert("Byteswap for type not implementd");
+}
+template<> void bswap<uint16_t>(uint16_t * u)
+{
   *u = static_cast<uint16_t>((*u >> 8) | (*u << 8));
 }
-template<> void bswapN<4>(void * x)
+template<> void bswap<uint32_t>(uint32_t * u)
 {
-  auto u = reinterpret_cast<uint32_t *>(x);
   *u = ((*u >> 24) |
     ((*u & 0x00ff0000) >> 8) |
     ((*u & 0x0000ff00) << 8) |
     (*u << 24));
 }
-template<> void bswapN<8>(void * x)
+template<> void bswap<uint64_t>(uint64_t * u)
 {
-  auto u = reinterpret_cast<uint64_t *>(x);
   *u = ((*u >> 56) |
     ((*u & 0x00ff000000000000) >> 40) |
     ((*u & 0x0000ff0000000000) >> 24) |
@@ -70,25 +70,30 @@ template<> void bswapN<8>(void * x)
 }
 
 
-struct WriteCursor
+template<size_t sz>
+static void bswapN(void *);
+template<> void bswapN<1>(void *) {}
+template<> void bswapN<2>(void * x)
 {
-  WriteCursor() = default;
-  ~WriteCursor() = default;
-
-  // don't want to accidentally copy
-  explicit WriteCursor(WriteCursor const &) = delete;
-  void operator=(WriteCursor const & x) = delete;
-
-  // virtual functions to be implemented
-  // get the cursor's current offset.
-  virtual size_t offset() const = 0;
-  // advance the cursor.
-  virtual void advance(size_t n_bytes) = 0;
-  // Copy bytes to the current cursor location (if needed) and advance the cursor
-  virtual void * put_bytes(const void * data, size_t size) = 0;
-  virtual bool ignores_data() const = 0;
-  // Move the logical origin this many places
-  virtual void rebase(ptrdiff_t relative_origin) = 0;
+  uint16_t tmp;
+  memcpy(&tmp, x, sizeof(tmp));
+  bswap(&tmp);
+  memcpy(x, &tmp, sizeof(tmp));
+}
+template<> void bswapN<4>(void * x)
+{
+  uint32_t tmp;
+  memcpy(&tmp, x, sizeof(tmp));
+  bswap(&tmp);
+  memcpy(x, &tmp, sizeof(tmp));
+}
+template<> void bswapN<8>(void * x)
+{
+  uint64_t tmp;
+  memcpy(&tmp, x, sizeof(tmp));
+  bswap(&tmp);
+  memcpy(x, &tmp, sizeof(tmp));
+}
 
   void align(size_t n_bytes)
   {
