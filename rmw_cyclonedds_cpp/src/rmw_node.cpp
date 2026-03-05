@@ -1842,67 +1842,113 @@ extern "C" rmw_ret_t rmw_get_serialized_message_size(
   return RMW_RET_UNSUPPORTED;
 }
 
-extern "C" rmw_ret_t rmw_serialize(
-  const void * ros_message,
-  const rosidl_message_type_support_t * type_support,
-  rmw_serialized_message_t * serialized_message)
-{
-  try {
-    auto writer = rmw_cyclonedds_cpp::make_cdr_writer(
-      rmw_cyclonedds_cpp::make_message_value_type(type_support));
+extern "C" rmw_ret_t
+rmw_serialize(const void *ros_message,
+              const rosidl_message_type_support_t *type_support,
+              rmw_serialized_message_t *serialized_message) {
+  // Cache the CDR writer per type_support pointer to avoid rebuilding
+  // make_message_value_type and make_cdr_writer on every call.
+  thread_local const rosidl_message_type_support_t *cached_serialize_ts =
+      nullptr;
+  thread_local std::unique_ptr<rmw_cyclonedds_cpp::BaseCDRWriter> cached_writer;
 
-    auto size = writer->get_serialized_size(ros_message);
+  try {
+    if (type_support != cached_serialize_ts) {
+      cached_writer = rmw_cyclonedds_cpp::make_cdr_writer(
+          rmw_cyclonedds_cpp::make_message_value_type(type_support));
+      cached_serialize_ts = type_support;
+    }
+
+    auto size = cached_writer->get_serialized_size(ros_message);
     rmw_ret_t ret = rmw_serialized_message_resize(serialized_message, size);
     if (RMW_RET_OK != ret) {
       rmw_reset_error();
       RMW_SET_ERROR_MSG("rmw_serialize: failed to allocate space for message");
       return ret;
     }
-    writer->serialize(serialized_message->buffer, ros_message);
+    cached_writer->serialize(serialized_message->buffer, ros_message);
     serialized_message->buffer_length = size;
     return RMW_RET_OK;
-  } catch (std::exception & e) {
-    RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("rmw_serialize: failed to serialize: %s", e.what());
+  } catch (std::exception &e) {
+    cached_serialize_ts = nullptr; // Invalidate cache on error
+    cached_writer.reset();
+    RMW_SET_ERROR_MSG_WITH_FORMAT_STRING(
+        "rmw_serialize: failed to serialize: %s", e.what());
     return RMW_RET_ERROR;
   }
 }
 
-extern "C" rmw_ret_t rmw_deserialize(
-  const rmw_serialized_message_t * serialized_message,
-  const rosidl_message_type_support_t * type_support,
-  void * ros_message)
-{
+extern "C" rmw_ret_t
+rmw_deserialize(const rmw_serialized_message_t *serialized_message,
+                const rosidl_message_type_support_t *type_support,
+                void *ros_message) {
+  // Cache the resolved typesupport and MessageTypeSupport per type_support
+  // pointer, mirroring the rmw_serialize thread-local writer cache.
+  // MessageTypeSupport's constructor runs std::regex_replace + ostringstream
+  // on every call, which adds ~400-500 ns of overhead per message.
+  thread_local const rosidl_message_type_support_t *cached_deser_ts = nullptr;
+  thread_local bool cached_is_c = false;
+  thread_local std::unique_ptr<rmw_cyclonedds_cpp::MessageTypeSupport<
+      rosidl_typesupport_introspection_c__MessageMembers>>
+      cached_msgts_c;
+  thread_local std::unique_ptr<rmw_cyclonedds_cpp::MessageTypeSupport<
+      rosidl_typesupport_introspection_cpp::MessageMembers>>
+      cached_msgts_cpp;
+
   bool ok;
   try {
-    cycdeser sd(serialized_message->buffer, serialized_message->buffer_length);
-    const rosidl_message_type_support_t * ts;
-    if ((ts =
-      get_message_typesupport_handle(
-        type_support, rosidl_typesupport_introspection_c__identifier)) != nullptr)
-    {
-      auto members =
-        static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(ts->data);
-      MessageTypeSupport_c msgts(members);
-      ok = msgts.deserializeROSmessage(sd, ros_message, nullptr);
-    } else {
-      if ((ts =
-        get_message_typesupport_handle(
-          type_support, rosidl_typesupport_introspection_cpp::typesupport_identifier)) != nullptr)
-      {
-        auto members =
-          static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(ts->data);
-        MessageTypeSupport_cpp msgts(members);
-        ok = msgts.deserializeROSmessage(sd, ros_message, nullptr);
+    if (type_support != cached_deser_ts) {
+      const rosidl_message_type_support_t *ts = get_message_typesupport_handle(
+          type_support, rosidl_typesupport_introspection_c__identifier);
+      if (ts != nullptr) {
+        auto members = static_cast<
+            const rosidl_typesupport_introspection_c__MessageMembers *>(
+            ts->data);
+        cached_msgts_c =
+            std::make_unique<rmw_cyclonedds_cpp::MessageTypeSupport<
+                rosidl_typesupport_introspection_c__MessageMembers>>(members);
+        cached_msgts_cpp.reset();
+        cached_deser_ts = type_support;
+        cached_is_c = true;
       } else {
-        RMW_SET_ERROR_MSG("rmw_serialize: type support trouble");
-        return RMW_RET_ERROR;
+        ts = get_message_typesupport_handle(
+            type_support,
+            rosidl_typesupport_introspection_cpp::typesupport_identifier);
+        if (ts != nullptr) {
+          auto members = static_cast<
+              const rosidl_typesupport_introspection_cpp::MessageMembers *>(
+              ts->data);
+          cached_msgts_cpp =
+              std::make_unique<rmw_cyclonedds_cpp::MessageTypeSupport<
+                  rosidl_typesupport_introspection_cpp::MessageMembers>>(
+                  members);
+          cached_msgts_c.reset();
+          cached_deser_ts = type_support;
+          cached_is_c = false;
+        } else {
+          RMW_SET_ERROR_MSG("rmw_deserialize: type support trouble");
+          return RMW_RET_ERROR;
+        }
       }
     }
-  } catch (rmw_cyclonedds_cpp::Exception & e) {
+
+    cycdeser sd(serialized_message->buffer, serialized_message->buffer_length);
+    if (cached_is_c) {
+      ok = cached_msgts_c->deserializeROSmessage(sd, ros_message, nullptr);
+    } else {
+      ok = cached_msgts_cpp->deserializeROSmessage(sd, ros_message, nullptr);
+    }
+  } catch (rmw_cyclonedds_cpp::Exception &e) {
     RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("rmw_serialize: %s", e.what());
+    cached_deser_ts = nullptr; // Invalidate cache on error
+    cached_msgts_c.reset();
+    cached_msgts_cpp.reset();
     ok = false;
-  } catch (std::runtime_error & e) {
+  } catch (std::runtime_error &e) {
     RMW_SET_ERROR_MSG_WITH_FORMAT_STRING("rmw_serialize: %s", e.what());
+    cached_deser_ts = nullptr;
+    cached_msgts_c.reset();
+    cached_msgts_cpp.reset();
     ok = false;
   }
 
