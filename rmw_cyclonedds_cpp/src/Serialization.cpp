@@ -106,8 +106,8 @@ struct CursorBase
       return;
     }
     static_cast<Derived *>(this)->advance(n_bytes - start_offset % n_bytes);
-    assert(offset() - start_offset < n_bytes);
-    assert(offset() % n_bytes == 0);
+    assert(static_cast<Derived *>(this)->offset() - start_offset < n_bytes);
+    assert(static_cast<Derived *>(this)->offset() % n_bytes == 0);
   }
 
   ptrdiff_t operator-(const CursorBase & other) const
@@ -693,7 +693,7 @@ std::unique_ptr<BaseCDRWriter> make_cdr_writer(
 }
 
 template<typename Derived>
-struct ReadCursorBase: public CursorBase<Derived>
+struct ReadCursorBase : public CursorBase<Derived>
 {
 };
 
