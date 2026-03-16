@@ -1326,9 +1326,10 @@ protected:
       const size_t sz = value_type->sizeof_type();
       static_cast<void>(src.advance(sz));
     } else {
-      value_type->apply([&](const auto & vt) {
-          return extractkey<bswap_src, bswap_dst>(src, dst, vt, mode);
-                                                                                                          });
+      auto f = [&](const auto & vt) {
+        return extractkey<bswap_src, bswap_dst>(src, dst, vt, mode);
+      };
+      value_type->apply(f);
     }
   }
 
