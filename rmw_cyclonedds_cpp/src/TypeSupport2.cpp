@@ -194,6 +194,9 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
     } else if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
       member_value_type = make_value_type<ArrayValueType>(
         element_value_type, member_impl.array_size_);
+    } else if (member_impl.is_rosidl_buffer_) {
+      member_value_type = make_value_type<ROSIDLC_BufferSpanSequenceValueType>(
+        element_value_type, bound);
     } else if (member_impl.size_function) {
       member_value_type = make_value_type<CallbackSpanSequenceValueType>(
         element_value_type,
@@ -268,6 +271,9 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
     } else if (member_impl.array_size_ != 0 && !member_impl.is_upper_bound_) {
       member_value_type = make_value_type<ArrayValueType>(
         element_value_type, member_impl.array_size_);
+    } else if (member_impl.is_rosidl_buffer_) {
+      member_value_type = make_value_type<CppBufferSpanSequenceValueType>(
+        element_value_type, bound);
     } else if (ROSIDL_TypeKind(member_impl.type_id_) == ROSIDL_TypeKind::BOOLEAN) {
       member_value_type =
         make_value_type<BoolVectorValueType>(
