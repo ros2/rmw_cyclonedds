@@ -16,6 +16,7 @@
 
   <depend>cyclonedds</depend>
   <depend>iceoryx_binding_c</depend>
+  <depend>rosidl_buffer</depend>
   <depend>rcutils</depend>
   <depend>rcpputils</depend>
   <depend>rmw</depend>

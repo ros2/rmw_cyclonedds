@@ -52,6 +52,7 @@ find_package(rmw REQUIRED)
 find_package(rmw_dds_common REQUIRED)
 find_package(rmw_security_common REQUIRED)
 find_package(rosidl_runtime_c REQUIRED)
+find_package(rosidl_buffer REQUIRED)
 find_package(rosidl_typesupport_introspection_c REQUIRED)
 find_package(rosidl_typesupport_introspection_cpp REQUIRED)
 
@@ -87,6 +88,7 @@ target_link_libraries(rmw_cyclonedds_cpp PUBLIC
 
 target_link_libraries(rmw_cyclonedds_cpp PRIVATE
   CycloneDDS::ddsc
+  rosidl_buffer::rosidl_buffer
   rcutils::rcutils
   rcpputils::rcpputils
   rmw_dds_common::rmw_dds_common_library

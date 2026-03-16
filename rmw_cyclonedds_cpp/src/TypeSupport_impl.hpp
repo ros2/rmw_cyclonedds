@@ -19,10 +19,12 @@
 #include <cassert>
 #include <functional>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "TypeSupport.hpp"
 #include "macros.hpp"
+#include "rosidl_buffer/buffer.hpp"
 #include "rmw/error_handling.h"
 #include "rosidl_typesupport_introspection_cpp/field_types.hpp"
 #include "rosidl_typesupport_introspection_cpp/message_introspection.hpp"
@@ -276,7 +278,35 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
         break;
       case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_BYTE:
       case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT8:
-        deserialize_field<uint8_t>(member, field, deser);
+        if (member->is_rosidl_buffer_ && member->is_array_ &&
+          !(member->array_size_ && !member->is_upper_bound_))
+        {
+          if constexpr (std::is_same_v<MembersType,
+            rosidl_typesupport_introspection_cpp::MessageMembers>)
+          {
+            auto & buffer = *reinterpret_cast<rosidl::Buffer<uint8_t> *>(field);
+            int32_t dsize = 0;
+            deser >> dsize;
+            buffer.resize(dsize);
+            if (dsize > 0) {deser.deserializeA(buffer.data(), dsize);}
+          } else {
+            auto * seq = reinterpret_cast<rosidl_runtime_c__uint8__Sequence *>(field);
+            int32_t dsize = 0;
+            deser >> dsize;
+            if (seq->is_rosidl_buffer && seq->data) {
+              auto * buf = reinterpret_cast<rosidl::Buffer<uint8_t> *>(seq->data);
+              buf->resize(dsize);
+              if (dsize > 0) {deser.deserializeA(buf->data(), dsize);}
+            } else {
+              if (!rosidl_runtime_c__uint8__Sequence__init(seq, dsize)) {
+                throw std::runtime_error("unable to initialize uint8 sequence");
+              }
+              if (dsize > 0) {deser.deserializeA(seq->data, dsize);}
+            }
+          }
+        } else {
+          deserialize_field<uint8_t>(member, field, deser);
+        }
         break;
       case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_CHAR:
       case ::rosidl_typesupport_introspection_cpp::ROS_TYPE_INT8:

@@ -29,6 +29,7 @@
 #include "rosidl_typesupport_introspection_c/identifier.h"
 #include "rosidl_typesupport_introspection_c/message_introspection.h"
 #include "rosidl_typesupport_introspection_c/service_introspection.h"
+#include "rosidl_buffer/buffer.hpp"
 #include "rosidl_typesupport_introspection_cpp/field_types.hpp"
 #include "rosidl_typesupport_introspection_cpp/identifier.hpp"
 #include "rosidl_typesupport_introspection_cpp/message_introspection.hpp"
@@ -512,6 +513,75 @@ auto AnyValueType::apply(UnaryFunction f)
       unreachable();
   }
 }
+
+/// For C++ introspection: field is directly rosidl::Buffer<uint8_t>.
+/// For serialization of non-CPU buffers, copies data to an internal CPU cache.
+class CppBufferSpanSequenceValueType : public SpanSequenceValueType
+{
+  const AnyValueType * m_element_value_type;
+  mutable std::vector<uint8_t> cpu_cache_;
+
+public:
+  explicit CppBufferSpanSequenceValueType(const AnyValueType * evt)
+  : m_element_value_type(evt) {}
+  size_t sizeof_type() const override {return sizeof(rosidl::Buffer<uint8_t>);}
+  const AnyValueType * element_value_type() const override {return m_element_value_type;}
+  size_t sequence_size(const void * ptr) const override
+  {
+    return reinterpret_cast<const rosidl::Buffer<uint8_t> *>(ptr)->size();
+  }
+  const void * sequence_contents(const void * ptr) const override
+  {
+    auto * buf = reinterpret_cast<const rosidl::Buffer<uint8_t> *>(ptr);
+    if (buf->size() == 0) {return nullptr;}
+    if (buf->get_backend_type() == "cpu") {return buf->data();}
+    cpu_cache_ = buf->to_vector();
+    return cpu_cache_.data();
+  }
+};
+
+/// For C introspection: field is rosidl_runtime_c__uint8__Sequence with is_rosidl_buffer flag.
+/// When is_rosidl_buffer is true, seq->data points to a Buffer<uint8_t>*.
+class ROSIDLC_BufferSpanSequenceValueType : public SpanSequenceValueType
+{
+  const AnyValueType * m_element_value_type;
+  mutable std::vector<uint8_t> cpu_cache_;
+
+  struct ROSIDLC_BufferSequenceObject
+  {
+    void * data;
+    size_t size;
+    size_t capacity;
+    bool is_rosidl_buffer;
+  };
+
+public:
+  explicit ROSIDLC_BufferSpanSequenceValueType(const AnyValueType * evt)
+  : m_element_value_type(evt) {}
+  size_t sizeof_type() const override {return sizeof(ROSIDLC_BufferSequenceObject);}
+  const AnyValueType * element_value_type() const override {return m_element_value_type;}
+  size_t sequence_size(const void * ptr) const override
+  {
+    auto * seq = static_cast<const ROSIDLC_BufferSequenceObject *>(ptr);
+    if (seq->is_rosidl_buffer) {
+      auto * buf = reinterpret_cast<const rosidl::Buffer<uint8_t> *>(seq->data);
+      return buf->size();
+    }
+    return seq->size;
+  }
+  const void * sequence_contents(const void * ptr) const override
+  {
+    auto * seq = static_cast<const ROSIDLC_BufferSequenceObject *>(ptr);
+    if (seq->is_rosidl_buffer) {
+      auto * buf = reinterpret_cast<const rosidl::Buffer<uint8_t> *>(seq->data);
+      if (buf->size() == 0) {return nullptr;}
+      if (buf->get_backend_type() == "cpu") {return buf->data();}
+      cpu_cache_ = buf->to_vector();
+      return cpu_cache_.data();
+    }
+    return seq->data;
+  }
+};
 
 }  // namespace rmw_cyclonedds_cpp
 #endif  // TYPESUPPORT2_HPP_
