@@ -3239,7 +3239,6 @@ extern "C" rmw_ret_t rmw_subscription_set_content_filter(
   static_cast<void>(subscription);
   static_cast<void>(options);
 
-  RMW_SET_ERROR_MSG("rmw_subscription_set_content_filter: unimplemented");
   return RMW_RET_UNSUPPORTED;
 }
 
@@ -3252,7 +3251,6 @@ extern "C" rmw_ret_t rmw_subscription_get_content_filter(
   static_cast<void>(allocator);
   static_cast<void>(options);
 
-  RMW_SET_ERROR_MSG("rmw_subscription_get_content_filter: unimplemented");
   return RMW_RET_UNSUPPORTED;
 }
 
