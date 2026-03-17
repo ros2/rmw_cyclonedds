@@ -31,31 +31,31 @@ MessageTypeSupport<MembersType>::MessageTypeSupport(const MembersType * members)
   assert(members);
   this->members_ = members;
 
-  std::string message_namespace(this->members_->message_namespace_);
   std::string message_name(this->members_->message_name_);
 
-  if (!message_namespace.empty()) {
+  std::string name;
+  if (this->members_->message_namespace_ != nullptr &&
+    this->members_->message_namespace_[0] != '\0')
+  {
+    std::string message_namespace(this->members_->message_namespace_);
     // Find and replace C namespace separator with C++, in case this is using C typesupport
     std::string::size_type pos = 0;
     while ((pos = message_namespace.find("__", pos)) != std::string::npos) {
       message_namespace.replace(pos, 2, "::");
       pos += 2;
     }
-  }
-
-  std::string name;
-  name.reserve(
-    message_namespace.size() + 2 + 5 + message_name.size() + 1);  // "::" + "dds_::" + "_"
-
-  if (!message_namespace.empty()) {
+    name.reserve(
+      message_namespace.size() + 2 + 5 + message_name.size() + 1);  // "::" + "dds_::" + "_"
     name += message_namespace;
     name += "::";
+  } else {
+    name.reserve(5 + message_name.size() + 1);  // "dds_::" + "_"
   }
   name += "dds_::";
   name += message_name;
   name += '_';
 
-  this->setName(name.c_str());
+  this->setName(name);
 }
 
 }  // namespace rmw_cyclonedds_cpp
