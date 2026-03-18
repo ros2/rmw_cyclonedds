@@ -3625,7 +3625,7 @@ static rmw_ret_t rmw_take_loan_int(
             RMW_SET_ERROR_MSG("Failed to deserialize sample from shared memory buffer");
             ddsi_serdata_unref(d);
             *taken = false;
-            goto take_done_err;
+            goto take_done;
           }
         } else if (iox_header->shm_data_state == IOX_CHUNK_CONTAINS_RAW_DATA) {
           *loaned_message = d->iox_chunk;
@@ -3633,7 +3633,7 @@ static rmw_ret_t rmw_take_loan_int(
           RMW_SET_ERROR_MSG("Received iox chunk is uninitialized");
           ddsi_serdata_unref(d);
           *taken = false;
-          goto take_done_err;
+          goto take_done;
         }
         *taken = true;
         // doesn't allocate, but initialise the allocator to free the chunk later when the loan
@@ -3658,7 +3658,7 @@ static rmw_ret_t rmw_take_loan_int(
         RMW_SET_ERROR_MSG("Data nor loan is available to take");
         ddsi_serdata_unref(d);
         *taken = false;
-        goto take_done_err;
+        goto take_done;
       }
     }
     ddsi_serdata_unref(d);
@@ -3671,15 +3671,7 @@ take_done:
     static_cast<const void *>(*loaned_message),
     (message_info ? message_info->source_timestamp : 0LL),
     *taken);
-  return RMW_RET_OK;
-take_done_err:
-  TRACETOOLS_TRACEPOINT(
-    rmw_take,
-    static_cast<const void *>(subscription),
-    static_cast<const void *>(*loaned_message),
-    (message_info ? message_info->source_timestamp : 0LL),
-    *taken);
-  return RMW_RET_ERROR;
+  return (*taken) ? RMW_RET_OK ? RMW_RET_ERROR;
 #else
   static_cast<void>(subscription);
   static_cast<void>(loaned_message);
