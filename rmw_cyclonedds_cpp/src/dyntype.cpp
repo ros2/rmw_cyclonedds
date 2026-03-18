@@ -21,6 +21,7 @@
 #include "dds/dds.h"
 #include "dyntype.hpp"
 #include "serdata.hpp"
+#include "type_name.hpp"
 
 #include "rmw/error_handling.h"
 
@@ -39,19 +40,13 @@ std::string create_type_name(const void * untyped_members)
     RMW_SET_ERROR_MSG("members handle is null");
     return "";
   }
-
-  std::ostringstream ss;
-  std::string message_namespace(members->message_namespace_);
-  std::string message_name(members->message_name_);
-
-  if (!message_namespace.empty()) {
-    // Find and replace C namespace separator with C++, in case this is using C typesupport
-    message_namespace = std::regex_replace(message_namespace, std::regex("__"), "::");
-    ss << message_namespace << "::";
+  std::string message_namespace;
+  if (members->message_namespace_ != nullptr) {
+    message_namespace = std::string(members->message_namespace_);
   }
-
-  ss << "dds_::" << message_name << "_";
-  return ss.str();
+  return get_type_name_impl(
+    message_namespace, std::string(members->message_name_),
+    std::string(""));
 }
 
 #if DDS_HAS_TYPELIB

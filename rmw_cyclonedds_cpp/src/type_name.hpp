@@ -19,6 +19,10 @@
 #include "rosidl_runtime_c/message_type_support_struct.h"
 #include "rosidl_runtime_c/service_type_support_struct.h"
 
+std::string get_type_name_impl(
+  const std::string & message_namespace, const std::string & message_name,
+  const std::string & suffix);
+
 std::string get_message_type_name(const rosidl_message_type_support_t * type_support);
 std::string get_request_type_name(const rosidl_service_type_support_t * type_support);
 std::string get_response_type_name(const rosidl_service_type_support_t * type_support);

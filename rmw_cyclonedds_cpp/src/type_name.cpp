@@ -43,18 +43,33 @@ static bool using_introspection_cpp_typesupport(const char * typesupport_identif
     rosidl_typesupport_introspection_cpp::typesupport_identifier) == 0;
 }
 
-static std::string get_type_name_impl(
-  const std::string & ns, const std::string & n,
+std::string get_type_name_impl(
+  const std::string & message_namespace, const std::string & message_name,
   const std::string & suffix)
 {
-  std::ostringstream ss;
-  if (!ns.empty()) {
+  // "::" + "dds_::" + "_"
+  const size_t fixed_reserve = 5 + message_name.size() + 1 + suffix.size();
+  std::string name;
+  if (message_namespace.size() != 0) {
+    std::string mangled_message_namespace(message_namespace);
     // Find and replace C namespace separator with C++, in case this is using C typesupport
-    std::string ns_mangled = std::regex_replace(ns, std::regex("__"), "::");
-    ss << ns_mangled << "::";
+    std::string::size_type pos = 0;
+    while ((pos = mangled_message_namespace.find("__", pos)) != std::string::npos) {
+      mangled_message_namespace.replace(pos, 2, "::");
+      pos += 2;
+    }
+    name.reserve(
+      mangled_message_namespace.size() + 2 + fixed_reserve);
+    name += mangled_message_namespace;
+    name += "::";
+  } else {
+    name.reserve(fixed_reserve);
   }
-  ss << "dds_::" << n << "_" << suffix;
-  return ss.str();
+  name += "dds_::";
+  name += message_name;
+  name += '_';
+  name += suffix;
+  return name;
 }
 
 template<typename MembersType>
