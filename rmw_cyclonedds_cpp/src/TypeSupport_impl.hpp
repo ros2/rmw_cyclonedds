@@ -285,14 +285,12 @@ bool TypeSupport<MembersType>::deserializeROSmessage(
             rosidl_typesupport_introspection_cpp::MessageMembers>)
           {
             auto & buffer = *reinterpret_cast<rosidl::Buffer<uint8_t> *>(field);
-            int32_t dsize = 0;
-            deser >> dsize;
+            const uint32_t dsize = deser.deserialize_len(1);
             buffer.resize(dsize);
             if (dsize > 0) {deser.deserializeA(buffer.data(), dsize);}
           } else {
             auto * seq = reinterpret_cast<rosidl_runtime_c__uint8__Sequence *>(field);
-            int32_t dsize = 0;
-            deser >> dsize;
+            const uint32_t dsize = deser.deserialize_len(1);
             if (seq->is_rosidl_buffer && seq->data) {
               auto * buf = reinterpret_cast<rosidl::Buffer<uint8_t> *>(seq->data);
               buf->resize(dsize);
