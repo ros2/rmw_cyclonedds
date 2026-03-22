@@ -553,6 +553,7 @@ class ROSIDLC_BufferSpanSequenceValueType : public SpanSequenceValueType
     size_t size;
     size_t capacity;
     bool is_rosidl_buffer;
+    bool owns_rosidl_buffer;
   };
 
 public:
