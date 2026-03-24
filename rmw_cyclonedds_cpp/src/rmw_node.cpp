@@ -1131,9 +1131,9 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * di
     dom.refcount = 1;
     dom.discovery_options = *discovery_options;
 
-    bool add_localhost_as_static_peer;
-    bool add_static_peers;
-    bool disable_multicast;
+    bool add_localhost_as_static_peer = false;
+    bool add_static_peers = false;
+    bool disable_multicast = false;
 
     switch (discovery_options->automatic_discovery_range) {
       case RMW_AUTOMATIC_DISCOVERY_RANGE_NOT_SET:
