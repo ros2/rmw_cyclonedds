@@ -657,7 +657,7 @@ static void sertype_rmw_realloc_samples(
   static_cast<void>(count);
   /* Not using code paths that rely on this (loans, dispose, unregister with instance handle,
      content filters) */
-  abort();
+  throw std::logic_error("not implemented");
 }
 
 static void sertype_rmw_free_samples(

@@ -183,7 +183,7 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
 
     const AnyValueType * member_value_type;
     if (member_impl.is_array_ && member_impl.array_size_ > UINT32_MAX) {
-      abort ();
+      throw std::length_error("arrays > UINT32_MAX not supported");
     }
     uint32_t bound = UINT32_MAX;
     if (member_impl.is_array_ && member_impl.array_size_ != 0 && member_impl.is_upper_bound_) {
@@ -257,7 +257,7 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
 
     const AnyValueType * member_value_type;
     if (member_impl.is_array_ && member_impl.array_size_ > UINT32_MAX) {
-      abort ();
+      throw std::length_error("arrays > UINT32_MAX not supported");
     }
     uint32_t bound = UINT32_MAX;
     if (member_impl.is_array_ && member_impl.array_size_ != 0 && member_impl.is_upper_bound_) {
