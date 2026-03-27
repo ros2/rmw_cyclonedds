@@ -42,7 +42,7 @@
 namespace rmw_cyclonedds_cpp
 {
 template<typename Type>
-static void bswap(Type *)
+static void bswap(Type *) // NOLINT
 {
   static_assert("Byteswap for type not implementd");
 }
