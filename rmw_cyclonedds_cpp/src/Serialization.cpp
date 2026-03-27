@@ -1327,8 +1327,8 @@ protected:
       static_cast<void>(src.advance(sz));
     } else {
       auto f = [&](const auto & vt) {
-        return extractkey<bswap_src, bswap_dst>(src, dst, vt, mode);
-      };
+          return extractkey<bswap_src, bswap_dst>(src, dst, vt, mode);
+        };
       value_type->apply(f);
     }
   }
