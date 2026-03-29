@@ -3671,7 +3671,7 @@ take_done:
     static_cast<const void *>(*loaned_message),
     (message_info ? message_info->source_timestamp : 0LL),
     *taken);
-  return (*taken) ? RMW_RET_OK ? RMW_RET_ERROR;
+  return (*taken) ? RMW_RET_OK : RMW_RET_ERROR;
 #else
   static_cast<void>(subscription);
   static_cast<void>(loaned_message);
