@@ -515,11 +515,10 @@ auto AnyValueType::apply(UnaryFunction f)
 }
 
 /// For C++ introspection: field is directly rosidl::Buffer<uint8_t>.
-/// For serialization of non-CPU buffers, copies data to an internal CPU cache.
+/// For serialization of non-CPU buffers, copies data to a thread-local CPU cache.
 class CppBufferSpanSequenceValueType : public SpanSequenceValueType
 {
   const AnyValueType * m_element_value_type;
-  mutable std::vector<uint8_t> cpu_cache_;
 
 public:
   explicit CppBufferSpanSequenceValueType(const AnyValueType * evt)
@@ -535,8 +534,9 @@ public:
     auto * buf = reinterpret_cast<const rosidl::Buffer<uint8_t> *>(ptr);
     if (buf->size() == 0) {return nullptr;}
     if (buf->get_backend_type() == "cpu") {return buf->data();}
-    cpu_cache_ = buf->to_vector();
-    return cpu_cache_.data();
+    thread_local std::vector<uint8_t> cpu_cache;
+    cpu_cache = buf->to_vector();
+    return cpu_cache.data();
   }
 };
 
@@ -545,7 +545,6 @@ public:
 class ROSIDLC_BufferSpanSequenceValueType : public SpanSequenceValueType
 {
   const AnyValueType * m_element_value_type;
-  mutable std::vector<uint8_t> cpu_cache_;
 
   struct ROSIDLC_BufferSequenceObject
   {
@@ -577,8 +576,9 @@ public:
       auto * buf = reinterpret_cast<const rosidl::Buffer<uint8_t> *>(seq->data);
       if (buf->size() == 0) {return nullptr;}
       if (buf->get_backend_type() == "cpu") {return buf->data();}
-      cpu_cache_ = buf->to_vector();
-      return cpu_cache_.data();
+      thread_local std::vector<uint8_t> cpu_cache;
+      cpu_cache = buf->to_vector();
+      return cpu_cache.data();
     }
     return seq->data;
   }
