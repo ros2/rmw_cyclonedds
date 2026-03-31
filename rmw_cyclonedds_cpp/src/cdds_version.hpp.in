@@ -1,4 +1,4 @@
-// Copyright 2016 Proyectos y Sistemas de Mantenimiento SL (eProsima).
+// Copyright 2024 ZettaScale Technology
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,32 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#ifndef CDDS_VERSION_HPP_
+#define CDDS_VERSION_HPP_
 
-#include "exception.hpp"
+#define CDDS_VERSION_0_10 10
+#define CDDS_VERSION_0_11 11
 
-using rmw_cyclonedds_cpp::Exception;
+#define CDDS_VERSION (@CycloneDDS_VERSION_MAJOR@ * 100 + @CycloneDDS_VERSION_MINOR@)
 
-Exception::Exception(const char * const & message)
-: m_message(message)
-{
-}
-
-Exception::Exception(const Exception & ex)
-: m_message(ex.m_message)
-{
-}
-
-Exception & Exception::operator=(const Exception & ex)
-{
-  m_message = ex.m_message;
-  return *this;
-}
-
-Exception::~Exception() throw()
-{
-}
-
-const char * Exception::what() const throw()
-{
-  return m_message.c_str();
-}
+#endif  // CDDS_VERSION_HPP_

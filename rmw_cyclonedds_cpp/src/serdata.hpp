@@ -22,37 +22,32 @@
 #include "bytewise.hpp"
 #include "dds/dds.h"
 #include "dds/ddsi/ddsi_serdata.h"
-#ifdef DDS_HAS_SHM
+#include "cdds_version.hpp"
+
+#if CDDS_VERSION == CDDS_VERSION_0_10 && defined DDS_HAS_SHM
 extern "C" {
 #include "dds/ddsi/ddsi_shm_transport.h"
 }
-#endif  // DDS_HAS_SHM
-
-#if !DDS_HAS_DDSI_SERTYPE
-#define ddsi_sertype ddsi_sertopic
-#define ddsi_sertype_ops ddsi_sertopic_ops
-#define sertype_rmw sertopic_rmw
-#define sertype_rmw_ops sertopic_rmw_ops
 #endif
 
 namespace rmw_cyclonedds_cpp
 {
 class BaseCDRWriter;
+class BaseCDRReader;
 }
-
-struct CddsTypeSupport
-{
-  void * type_support_;
-  const char * typesupport_identifier_;
-};
 
 struct sertype_rmw : ddsi_sertype
 {
-  CddsTypeSupport type_support;
   bool is_request_header;
+  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type;
   std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRWriter> cdr_writer;
+  std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRReader> cdr_reader;
   bool is_fixed;
   std::mutex serialize_lock;
+#if DDS_HAS_TYPELIB
+  struct dds_type_meta_ser type_information;
+  struct dds_type_meta_ser type_mapping;
+#endif
 };
 
 class serdata_rmw : public ddsi_serdata
@@ -62,12 +57,18 @@ protected:
   /* first two bytes of data is CDR encoding
      second two bytes are encoding options */
   std::unique_ptr<byte[]> m_data {nullptr};
+  size_t m_keysize {0};
+  std::unique_ptr<byte[]> m_key {nullptr};
 
 public:
   serdata_rmw(const ddsi_sertype * type, ddsi_serdata_kind kind);
   void resize(size_t requested_size);
   size_t size() const {return m_size;}
   void * data() const {return m_data.get();}
+  size_t keysize() const {return m_keysize;}
+  void * key() const {return m_key.get();}
+  void set_key(size_t keysize, std::unique_ptr<byte[]> & key);
+  void set_key(size_t size, const void * key);
 };
 
 typedef struct cdds_request_header
@@ -82,25 +83,26 @@ typedef struct cdds_request_wrapper
   void * data;
 } cdds_request_wrapper_t;
 
-void * create_message_type_support(
-  const void * untyped_members,
-  const char * typesupport_identifier);
-void * create_request_type_support(
-  const void * untyped_members,
-  const char * typesupport_identifier);
-void * create_response_type_support(
-  const void * untyped_members,
-  const char * typesupport_identifier);
-
 struct sertype_rmw * create_sertype(
-  const char * type_support_identifier,
-  void * type_support, bool is_request_header,
-  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type_support,
-  const uint32_t sample_size = 0U,
-  const bool is_fixed_type = false);
+  const std::string type_name,
+  bool is_request_header,
+  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type_support);
 
 struct ddsi_serdata * serdata_rmw_from_serialized_message(
   const struct ddsi_sertype * typecmn,
+  enum ddsi_serdata_kind kind,
   const void * raw, size_t size);
+
+void create_msg_dds_dynamic_type(
+  const char * type_support_identifier,
+  const void * untyped_members, dds_entity_t dds_ppant, struct sertype_rmw * st);
+
+void create_req_dds_dynamic_type(
+  const char * type_support_identifier,
+  const void * untyped_members, dds_entity_t dds_ppant, struct sertype_rmw * st);
+
+void create_res_dds_dynamic_type(
+  const char * type_support_identifier,
+  const void * untyped_members, dds_entity_t dds_ppant, struct sertype_rmw * st);
 
 #endif  // SERDATA_HPP_
