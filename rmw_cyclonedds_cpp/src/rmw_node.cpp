@@ -3112,6 +3112,7 @@ static rmw_subscription_t * create_subscription(
   rmw_subscription->options = *subscription_options;
   rmw_subscription->can_loan_messages = sub->is_loaning_available;
   rmw_subscription->is_cft_enabled = false;
+  rmw_subscription->is_cft_supported = false;
 
   cleanup_subscription.cancel();
   cleanup_rmw_subscription.cancel();
