@@ -15,6 +15,7 @@
 #define SERIALIZATION_HPP_
 
 #include <memory>
+#include <vector>
 
 #include "TypeSupport2.hpp"
 #include "rosidl_runtime_c/service_type_support_struct.h"
@@ -22,18 +23,59 @@
 
 namespace rmw_cyclonedds_cpp
 {
+enum class SampleOrKey
+{
+  Sample,
+  Key
+};
+
+enum class SampleOrRequest
+{
+  Sample,
+  Request
+};
 
 class BaseCDRWriter
 {
 public:
-  virtual size_t get_serialized_size(const void * data) const = 0;
-  virtual void serialize(void * dest, const void * data) const = 0;
-  virtual size_t get_serialized_size(const cdds_request_wrapper_t & request) const = 0;
-  virtual void serialize(void * dest, const cdds_request_wrapper_t & request) const = 0;
+  virtual size_t get_serialized_size(const void * data, SampleOrKey what) const = 0;
+  virtual size_t get_serialized_size_estimate(const void * data, SampleOrKey what) const = 0;
+
+  // includes 4 bytes encoding header
+  virtual size_t get_min_serialized_size(SampleOrKey what) const = 0;
+  // includes 4 bytes encoding header, SIZE_MAX if unbounded
+  virtual size_t get_max_serialized_size(SampleOrKey what) const = 0;
+
+  virtual void serialize(void * dest, const void * data, SampleOrKey what) const = 0;
   virtual ~BaseCDRWriter() = default;
 };
 
-std::unique_ptr<BaseCDRWriter> make_cdr_writer(std::unique_ptr<StructValueType> value_type);
+std::unique_ptr<BaseCDRWriter> make_cdr_writer(
+  const StructValueType * value_type,
+  SampleOrRequest variant);
+
+class BaseCDRReader
+{
+public:
+  virtual void deserialize(
+    void * dest, const void * cdr, size_t cdrsize,
+    SampleOrKey what) const = 0;
+  virtual void extractkey(
+    std::vector<byte> & dest, const void * cdr, size_t cdrsize,
+    SampleOrKey what) const = 0;
+  virtual void extractkey_be(
+    std::vector<byte> & dst, const void * cdr, size_t cdrsize,
+    SampleOrKey what) const = 0;
+  virtual size_t print(
+    char * dst, size_t dstsize, const void * cdr, size_t cdrsize,
+    SampleOrKey what) const =  0;
+
+  virtual ~BaseCDRReader() = default;
+};
+
+std::unique_ptr<BaseCDRReader> make_cdr_reader(
+  const StructValueType * value_type,
+  SampleOrRequest variant);
 }  // namespace rmw_cyclonedds_cpp
 
 #endif  // SERIALIZATION_HPP_
