@@ -3605,7 +3605,10 @@ static rmw_ret_t rmw_take_loan_int(
 
   dds_sample_info_t info;
   struct ddsi_serdata * d;
-  while (dds_takecdr(cdds_subscription->enth, &d, 1, &info, DDS_ANY_STATE) == 1) {
+  rmw_ret_t ret = RMW_RET_OK;
+  int32_t nread = 0;
+  *taken = false;
+  while ((nread = dds_takecdr(cdds_subscription->enth, &d, 1, &info, DDS_ANY_STATE)) == 1) {
     if (info.valid_data) {
       if (message_info) {
         message_info_from_sample_info(info, message_info);
@@ -3624,7 +3627,7 @@ static rmw_ret_t rmw_take_loan_int(
           {
             RMW_SET_ERROR_MSG("Failed to deserialize sample from shared memory buffer");
             ddsi_serdata_unref(d);
-            *taken = false;
+            ret = RMW_RET_ERROR;
             goto take_done;
           }
         } else if (iox_header->shm_data_state == IOX_CHUNK_CONTAINS_RAW_DATA) {
@@ -3632,7 +3635,7 @@ static rmw_ret_t rmw_take_loan_int(
         } else {
           RMW_SET_ERROR_MSG("Received iox chunk is uninitialized");
           ddsi_serdata_unref(d);
-          *taken = false;
+          ret = RMW_RET_ERROR;
           goto take_done;
         }
         *taken = true;
@@ -3657,13 +3660,15 @@ static rmw_ret_t rmw_take_loan_int(
       } else {
         RMW_SET_ERROR_MSG("Data nor loan is available to take");
         ddsi_serdata_unref(d);
-        *taken = false;
+        ret = RMW_RET_ERROR;
         goto take_done;
       }
     }
     ddsi_serdata_unref(d);
   }
-  *taken = false;
+  if (nread < 0) {
+    ret = RMW_RET_ERROR;
+  }
 take_done:
   TRACETOOLS_TRACEPOINT(
     rmw_take,
@@ -3671,7 +3676,7 @@ take_done:
     static_cast<const void *>(*loaned_message),
     (message_info ? message_info->source_timestamp : 0LL),
     *taken);
-  return (*taken) ? RMW_RET_OK : RMW_RET_ERROR;
+  return ret;
 #else
   static_cast<void>(subscription);
   static_cast<void>(loaned_message);
