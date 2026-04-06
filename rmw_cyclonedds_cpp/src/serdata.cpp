@@ -678,6 +678,28 @@ static bool serdata_rmw_get_related_sample_identity(
   return true;
 }
 
+/*
+ * CycloneDDS uses two different ddsi_serdata_ops tail layouts here:
+ * - older Humble-era layouts use SHM-specific iox hooks
+ * - newer layouts replace those hooks with from_loaned_sample/from_psmx and
+ *   append get_related_sample_identity at the end
+ *
+ * Keep the original SHM tail on older layouts and only append the related
+ * sample identity getter on newer layouts.
+ */
+#ifdef DDSI_SERDATA_HAS_GET_RELATED_SAMPLE_IDENTITY
+#define SERDATA_RMW_OPS_TAIL \
+  , nullptr, \
+  nullptr, \
+  serdata_rmw_get_related_sample_identity
+#elif defined(DDS_HAS_SHM)
+#define SERDATA_RMW_OPS_TAIL \
+  , ddsi_serdata_iox_size, \
+  serdata_rmw_from_iox
+#else
+#define SERDATA_RMW_OPS_TAIL
+#endif
+
 static const struct ddsi_serdata_ops serdata_rmw_ops = {
   serdata_rmw_eqkey,
   serdata_rmw_size,
@@ -694,15 +716,10 @@ static const struct ddsi_serdata_ops serdata_rmw_ops = {
   serdata_rmw_free,
   serdata_rmw_print,
   serdata_rmw_get_keyhash
-#ifdef DDSI_SERDATA_HAS_GET_RELATED_SAMPLE_IDENTITY
-  , nullptr,
-  nullptr,
-  serdata_rmw_get_related_sample_identity
-#elif defined(DDS_HAS_SHM)
-  , ddsi_serdata_iox_size,
-  serdata_rmw_from_iox
-#endif  // DDS_HAS_SHM
+  SERDATA_RMW_OPS_TAIL
 };
+
+#undef SERDATA_RMW_OPS_TAIL
 
 static void sertype_rmw_free(struct ddsi_sertype * tpcmn)
 {
