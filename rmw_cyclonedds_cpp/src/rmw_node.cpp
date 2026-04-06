@@ -4839,7 +4839,7 @@ static rmw_ret_t rmw_send_response_standard(
   response->related_sample_identity.seq = request_header->sequence_number;
   response->has_related_sample_identity = true;
 
-  if (dds_forwardcdr(info->service.pub->enth, response) >= 0) {
+  if (dds_writecdr(info->service.pub->enth, response) >= 0) {
     return RMW_RET_OK;
   }
 

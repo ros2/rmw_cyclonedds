@@ -25,6 +25,7 @@
 #include "Serialization.hpp"
 #include "TypeSupport2.hpp"
 #include "bytewise.hpp"
+#include "dds/ddsi/ddsi_guid.h"
 #if __has_include("dds/ddsi/ddsi_protocol.h")
 #include "dds/ddsi/ddsi_protocol.h"
 #define RMW_CYCLONEDDS_HAS_DDSI_PROTOCOL_NAMES 1
@@ -44,7 +45,6 @@
 
 #if !RMW_CYCLONEDDS_HAS_DDSI_PROTOCOL_NAMES
 #define ddsi_rtps_submessage_header_t SubmessageHeader_t
-#define ddsi_entityid_t EntityId_t
 #define ddsi_rdata nn_rdata
 #define DDSI_RDATA_SUBMSG_OFF NN_RDATA_SUBMSG_OFF
 #define DDSI_RDATA_PAYLOAD_OFF NN_RDATA_PAYLOAD_OFF
