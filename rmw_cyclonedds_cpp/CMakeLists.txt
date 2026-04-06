@@ -84,7 +84,7 @@ check_cxx_source_compiles(
     (void)sample;
     (void)size;
     (void)enc_identifier;
-    return (dds_return_t)0;
+    return 0;
   }
 
   static bool probe_serialize_into(
@@ -107,7 +107,7 @@ check_cxx_source_compiles(
 
   int main()
   {
-    return (probe_get_ptr != 0 && probe_serialize_ptr != 0) ? 0 : 0;
+    return 0;
   }
   "
   RMW_CYCLONEDDS_HAS_DDSI_SERTYPE_V2_OPS)

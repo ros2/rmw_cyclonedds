@@ -559,7 +559,8 @@ static bool standard_service_wire_mode_enabled()
 }
 
 static ddsi_guid_t request_guid_bytes_to_ddsi_guid(
-  const int8_t writer_guid[sizeof(((rmw_request_id_t *)0)->writer_guid)])
+  const int8_t writer_guid[
+    sizeof(reinterpret_cast<const rmw_request_id_t *>(0)->writer_guid)])
 {
   ddsi_guid_t ddsi_guid;
   std::memcpy(&ddsi_guid, writer_guid, sizeof(ddsi_guid));
@@ -4793,7 +4794,8 @@ static client_present_t check_for_response_reader(
 
 static client_present_t check_for_response_reader_standard(
   const CddsCS & service,
-  const int8_t writer_guid[sizeof(((rmw_request_id_t *)0)->writer_guid)])
+  const int8_t writer_guid[
+    sizeof(reinterpret_cast<const rmw_request_id_t *>(0)->writer_guid)])
 {
   std::vector<dds_instance_handle_t> rds;
   if (get_matched_endpoints(service.pub->enth, dds_get_matched_subscriptions, rds) < 0) {
