@@ -873,7 +873,7 @@ bool sertype_serialize_into(
   return true;
 }
 
-#if DDS_HAS_DDSI_SERTYPE
+#ifdef RMW_CYCLONEDDS_HAS_DDSI_SERTYPE_V2_OPS
 static dds_return_t sertype_get_serialized_size_v2(
   const struct ddsi_sertype * d,
   enum ddsi_serdata_kind sdkind,
@@ -923,8 +923,13 @@ static const struct ddsi_sertype_ops sertype_rmw_ops = {
   nullptr,
   nullptr,
   nullptr,
+#ifdef RMW_CYCLONEDDS_HAS_DDSI_SERTYPE_V2_OPS
   sertype_get_serialized_size_v2,
   sertype_serialize_into_v2
+#else
+  sertype_get_serialized_size,
+  sertype_serialize_into
+#endif
 #endif
 };
 

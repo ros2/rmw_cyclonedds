@@ -16,6 +16,8 @@ cmake_minimum_required(VERSION 3.5)
 
 project(rmw_cyclonedds_cpp)
 
+include(CheckCXXSourceCompiles)
+
 # Default to C++14
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 14)
@@ -47,6 +49,71 @@ else()
   ament_package()
   return()
 endif()
+
+get_target_property(_cyclonedds_ddsc_include_dirs CycloneDDS::ddsc INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(_cyclonedds_ddsc_compile_defs CycloneDDS::ddsc INTERFACE_COMPILE_DEFINITIONS)
+
+set(_saved_cmake_required_includes "${CMAKE_REQUIRED_INCLUDES}")
+set(_saved_cmake_required_definitions "${CMAKE_REQUIRED_DEFINITIONS}")
+set(_saved_cmake_required_flags "${CMAKE_REQUIRED_FLAGS}")
+
+if(_cyclonedds_ddsc_include_dirs AND NOT _cyclonedds_ddsc_include_dirs STREQUAL "_cyclonedds_ddsc_include_dirs-NOTFOUND")
+  list(APPEND CMAKE_REQUIRED_INCLUDES ${_cyclonedds_ddsc_include_dirs})
+endif()
+
+if(_cyclonedds_ddsc_compile_defs AND NOT _cyclonedds_ddsc_compile_defs STREQUAL "_cyclonedds_ddsc_compile_defs-NOTFOUND")
+  foreach(_def ${_cyclonedds_ddsc_compile_defs})
+    list(APPEND CMAKE_REQUIRED_DEFINITIONS "-D${_def}")
+  endforeach()
+endif()
+
+set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -std=c++${CMAKE_CXX_STANDARD}")
+check_cxx_source_compiles(
+  "
+  #include \"dds/ddsi/ddsi_sertype.h\"
+
+  static dds_return_t probe_get_serialized_size(
+    const struct ddsi_sertype * tp,
+    enum ddsi_serdata_kind sdkind,
+    const void * sample,
+    size_t * size,
+    uint16_t * enc_identifier)
+  {
+    (void)tp;
+    (void)sdkind;
+    (void)sample;
+    (void)size;
+    (void)enc_identifier;
+    return (dds_return_t)0;
+  }
+
+  static bool probe_serialize_into(
+    const struct ddsi_sertype * tp,
+    enum ddsi_serdata_kind sdkind,
+    const void * sample,
+    void * dst_buffer,
+    size_t dst_size)
+  {
+    (void)tp;
+    (void)sdkind;
+    (void)sample;
+    (void)dst_buffer;
+    (void)dst_size;
+    return true;
+  }
+
+  static ddsi_sertype_get_serialized_size_t probe_get_ptr = probe_get_serialized_size;
+  static ddsi_sertype_serialize_into_t probe_serialize_ptr = probe_serialize_into;
+
+  int main()
+  {
+    return (probe_get_ptr != 0 && probe_serialize_ptr != 0) ? 0 : 0;
+  }
+  "
+  RMW_CYCLONEDDS_HAS_DDSI_SERTYPE_V2_OPS)
+set(CMAKE_REQUIRED_INCLUDES "${_saved_cmake_required_includes}")
+set(CMAKE_REQUIRED_DEFINITIONS "${_saved_cmake_required_definitions}")
+set(CMAKE_REQUIRED_FLAGS "${_saved_cmake_required_flags}")
 
 find_package(rmw REQUIRED)
 find_package(rmw_dds_common REQUIRED)
@@ -117,6 +184,12 @@ target_compile_definitions(${PROJECT_NAME}
     RMW_VERSION_MINOR=${rmw_VERSION_MINOR}
     RMW_VERSION_PATCH=${rmw_VERSION_PATCH}
 )
+
+if(RMW_CYCLONEDDS_HAS_DDSI_SERTYPE_V2_OPS)
+  target_compile_definitions(${PROJECT_NAME}
+    PRIVATE
+      RMW_CYCLONEDDS_HAS_DDSI_SERTYPE_V2_OPS=1)
+endif()
 
 ament_export_targets(export_rmw_cyclonedds_cpp)
 
