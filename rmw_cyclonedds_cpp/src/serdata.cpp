@@ -25,12 +25,35 @@
 #include "Serialization.hpp"
 #include "TypeSupport2.hpp"
 #include "bytewise.hpp"
+#if __has_include("dds/ddsi/ddsi_protocol.h")
 #include "dds/ddsi/ddsi_protocol.h"
+#define RMW_CYCLONEDDS_HAS_DDSI_PROTOCOL_NAMES 1
+#else
+#include "dds/ddsi/q_protocol.h"
+#define RMW_CYCLONEDDS_HAS_DDSI_PROTOCOL_NAMES 0
+#endif
+#if __has_include("dds/ddsi/ddsi_radmin.h")
 #include "dds/ddsi/ddsi_radmin.h"
+#else
+#include "dds/ddsi/q_radmin.h"
+#endif
 #include "rmw/error_handling.h"
 #include "MessageTypeSupport.hpp"
 #include "ServiceTypeSupport.hpp"
 #include "serdes.hpp"
+
+#if !RMW_CYCLONEDDS_HAS_DDSI_PROTOCOL_NAMES
+#define ddsi_rtps_submessage_header_t SubmessageHeader_t
+#define ddsi_entityid_t EntityId_t
+#define ddsi_rdata nn_rdata
+#define DDSI_RDATA_SUBMSG_OFF NN_RDATA_SUBMSG_OFF
+#define DDSI_RDATA_PAYLOAD_OFF NN_RDATA_PAYLOAD_OFF
+#define DDSI_RMSG_PAYLOADOFF NN_RMSG_PAYLOADOFF
+#define DDSI_RTPS_SUBMESSAGE_FLAG_ENDIANNESS SMFLAG_ENDIANNESS
+#define DDSI_RTPS_SMID_DATA SMID_DATA
+#define DDSI_RTPS_SMID_DATA_FRAG SMID_DATA_FRAG
+#define DDSI_RTPS_CDR_LE CDR_LE
+#endif
 
 using TypeSupport_c =
   rmw_cyclonedds_cpp::TypeSupport<rosidl_typesupport_introspection_c__MessageMembers>;
@@ -664,6 +687,7 @@ static void serdata_rmw_get_keyhash(
   memset(buf, 0, sizeof(*buf));
 }
 
+#ifdef DDSI_SERDATA_HAS_GET_RELATED_SAMPLE_IDENTITY
 static bool serdata_rmw_get_related_sample_identity(
   const struct ddsi_serdata * dcmn,
   ddsi_guid_t * writer_guid,
@@ -677,15 +701,12 @@ static bool serdata_rmw_get_related_sample_identity(
   *seq = static_cast<ddsi_seqno_t>(d->related_sample_identity.seq);
   return true;
 }
+#endif
 
 /*
- * CycloneDDS uses two different ddsi_serdata_ops tail layouts here:
- * - older Humble-era layouts use SHM-specific iox hooks
- * - newer layouts replace those hooks with from_loaned_sample/from_psmx and
- *   append get_related_sample_identity at the end
- *
- * Keep the original SHM tail on older layouts and only append the related
- * sample identity getter on newer layouts.
+ * Keep the older Humble-era SHM tail intact, but append the related sample
+ * identity getter when building against companion CycloneDDS headers that
+ * advertise DDSI_SERDATA_HAS_GET_RELATED_SAMPLE_IDENTITY.
  */
 #ifdef DDSI_SERDATA_HAS_GET_RELATED_SAMPLE_IDENTITY
 #define SERDATA_RMW_OPS_TAIL \

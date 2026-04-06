@@ -84,6 +84,8 @@
 #include "namespace_prefix.hpp"
 
 #include "dds/dds.h"
+#include "dds/ddsi/ddsi_guid.h"
+#include "dds/ddsrt/bswap.h"
 #if __has_include("dds/ddsc/dds_data_allocator.h")
 #include "dds/ddsc/dds_data_allocator.h"
 #endif
@@ -95,7 +97,6 @@
 #include "serdes.hpp"
 #include "serdata.hpp"
 #include "demangle.hpp"
-#include "dds/ddsi/ddsi_protocol.h"
 
 using namespace std::literals::chrono_literals;
 
@@ -462,6 +463,9 @@ struct CddsClient
 {
   struct StandardRequestMappingState
   {
+    // The first correlated standard-mode response calibrates wire sequence
+    // numbers against local request ids, so the uncalibrated state only
+    // supports a single in-flight request.
     int64_t next_local_request_id {0};
     std::deque<int64_t> pending_local_request_ids;
     bool calibrated {false};
