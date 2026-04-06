@@ -13,12 +13,14 @@
 // limitations under the License.
 
 #include <cassert>
+#include <cstdlib>
 #include <cstring>
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
 #include <chrono>
+#include <deque>
 #include <iomanip>
 #include <map>
 #include <set>
@@ -82,13 +84,85 @@
 #include "namespace_prefix.hpp"
 
 #include "dds/dds.h"
+#if __has_include("dds/ddsc/dds_data_allocator.h")
 #include "dds/ddsc/dds_data_allocator.h"
+#endif
+#if __has_include("dds/ddsc/dds_loan_api.h")
 #include "dds/ddsc/dds_loan_api.h"
+#elif __has_include("dds/ddsc/dds_public_loan_api.h")
+#include "dds/ddsc/dds_public_loan_api.h"
+#endif
 #include "serdes.hpp"
 #include "serdata.hpp"
 #include "demangle.hpp"
+#include "dds/ddsi/ddsi_protocol.h"
 
 using namespace std::literals::chrono_literals;
+
+#if !__has_include("dds/ddsc/dds_data_allocator.h")
+typedef struct dds_data_allocator
+{
+  dds_entity_t entity;
+  bool heap;
+} dds_data_allocator_t;
+
+static dds_return_t dds_data_allocator_init(
+  dds_entity_t entity,
+  dds_data_allocator_t * allocator)
+{
+  allocator->entity = entity;
+  allocator->heap = false;
+  return DDS_RETCODE_OK;
+}
+
+static dds_return_t dds_data_allocator_init_heap(dds_data_allocator_t * allocator)
+{
+  allocator->entity = 0;
+  allocator->heap = true;
+  return DDS_RETCODE_OK;
+}
+
+static void * dds_data_allocator_alloc(
+  dds_data_allocator_t * allocator,
+  uint32_t sample_size)
+{
+  void * sample = nullptr;
+  if (!allocator->heap) {
+    if (dds_request_loan_of_size(allocator->entity, sample_size, &sample) == DDS_RETCODE_OK) {
+      return sample;
+    }
+    sample = nullptr;
+    if (dds_request_loan(allocator->entity, &sample) == DDS_RETCODE_OK) {
+      return sample;
+    }
+  }
+  return std::malloc(sample_size);
+}
+
+static dds_return_t dds_data_allocator_free(
+  dds_data_allocator_t * allocator,
+  void * sample)
+{
+  if (sample == nullptr) {
+    return DDS_RETCODE_OK;
+  }
+  if (!allocator->heap) {
+    void * loaned_sample = sample;
+    if (dds_return_loan(allocator->entity, &loaned_sample, 1) == DDS_RETCODE_OK) {
+      return DDS_RETCODE_OK;
+    }
+  }
+  std::free(sample);
+  return DDS_RETCODE_OK;
+}
+
+static dds_return_t dds_data_allocator_fini(dds_data_allocator_t * allocator)
+{
+  allocator->entity = 0;
+  allocator->heap = false;
+  return DDS_RETCODE_OK;
+}
+#endif
 
 /* Security must be enabled when compiling and requires cyclone to support QOS property lists */
 #if DDS_HAS_SECURITY && DDS_HAS_PROPERTY_LIST_QOS
@@ -381,11 +455,23 @@ struct CddsCS
   std::unique_ptr<CddsPublisher> pub;
   std::unique_ptr<CddsSubscription> sub;
   client_service_id_t id;
+  bool use_standard_service_wire {false};
 };
 
 struct CddsClient
 {
+  struct StandardRequestMappingState
+  {
+    int64_t next_local_request_id {0};
+    std::deque<int64_t> pending_local_request_ids;
+    bool calibrated {false};
+    bool failed {false};
+    int64_t wire_to_local_offset {0};
+  };
+
   CddsCS client;
+  std::mutex standard_request_mapping_lock;
+  StandardRequestMappingState standard_request_mapping;
 
 #if REPORT_BLOCKED_REQUESTS
   std::mutex lock;
@@ -431,6 +517,56 @@ static void clean_waitset_caches();
 #if REPORT_BLOCKED_REQUESTS
 static void check_for_blocked_requests(CddsClient & client);
 #endif
+
+static bool standard_service_wire_mode_enabled()
+{
+  static bool initialized = false;
+  static bool enabled = false;
+  if (initialized) {
+    return enabled;
+  }
+  initialized = true;
+
+  const char * get_env_error = nullptr;
+  const char * env_value = nullptr;
+  get_env_error = rcutils_get_env("RMW_CYCLONEDDS_SERVICE_WIRE_MODE", &env_value);
+  if (get_env_error != nullptr) {
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp",
+      "failed to read RMW_CYCLONEDDS_SERVICE_WIRE_MODE: %s",
+      get_env_error);
+    return enabled;
+  }
+
+  if (env_value == nullptr || *env_value == '\0') {
+    return enabled;
+  }
+  if (strcmp(env_value, "standard") == 0) {
+    enabled = true;
+    return enabled;
+  }
+  if (strcmp(env_value, "legacy") != 0) {
+    RCUTILS_LOG_WARN_NAMED(
+      "rmw_cyclonedds_cpp",
+      "ignoring unrecognized value for RMW_CYCLONEDDS_SERVICE_WIRE_MODE: '%s'",
+      env_value);
+  }
+  return enabled;
+}
+
+static ddsi_guid_t request_guid_bytes_to_ddsi_guid(
+  const int8_t writer_guid[sizeof(((rmw_request_id_t *)0)->writer_guid)])
+{
+  ddsi_guid_t ddsi_guid;
+  std::memcpy(&ddsi_guid, writer_guid, sizeof(ddsi_guid));
+#if DDSRT_ENDIAN == DDSRT_LITTLE_ENDIAN
+  ddsi_guid.prefix.u[0] = ddsrt_bswap4u(ddsi_guid.prefix.u[0]);
+  ddsi_guid.prefix.u[1] = ddsrt_bswap4u(ddsi_guid.prefix.u[1]);
+  ddsi_guid.prefix.u[2] = ddsrt_bswap4u(ddsi_guid.prefix.u[2]);
+  ddsi_guid.entityid.u = ddsrt_bswap4u(ddsi_guid.entityid.u);
+#endif
+  return ddsi_guid;
+}
 
 #ifndef WIN32
 /* TODO(allenh1): check for Clang */
@@ -4270,6 +4406,141 @@ static rmw_ret_t rmw_take_response_request(
   return RMW_RET_OK;
 }
 
+static rmw_ret_t fail_standard_request_mapping(
+  CddsClient * info,
+  const char * error_message)
+{
+  {
+    std::lock_guard<std::mutex> lock(info->standard_request_mapping_lock);
+    info->standard_request_mapping.failed = true;
+  }
+  RMW_SET_ERROR_MSG(error_message);
+  return RMW_RET_ERROR;
+}
+
+static rmw_ret_t rmw_take_response_standard(
+  CddsClient * info,
+  rmw_service_info_t * request_header,
+  void * ros_response,
+  bool * taken)
+{
+  RMW_CHECK_ARGUMENT_FOR_NULL(info, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(request_header, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(ros_response, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(taken, RMW_RET_INVALID_ARGUMENT);
+  {
+    std::lock_guard<std::mutex> lock(info->standard_request_mapping_lock);
+    if (info->standard_request_mapping.failed) {
+      *taken = false;
+      RMW_SET_ERROR_MSG("standard wire mode request mapping is in failed state");
+      return RMW_RET_ERROR;
+    }
+  }
+
+  dds_sample_info_t sample_info;
+  struct ddsi_serdata * raw_response = nullptr;
+  while (dds_takecdr(info->client.sub->enth, &raw_response, 1, &sample_info, DDS_ANY_STATE) == 1) {
+    if (!sample_info.valid_data) {
+      ddsi_serdata_unref(raw_response);
+      continue;
+    }
+    if (!ddsi_serdata_to_sample(raw_response, ros_response, nullptr, nullptr)) {
+      ddsi_serdata_unref(raw_response);
+      *taken = false;
+      return RMW_RET_ERROR;
+    }
+
+    auto * response = static_cast<serdata_rmw *>(raw_response);
+    if (!response->has_related_sample_identity) {
+      ddsi_serdata_unref(raw_response);
+      *taken = false;
+      return fail_standard_request_mapping(
+        info,
+        "standard wire mode response missing related sample identity metadata");
+    }
+
+    int64_t local_sequence_number = 0;
+    bool ignore_response = false;
+    {
+      std::lock_guard<std::mutex> lock(info->standard_request_mapping_lock);
+      auto & mapping = info->standard_request_mapping;
+      if (mapping.failed) {
+        ddsi_serdata_unref(raw_response);
+        *taken = false;
+        RMW_SET_ERROR_MSG("standard wire mode request mapping is in failed state");
+        return RMW_RET_ERROR;
+      }
+
+      if (!mapping.calibrated) {
+        if (mapping.pending_local_request_ids.empty()) {
+          ddsi_serdata_unref(raw_response);
+          *taken = false;
+          mapping.failed = true;
+          RMW_SET_ERROR_MSG(
+            "standard request mapping cannot calibrate with zero pending requests");
+          return RMW_RET_ERROR;
+        }
+        if (mapping.pending_local_request_ids.size() > 1) {
+          ddsi_serdata_unref(raw_response);
+          *taken = false;
+          mapping.failed = true;
+          RMW_SET_ERROR_MSG(
+            "standard request mapping cannot calibrate with multiple pending requests");
+          return RMW_RET_ERROR;
+        }
+
+        local_sequence_number = mapping.pending_local_request_ids.front();
+        mapping.pending_local_request_ids.pop_front();
+        mapping.wire_to_local_offset =
+          response->related_sample_identity.seq - local_sequence_number;
+        mapping.calibrated = true;
+      } else {
+        local_sequence_number =
+          response->related_sample_identity.seq - mapping.wire_to_local_offset;
+        if (local_sequence_number <= 0 || local_sequence_number > mapping.next_local_request_id) {
+          ddsi_serdata_unref(raw_response);
+          *taken = false;
+          mapping.failed = true;
+          RMW_SET_ERROR_MSG("standard request mapping computed invalid local id");
+          return RMW_RET_ERROR;
+        }
+        auto pending_request = std::find(
+          mapping.pending_local_request_ids.begin(),
+          mapping.pending_local_request_ids.end(),
+          local_sequence_number);
+        if (pending_request == mapping.pending_local_request_ids.end()) {
+          ignore_response = true;
+        } else {
+          mapping.pending_local_request_ids.erase(pending_request);
+        }
+      }
+    }
+
+    if (ignore_response) {
+      ddsi_serdata_unref(raw_response);
+      continue;
+    }
+
+    static_assert(
+      sizeof(request_header->request_id.writer_guid) ==
+      sizeof(response->related_sample_identity.writer_guid),
+      "request_id writer_guid size assumptions not met");
+    memcpy(
+      static_cast<void *>(request_header->request_id.writer_guid),
+      static_cast<const void *>(response->related_sample_identity.writer_guid),
+      sizeof(request_header->request_id.writer_guid));
+    request_header->request_id.sequence_number = local_sequence_number;
+    request_header->source_timestamp = sample_info.source_timestamp;
+    request_header->received_timestamp = 0;
+    ddsi_serdata_unref(raw_response);
+    *taken = true;
+    return RMW_RET_OK;
+  }
+
+  *taken = false;
+  return RMW_RET_OK;
+}
+
 extern "C" rmw_ret_t rmw_take_response(
   const rmw_client_t * client,
   rmw_service_info_t * request_header, void * ros_response,
@@ -4281,6 +4552,9 @@ extern "C" rmw_ret_t rmw_take_response(
     client->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   auto info = static_cast<CddsClient *>(client->data);
+  if (info->client.use_standard_service_wire) {
+    return rmw_take_response_standard(info, request_header, ros_response, taken);
+  }
   dds_time_t source_timestamp;
   rmw_ret_t ret = rmw_take_response_request(
     &info->client, request_header, ros_response, taken,
@@ -4321,6 +4595,74 @@ static void check_for_blocked_requests(CddsClient & client)
 }
 #endif
 
+static rmw_ret_t rmw_take_request_standard(
+  CddsService * info,
+  rmw_service_info_t * request_header,
+  void * ros_request,
+  bool * taken)
+{
+  RMW_CHECK_ARGUMENT_FOR_NULL(info, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(request_header, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(ros_request, RMW_RET_INVALID_ARGUMENT);
+  RMW_CHECK_ARGUMENT_FOR_NULL(taken, RMW_RET_INVALID_ARGUMENT);
+
+  dds_sample_info_t sample_info;
+  struct ddsi_serdata * raw_request = nullptr;
+  while (dds_takecdr(info->service.sub->enth, &raw_request, 1, &sample_info, DDS_ANY_STATE) == 1) {
+    if (!sample_info.valid_data) {
+      ddsi_serdata_unref(raw_request);
+      continue;
+    }
+    if (!ddsi_serdata_to_sample(raw_request, ros_request, nullptr, nullptr)) {
+      ddsi_serdata_unref(raw_request);
+      *taken = false;
+      return RMW_RET_ERROR;
+    }
+
+    auto * request = static_cast<serdata_rmw *>(raw_request);
+    if (!request->has_sample_sequence_number) {
+      ddsi_serdata_unref(raw_request);
+      *taken = false;
+      RMW_SET_ERROR_MSG("standard wire mode request missing sample sequence number");
+      return RMW_RET_ERROR;
+    }
+
+    auto reqwr = get_matched_publication_data(
+      info->service.sub->enth,
+      sample_info.publication_handle);
+    if (reqwr == nullptr) {
+      ddsi_serdata_unref(raw_request);
+      *taken = false;
+      RMW_SET_ERROR_MSG("standard wire mode request writer lookup failed");
+      return RMW_RET_ERROR;
+    }
+
+    static_assert(
+      sizeof(request_header->request_id.writer_guid) == sizeof(dds_guid_t),
+      "request_id writer_guid size assumptions not met");
+    if (request->has_related_sample_identity) {
+      memcpy(
+        static_cast<void *>(request_header->request_id.writer_guid),
+        static_cast<const void *>(request->related_sample_identity.writer_guid),
+        sizeof(request_header->request_id.writer_guid));
+    } else {
+      memcpy(
+        static_cast<void *>(request_header->request_id.writer_guid),
+        static_cast<const void *>(&reqwr->key),
+        sizeof(request_header->request_id.writer_guid));
+    }
+    request_header->request_id.sequence_number = request->sample_sequence_number;
+    request_header->source_timestamp = sample_info.source_timestamp;
+    request_header->received_timestamp = 0;
+    ddsi_serdata_unref(raw_request);
+    *taken = true;
+    return RMW_RET_OK;
+  }
+
+  *taken = false;
+  return RMW_RET_OK;
+}
+
 extern "C" rmw_ret_t rmw_take_request(
   const rmw_service_t * service,
   rmw_service_info_t * request_header, void * ros_request,
@@ -4332,6 +4674,9 @@ extern "C" rmw_ret_t rmw_take_request(
     service->implementation_identifier, eclipse_cyclonedds_identifier,
     return RMW_RET_INCORRECT_RMW_IMPLEMENTATION);
   auto info = static_cast<CddsService *>(service->data);
+  if (info->service.use_standard_service_wire) {
+    return rmw_take_request_standard(info, request_header, ros_request, taken);
+  }
   return rmw_take_response_request(
     &info->service, request_header, ros_request, taken, nullptr,
     false);
@@ -4348,6 +4693,48 @@ static rmw_ret_t rmw_send_response_request(
     RMW_SET_ERROR_MSG("cannot publish data");
     return RMW_RET_ERROR;
   }
+}
+
+static rmw_ret_t rmw_send_request_standard(
+  CddsClient * info,
+  const void * ros_request,
+  int64_t * sequence_id)
+{
+  int64_t local_sequence_number = 0;
+  {
+    std::lock_guard<std::mutex> lock(info->standard_request_mapping_lock);
+    auto & mapping = info->standard_request_mapping;
+    if (mapping.failed) {
+      RMW_SET_ERROR_MSG("standard wire mode request mapping is in failed state");
+      return RMW_RET_ERROR;
+    }
+    if (!mapping.calibrated && !mapping.pending_local_request_ids.empty()) {
+      RMW_SET_ERROR_MSG(
+        "standard wire mode requires calibration before multiple in-flight requests");
+      return RMW_RET_ERROR;
+    }
+    local_sequence_number = ++mapping.next_local_request_id;
+    mapping.pending_local_request_ids.push_back(local_sequence_number);
+  }
+
+  *sequence_id = local_sequence_number;
+  if (dds_write(info->client.pub->enth, const_cast<void *>(ros_request)) >= 0) {
+    return RMW_RET_OK;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(info->standard_request_mapping_lock);
+    auto & mapping = info->standard_request_mapping;
+    auto pending_request = std::find(
+      mapping.pending_local_request_ids.begin(),
+      mapping.pending_local_request_ids.end(),
+      local_sequence_number);
+    if (pending_request != mapping.pending_local_request_ids.end()) {
+      mapping.pending_local_request_ids.erase(pending_request);
+    }
+  }
+  RMW_SET_ERROR_MSG("cannot publish data");
+  return RMW_RET_ERROR;
 }
 
 enum class client_present_t
@@ -4400,6 +4787,62 @@ static client_present_t check_for_response_reader(
   }
 }
 
+static client_present_t check_for_response_reader_standard(
+  const CddsCS & service,
+  const int8_t writer_guid[sizeof(((rmw_request_id_t *)0)->writer_guid)])
+{
+  std::vector<dds_instance_handle_t> rds;
+  if (get_matched_endpoints(service.pub->enth, dds_get_matched_subscriptions, rds) < 0) {
+    RMW_SET_ERROR_MSG("rmw_send_response: failed to get response reader matches");
+    return client_present_t::FAILURE;
+  }
+
+  for (const auto & rdih : rds) {
+    auto rd = get_matched_subscription_data(service.pub->enth, rdih);
+    if (rd == nullptr) {
+      continue;
+    }
+    if (memcmp(&rd->key, writer_guid, sizeof(rd->key)) != 0) {
+      continue;
+    }
+    return client_present_t::YES;
+  }
+  return client_present_t::MAYBE;
+}
+
+static rmw_ret_t rmw_send_response_standard(
+  CddsService * info,
+  rmw_request_id_t * request_header,
+  void * ros_response)
+{
+  auto * response = static_cast<serdata_rmw *>(
+    ddsi_serdata_from_sample(info->service.pub->sertype, SDK_DATA, ros_response));
+  if (response == nullptr) {
+    RMW_SET_ERROR_MSG("cannot serialize data");
+    return RMW_RET_ERROR;
+  }
+
+  const ddsi_guid_t related_writer_guid =
+    request_guid_bytes_to_ddsi_guid(request_header->writer_guid);
+  static_assert(
+    sizeof(response->related_sample_identity.writer_guid) ==
+    sizeof(related_writer_guid),
+    "request header size assumptions not met");
+  memcpy(
+    static_cast<void *>(response->related_sample_identity.writer_guid),
+    static_cast<const void *>(&related_writer_guid),
+    sizeof(response->related_sample_identity.writer_guid));
+  response->related_sample_identity.seq = request_header->sequence_number;
+  response->has_related_sample_identity = true;
+
+  if (dds_forwardcdr(info->service.pub->enth, response) >= 0) {
+    return RMW_RET_OK;
+  }
+
+  RMW_SET_ERROR_MSG("cannot publish data");
+  return RMW_RET_ERROR;
+}
+
 extern "C" rmw_ret_t rmw_send_response(
   const rmw_service_t * service,
   rmw_request_id_t * request_header, void * ros_response)
@@ -4412,6 +4855,32 @@ extern "C" rmw_ret_t rmw_send_response(
   RMW_CHECK_ARGUMENT_FOR_NULL(request_header, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_ARGUMENT_FOR_NULL(ros_response, RMW_RET_INVALID_ARGUMENT);
   CddsService * info = static_cast<CddsService *>(service->data);
+
+  if (info->service.use_standard_service_wire) {
+    client_present_t st;
+    std::chrono::system_clock::time_point tnow = std::chrono::system_clock::now();
+    std::chrono::system_clock::time_point tend = tnow + 100ms;
+    while ((st =
+      check_for_response_reader_standard(
+        info->service,
+        request_header->writer_guid)) == client_present_t::MAYBE && tnow < tend)
+    {
+      dds_sleepfor(DDS_MSECS(10));
+      tnow = std::chrono::system_clock::now();
+    }
+    switch (st) {
+      case client_present_t::FAILURE:
+        break;
+      case client_present_t::MAYBE:
+        return RMW_RET_TIMEOUT;
+      case client_present_t::YES:
+        return rmw_send_response_standard(info, request_header, ros_response);
+      case client_present_t::GONE:
+        return RMW_RET_OK;
+    }
+    return RMW_RET_ERROR;
+  }
+
   cdds_request_header_t header;
   dds_instance_handle_t reqwrih;
   static_assert(
@@ -4466,6 +4935,9 @@ extern "C" rmw_ret_t rmw_send_request(
   RMW_CHECK_ARGUMENT_FOR_NULL(sequence_id, RMW_RET_INVALID_ARGUMENT);
 
   auto info = static_cast<CddsClient *>(client->data);
+  if (info->client.use_standard_service_wire) {
+    return rmw_send_request_standard(info, ros_request, sequence_id);
+  }
   cdds_request_header_t header;
   header.guid = info->client.pub->pubiid;
   header.seq = *sequence_id = ++next_request_id;
@@ -4611,13 +5083,19 @@ static rmw_ret_t rmw_init_cs(
     is_service ? "Service" : "Client");
   RCUTILS_LOG_DEBUG_NAMED("rmw_cyclonedds_cpp", "Sub Topic %s", subtopic_name.c_str());
   RCUTILS_LOG_DEBUG_NAMED("rmw_cyclonedds_cpp", "Pub Topic %s", pubtopic_name.c_str());
+  cs->use_standard_service_wire = standard_service_wire_mode_enabled();
+  RCUTILS_LOG_DEBUG_NAMED(
+    "rmw_cyclonedds_cpp",
+    "%s service wire mode %s",
+    is_service ? "service" : "client",
+    cs->use_standard_service_wire ? "standard" : "legacy");
   RCUTILS_LOG_DEBUG_NAMED("rmw_cyclonedds_cpp", "***********");
 
   dds_entity_t pubtopic, subtopic;
   struct sertype_rmw * pub_st, * sub_st;
 
   pub_st = create_sertype(
-    type_support->typesupport_identifier, pub_type_support, true,
+    type_support->typesupport_identifier, pub_type_support, !cs->use_standard_service_wire,
     std::move(pub_msg_ts));
   struct ddsi_sertype * pub_stact;
   pubtopic = create_topic(node->context->impl->ppant, pubtopic_name.c_str(), pub_st, &pub_stact);
@@ -4627,7 +5105,7 @@ static rmw_ret_t rmw_init_cs(
   }
 
   sub_st = create_sertype(
-    type_support->typesupport_identifier, sub_type_support, true,
+    type_support->typesupport_identifier, sub_type_support, !cs->use_standard_service_wire,
     std::move(sub_msg_ts));
   subtopic = create_topic(node->context->impl->ppant, subtopic_name.c_str(), sub_st);
   if (subtopic < 0) {

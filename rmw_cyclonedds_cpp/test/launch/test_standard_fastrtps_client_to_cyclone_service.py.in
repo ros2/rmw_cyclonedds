@@ -1,0 +1,78 @@
+import os
+import unittest
+
+from launch import LaunchDescription
+from launch.actions import ExecuteProcess
+from launch.actions import RegisterEventHandler
+from launch.event_handlers import OnProcessIO
+
+import launch_testing
+import launch_testing.actions
+
+
+def generate_test_description():
+    server_env = dict(
+        os.environ,
+        RMW_IMPLEMENTATION="rmw_cyclonedds_cpp",
+        RMW_CYCLONEDDS_SERVICE_WIRE_MODE="standard",
+        PHASE5_NODE_NAME="standard_cyclone_param_server",
+    )
+    client_env = dict(
+        os.environ,
+        RMW_IMPLEMENTATION="rmw_fastrtps_cpp",
+        PHASE5_NODE_NAME="standard_fastrtps_client",
+        PHASE5_SERVICE_NAME="/standard_cyclone_param_server/list_parameters",
+        PHASE5_WAIT_SEC="15",
+        PHASE5_TIMEOUT_SEC="10",
+    )
+
+    server = ExecuteProcess(
+        cmd=["python3", "@TEST_HELPERS_DIR@/parameter_server_helper.py"],
+        env=server_env,
+        name="standard_cyclone_param_server",
+        output="screen",
+    )
+    client = ExecuteProcess(
+        cmd=["@TEST_RCLCPP_LIST_PARAMETERS_CLIENT_EXECUTABLE@"],
+        env=client_env,
+        name="standard_fastrtps_client",
+        output="screen",
+    )
+
+    def start_client_after_server_ready(event):
+        text = event.text.decode() if isinstance(event.text, bytes) else event.text
+        if "server_ready" in text:
+            return [client]
+        return []
+
+    start_client = RegisterEventHandler(
+        OnProcessIO(
+            target_action=server,
+            on_stdout=start_client_after_server_ready,
+        )
+    )
+
+    return LaunchDescription([
+        server,
+        start_client,
+        launch_testing.actions.ReadyToTest(),
+    ]), {"client_process": client}
+
+
+class TestStandardFastrtpsClientToCycloneService(unittest.TestCase):
+
+    def test_client_reports_success_and_exits(self, client_process, proc_output, proc_info):
+        proc_output.assertWaitFor(
+            "client_result=ok",
+            process=client_process,
+            stream="stdout",
+            timeout=30,
+        )
+        proc_info.assertWaitForShutdown(process=client_process, timeout=30)
+
+
+@launch_testing.post_shutdown_test()
+class TestStandardFastrtpsClientToCycloneServiceAfterShutdown(unittest.TestCase):
+
+    def test_client_exit_code(self, client_process, proc_info):
+        self.assertEqual(proc_info[client_process].returncode, 0)
