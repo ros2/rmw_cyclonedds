@@ -23,6 +23,7 @@
 #include "serdata.hpp"
 #include "type_name.hpp"
 
+#include "rcutils/macros.h"
 #include "rmw/error_handling.h"
 
 #if DDS_HAS_TYPELIB
@@ -95,6 +96,7 @@ static void dynamic_type_add_array_prim(
     dstruct,
     get_dynamic_member_descriptor(ddt, member->name_));
   assert(ret == DDS_RETCODE_OK);
+  RCUTILS_UNUSED(ret);  // ret is unused in Release builds
 }
 
 template<typename MemberType>
@@ -125,6 +127,7 @@ static void dynamic_type_add_array(
     dstruct,
     get_dynamic_member_descriptor(dseq, member->name_));
   assert(ret == DDS_RETCODE_OK);
+  RCUTILS_UNUSED(ret);  // ret is unused in Release builds
 }
 
 template<typename MemberType>
@@ -143,6 +146,7 @@ static void dynamic_type_add_member(
       dstruct,
       get_dynamic_member_descriptor_prim(type, member->name_));
     assert(ret == DDS_RETCODE_OK);
+    RCUTILS_UNUSED(ret);  // ret is unused in Release builds
   } else {
     dynamic_type_add_array_prim(dstruct, dds_ppant, member, type);
   }
@@ -258,6 +262,7 @@ static bool construct_dds_dynamic_type(
               dstruct,
               get_dynamic_member_descriptor(ddt, member->name_));
             assert(ret == DDS_RETCODE_OK);
+            RCUTILS_UNUSED(ret);  // ret is unused in Release builds
           } else {
             dynamic_type_add_array(dstruct, dds_ppant, member, ddt);
           }
