@@ -95,6 +95,7 @@ static void dynamic_type_add_array_prim(
     dstruct,
     get_dynamic_member_descriptor(ddt, member->name_));
   assert(ret == DDS_RETCODE_OK);
+  (void)ret;
 }
 
 template<typename MemberType>
@@ -125,6 +126,7 @@ static void dynamic_type_add_array(
     dstruct,
     get_dynamic_member_descriptor(dseq, member->name_));
   assert(ret == DDS_RETCODE_OK);
+  (void)ret;
 }
 
 template<typename MemberType>
@@ -132,17 +134,16 @@ static void dynamic_type_add_member(
   dds_dynamic_type_t * dstruct, dds_entity_t dds_ppant, const MemberType * member,
   const dds_dynamic_type_kind_t type)
 {
-  dds_return_t ret;
-
   assert(member->type_id_ != rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING);
   assert(member->type_id_ != rosidl_typesupport_introspection_cpp::ROS_TYPE_WSTRING);
   assert(member->type_id_ != rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE);
 
   if (!member->is_array_) {
-    ret = dds_dynamic_type_add_member(
+    dds_return_t ret = dds_dynamic_type_add_member(
       dstruct,
       get_dynamic_member_descriptor_prim(type, member->name_));
     assert(ret == DDS_RETCODE_OK);
+    (void)ret;
   } else {
     dynamic_type_add_array_prim(dstruct, dds_ppant, member, type);
   }
@@ -190,8 +191,6 @@ static bool construct_dds_dynamic_type(
 {
   assert(members);
   assert(dds_ppant);
-
-  dds_return_t ret;
 
   for (uint32_t i = 0; i < members->member_count_; ++i) {
     const auto * member = members->members_ + i;
@@ -254,10 +253,11 @@ static bool construct_dds_dynamic_type(
               get_dynamic_type_descriptor(DDS_DYNAMIC_STRING8, nullptr, 0, nullptr, {}));
           }
           if (!member->is_array_) {
-            ret = dds_dynamic_type_add_member(
+            dds_return_t ret = dds_dynamic_type_add_member(
               dstruct,
               get_dynamic_member_descriptor(ddt, member->name_));
             assert(ret == DDS_RETCODE_OK);
+            (void)ret;
           } else {
             dynamic_type_add_array(dstruct, dds_ppant, member, ddt);
           }
@@ -278,10 +278,11 @@ static bool construct_dds_dynamic_type(
               get_dynamic_type_descriptor(DDS_DYNAMIC_STRING16, nullptr, 0, nullptr, {}));
           }
           if (!member->is_array_) {
-            ret = dds_dynamic_type_add_member(
+            dds_return_t ret = dds_dynamic_type_add_member(
               dstruct,
               get_dynamic_member_descriptor(ddt, member->name_));
             assert(ret == DDS_RETCODE_OK);
+            (void)ret;
           } else {
             dynamic_type_add_array(dstruct, dds_ppant, member, ddt);
           }
@@ -311,10 +312,11 @@ static bool construct_dds_dynamic_type(
           }
 
           if (!member->is_array_) {
-            ret = dds_dynamic_type_add_member(
+            dds_return_t ret = dds_dynamic_type_add_member(
               dstruct,
               get_dynamic_member_descriptor(ddt, member->name_));
             assert(ret == DDS_RETCODE_OK);
+            (void)ret;
           } else {
             dynamic_type_add_array(dstruct, dds_ppant, member, ddt);
           }
