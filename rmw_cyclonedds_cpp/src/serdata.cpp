@@ -852,8 +852,9 @@ static const struct ddsi_sertype_ops sertype_rmw_ops = {
 struct sertype_rmw * create_sertype(
   const std::string type_name,
   bool is_request_header,
-  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type)
+  rmw_cyclonedds_cpp::MessageMembersVariant members)
 {
+  auto message_type = rmw_cyclonedds_cpp::make_struct_value_type(members);
   struct sertype_rmw * st = new struct sertype_rmw;
   const uint32_t sample_size = message_type->sizeof_type();
   const bool is_self_contained = message_type->is_self_contained();
@@ -894,9 +895,8 @@ struct sertype_rmw * create_sertype(
   const auto variant =
     is_request_header ? rmw_cyclonedds_cpp::SampleOrRequest::Request :
     rmw_cyclonedds_cpp::SampleOrRequest::Sample;
-  const auto * raw_type = message_type.get();
-  st->cdr_writer = rmw_cyclonedds_cpp::make_cdr_writer(std::move(message_type), variant);
-  st->cdr_reader = rmw_cyclonedds_cpp::make_cdr_reader(raw_type, variant);
+  st->cdr_writer = rmw_cyclonedds_cpp::make_cdr_writer(members, variant);
+  st->cdr_reader = rmw_cyclonedds_cpp::make_cdr_reader(members, variant);
 
   return st;
 }

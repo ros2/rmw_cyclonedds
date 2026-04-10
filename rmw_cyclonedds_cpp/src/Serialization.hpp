@@ -17,12 +17,14 @@
 #include <memory>
 #include <vector>
 
-#include "TypeSupport2.hpp"
-#include "rosidl_runtime_c/service_type_support_struct.h"
 #include "serdata.hpp"
 
 namespace rmw_cyclonedds_cpp
 {
+
+std::pair<MessageMembersVariant, MessageMembersVariant>
+make_request_response_value_types(const rosidl_service_type_support_t * svc);
+
 enum class SampleOrKey
 {
   Sample,
@@ -52,7 +54,7 @@ public:
 };
 
 std::unique_ptr<BaseCDRWriter> make_cdr_writer(
-  std::unique_ptr<StructValueType> value_type,
+  MessageMembersVariant members,
   SampleOrRequest variant);
 
 class BaseCDRReader
@@ -75,7 +77,7 @@ public:
 };
 
 std::unique_ptr<BaseCDRReader> make_cdr_reader(
-  const StructValueType * value_type,
+  MessageMembersVariant members,
   SampleOrRequest variant);
 }  // namespace rmw_cyclonedds_cpp
 

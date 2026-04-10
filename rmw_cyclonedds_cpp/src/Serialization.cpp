@@ -692,13 +692,6 @@ protected:
   }
 };
 
-std::unique_ptr<BaseCDRWriter> make_cdr_writer(
-  std::unique_ptr<StructValueType> value_type,
-  SampleOrRequest variant)
-{
-  return std::make_unique<CDRWriter>(std::move(value_type), variant);
-}
-
 template<typename Derived>
 struct ReadCursorBase : public CursorBase<Derived>
 {
@@ -748,17 +741,19 @@ class CDRReader final : public BaseCDRReader
 {
 public:
   const EncodingVersion eversion;
-  const StructValueType * m_root_value_type;
+  std::unique_ptr<StructValueType> m_root_value_type;
   const TriviallySerializedCache tsc;
   const SampleOrRequest m_variant;
 
 public:
-  explicit CDRReader(const StructValueType * root_value_type, SampleOrRequest variant)
+
+  explicit CDRReader(std::unique_ptr<StructValueType> root_value_type, SampleOrRequest variant)
   : eversion{EncodingVersion::XCDR1},
-    m_root_value_type{root_value_type},
-    tsc{root_value_type},
+    m_root_value_type{std::move(root_value_type)},
+    tsc{m_root_value_type.get()},
     m_variant{variant}
   {
+    assert(m_root_value_type);
   }
 
   void deserialize(void * dst, const void * cdr, size_t cdrsize, SampleOrKey what) const override
@@ -836,7 +831,7 @@ protected:
     }
     if (what == SampleOrKey::Sample || m_root_value_type->has_keys()) {
       deserialize_maybe_bswap(
-        src, static_cast<unsigned char *>(dst), m_root_value_type, what,
+        src, static_cast<unsigned char *>(dst), m_root_value_type.get(), what,
         bswap_src);
     }
     src.rebase(-4);
@@ -880,7 +875,7 @@ protected:
     // the top-level type has keys and so "all_fields_are_key" will be false
     ExtractKeyMode kmode = (what ==
       SampleOrKey::Key) ? ExtractKeyMode::Key : ExtractKeyMode::Sample;
-    extractkey_maybe_bswap(src, dst, m_root_value_type, kmode, bswap_src, bswap_dst);
+    extractkey_maybe_bswap(src, dst, m_root_value_type.get(), kmode, bswap_src, bswap_dst);
     dst.rebase(-4);
     src.rebase(-4);
   }
@@ -901,7 +896,7 @@ protected:
       print_maybe_bswap(src, dst, &u64, what, limit, bswap_src);
     }
     if (what == SampleOrKey::Sample || m_root_value_type->has_keys()) {
-      print_maybe_bswap(src, dst, m_root_value_type, what, limit, bswap_src);
+      print_maybe_bswap(src, dst, m_root_value_type.get(), what, limit, bswap_src);
     }
     src.rebase(-4);
   }
@@ -1560,10 +1555,17 @@ protected:
   }
 };
 
-std::unique_ptr<BaseCDRReader> make_cdr_reader(
-  const StructValueType * value_type,
+std::unique_ptr<BaseCDRWriter> make_cdr_writer(
+  MessageMembersVariant members,
   SampleOrRequest variant)
 {
-  return std::make_unique<CDRReader>(value_type, variant);
+  return std::make_unique<CDRWriter>(make_struct_value_type(members), variant);
+}
+
+std::unique_ptr<BaseCDRReader> make_cdr_reader(
+  MessageMembersVariant members,
+  SampleOrRequest variant)
+{
+  return std::make_unique<CDRReader>(make_struct_value_type(members), variant);
 }
 }  // namespace rmw_cyclonedds_cpp

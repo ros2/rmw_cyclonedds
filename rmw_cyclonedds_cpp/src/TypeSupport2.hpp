@@ -19,6 +19,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 #include <stdexcept>
 
@@ -120,6 +121,11 @@ using MetaMember = typename TypeGeneratorInfo<g>::MetaMember;
 template<TypeGenerator g>
 using MetaService = typename TypeGeneratorInfo<g>::MetaService;
 
+using MessageMembersVariant = std::variant<
+  const MetaMessage<TypeGenerator::ROSIDL_C> *,
+  const MetaMessage<TypeGenerator::ROSIDL_Cpp> *
+>;
+
 namespace tsi_enum = rosidl_typesupport_introspection_cpp;
 
 // these are shared between c and cpp
@@ -148,9 +154,10 @@ enum class ROSIDL_TypeKind : uint8_t
 
 class StructValueType;
 std::unique_ptr<StructValueType> make_message_value_type(const rosidl_message_type_support_t * mts);
+MessageMembersVariant make_message_members_variant(const rosidl_message_type_support_t * mts);
 
-std::pair<std::unique_ptr<StructValueType>, std::unique_ptr<StructValueType>>
-make_request_response_value_types(const rosidl_service_type_support_t * svc);
+
+std::unique_ptr<StructValueType> make_struct_value_type(MessageMembersVariant members);
 
 enum class EValueType
 {
