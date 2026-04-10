@@ -1889,7 +1889,7 @@ extern "C" rmw_ret_t rmw_serialize(
   try {
     auto message_value_type = rmw_cyclonedds_cpp::make_message_value_type(type_support);
     auto writer = rmw_cyclonedds_cpp::make_cdr_writer(
-      message_value_type.get(),
+      std::move(message_value_type),
       rmw_cyclonedds_cpp::SampleOrRequest::Sample);
     auto size = writer->get_serialized_size(ros_message, rmw_cyclonedds_cpp::SampleOrKey::Sample);
     rmw_ret_t ret = rmw_serialized_message_resize(serialized_message, size);

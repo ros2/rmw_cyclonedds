@@ -47,11 +47,12 @@ public:
   virtual size_t get_max_serialized_size(SampleOrKey what) const = 0;
 
   virtual void serialize(void * dest, const void * data, SampleOrKey what) const = 0;
+  virtual TypeGenerator type_generator() const = 0;
   virtual ~BaseCDRWriter() = default;
 };
 
 std::unique_ptr<BaseCDRWriter> make_cdr_writer(
-  const StructValueType * value_type,
+  std::unique_ptr<StructValueType> value_type,
   SampleOrRequest variant);
 
 class BaseCDRReader

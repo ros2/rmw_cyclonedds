@@ -249,6 +249,7 @@ class CDRWriter final : public BaseCDRWriter
 {
 public:
   const EncodingVersion eversion;
+  std::unique_ptr<StructValueType> m_owned_value_type;
   const StructValueType * m_root_value_type;
   const TriviallySerializedCache tsc;
   const SampleOrRequest m_variant;
@@ -258,10 +259,11 @@ public:
   const size_t max_serialized_key_size;   // Includes 4 bytes encoding header; SIZE_MAX if unbounded
 
 public:
-  explicit CDRWriter(const StructValueType * root_value_type, SampleOrRequest variant)
+  explicit CDRWriter(std::unique_ptr<StructValueType> root_value_type, SampleOrRequest variant)
   : eversion{EncodingVersion::XCDR1},
-    m_root_value_type{root_value_type},
-    tsc{root_value_type},
+    m_owned_value_type{std::move(root_value_type)},
+    m_root_value_type{m_owned_value_type.get()},
+    tsc{m_root_value_type},
     m_variant{variant},
     min_serialized_data_size{compute_serialized_size_bound(SampleOrKey::Sample, MinOrMax::Min)},
     min_serialized_key_size{compute_serialized_size_bound(SampleOrKey::Key, MinOrMax::Min)},
@@ -312,6 +314,11 @@ public:
   {
     SerializeCursor cursor(dst);
     serialize_top_level(cursor, src, what);
+  }
+
+  TypeGenerator type_generator() const override
+  {
+    return m_root_value_type->type_generator();
   }
 
 protected:
@@ -686,10 +693,10 @@ protected:
 };
 
 std::unique_ptr<BaseCDRWriter> make_cdr_writer(
-  const StructValueType * value_type,
+  std::unique_ptr<StructValueType> value_type,
   SampleOrRequest variant)
 {
-  return std::make_unique<CDRWriter>(value_type, variant);
+  return std::make_unique<CDRWriter>(std::move(value_type), variant);
 }
 
 template<typename Derived>

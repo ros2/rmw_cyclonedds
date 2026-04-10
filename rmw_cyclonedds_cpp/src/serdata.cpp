@@ -683,7 +683,7 @@ bool sertype_rmw_equal(
   if (a->is_request_header != b->is_request_header) {
     return false;
   }
-  if (a->message_type->type_generator() != b->message_type->type_generator()) {
+  if (a->cdr_writer->type_generator() != b->cdr_writer->type_generator()) {
     return false;
   }
   return true;
@@ -695,8 +695,8 @@ uint32_t sertype_rmw_hash(const struct ddsi_sertype * tpcmn)
   uint32_t h2 = static_cast<uint32_t>(std::hash<bool>{}(tp->is_request_header));
   // FIXME: there's got to be an easier way
   auto gen =
-    static_cast<std::underlying_type<decltype(tp->message_type->type_generator())>::type>(tp->
-    message_type->type_generator());
+    static_cast<std::underlying_type<decltype(tp->cdr_writer->type_generator())>::type>(tp->
+    cdr_writer->type_generator());
   uint32_t h1 = static_cast<uint32_t>(std::hash<decltype(gen)>{}(gen));
   return h1 ^ h2;
 }
@@ -891,12 +891,12 @@ struct sertype_rmw * create_sertype(
 #endif  // DDS_HAS_SHM
 #endif  // CDDS_VERSION > CDDS_VERSION_0_10
   st->is_request_header = is_request_header;
-  st->message_type = std::move(message_type);
   const auto variant =
     is_request_header ? rmw_cyclonedds_cpp::SampleOrRequest::Request :
     rmw_cyclonedds_cpp::SampleOrRequest::Sample;
-  st->cdr_writer = rmw_cyclonedds_cpp::make_cdr_writer(st->message_type.get(), variant);
-  st->cdr_reader = rmw_cyclonedds_cpp::make_cdr_reader(st->message_type.get(), variant);
+  const auto * raw_type = message_type.get();
+  st->cdr_writer = rmw_cyclonedds_cpp::make_cdr_writer(std::move(message_type), variant);
+  st->cdr_reader = rmw_cyclonedds_cpp::make_cdr_reader(raw_type, variant);
 
   return st;
 }
