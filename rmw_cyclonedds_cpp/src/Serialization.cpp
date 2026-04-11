@@ -198,9 +198,9 @@ struct SerializeCursor final : public WriteCursorBase<SerializeCursor>
 struct ByteVectorCursor final : public WriteCursorBase<ByteVectorCursor>
 {
   size_t pos_;
-  std::vector<byte> & data_;
+  std::vector<std::byte> & data_;
 
-  explicit ByteVectorCursor(std::vector<byte> & data)
+  explicit ByteVectorCursor(std::vector<std::byte> & data)
   : pos_{0}, data_{data}
   {
   }
@@ -208,8 +208,7 @@ struct ByteVectorCursor final : public WriteCursorBase<ByteVectorCursor>
   size_t offset() const {return pos_;}
   void advance(size_t n_bytes)
   {
-    byte zero = static_cast<byte>(0);
-    data_.insert(data_.end(), n_bytes, zero);
+    data_.insert(data_.end(), n_bytes, std::byte{0});
     pos_ += n_bytes;
   }
   void * put_bytes(const void * bytes, size_t n_bytes)
@@ -217,7 +216,7 @@ struct ByteVectorCursor final : public WriteCursorBase<ByteVectorCursor>
     if (n_bytes == 0) {
       return nullptr;
     } else {
-      auto ucbytes = static_cast<const byte *>(bytes);
+      auto ucbytes = static_cast<const std::byte *>(bytes);
       data_.insert(data_.end(), ucbytes, ucbytes + n_bytes);
       pos_ += n_bytes;
       return data_.data() + data_.size() - n_bytes;
@@ -765,7 +764,7 @@ public:
   }
 
   void extractkey(
-    std::vector<byte> & dst, const void * cdr, size_t cdrsize,
+    std::vector<std::byte> & dst, const void * cdr, size_t cdrsize,
     SampleOrKey what) const override
   {
     DeserializeCursor rdcursor(cdr, cdrsize);
@@ -774,7 +773,7 @@ public:
   }
 
   void extractkey_be(
-    std::vector<byte> & dst, const void * cdr, size_t cdrsize,
+    std::vector<std::byte> & dst, const void * cdr, size_t cdrsize,
     SampleOrKey what) const override
   {
     DeserializeCursor rdcursor(cdr, cdrsize);
@@ -1555,6 +1554,7 @@ protected:
   }
 };
 
+__attribute__((visibility("default")))
 std::unique_ptr<BaseCDRWriter> make_cdr_writer(
   MessageMembersVariant members,
   SampleOrRequest variant)
@@ -1562,6 +1562,7 @@ std::unique_ptr<BaseCDRWriter> make_cdr_writer(
   return std::make_unique<CDRWriter>(make_struct_value_type(members), variant);
 }
 
+__attribute__((visibility("default")))
 std::unique_ptr<BaseCDRReader> make_cdr_reader(
   MessageMembersVariant members,
   SampleOrRequest variant)

@@ -15,6 +15,7 @@
 #define TYPESUPPORT2_HPP_
 
 #include <cassert>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -22,6 +23,18 @@
 #include <variant>
 #include <vector>
 #include <stdexcept>
+
+typedef struct cdds_request_header
+{
+  uint64_t guid;
+  int64_t seq;
+} cdds_request_header_t;
+
+typedef struct cdds_request_wrapper
+{
+  cdds_request_header_t header;
+  void * data;
+} cdds_request_wrapper_t;
 
 #include "rosidl_runtime_c/string_functions.h"
 #include "rosidl_runtime_c/u16string_functions.h"
@@ -151,6 +164,9 @@ enum class ROSIDL_TypeKind : uint8_t
   MESSAGE = tsi_enum::ROS_TYPE_MESSAGE,
 };
 
+
+enum class SampleOrKey { Sample, Key };
+enum class SampleOrRequest { Sample, Request };
 
 class StructValueType;
 std::unique_ptr<StructValueType> make_message_value_type(const rosidl_message_type_support_t * mts);

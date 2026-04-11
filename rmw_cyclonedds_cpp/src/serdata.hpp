@@ -70,18 +70,6 @@ public:
   void set_key(size_t size, const void * key);
 };
 
-typedef struct cdds_request_header
-{
-  uint64_t guid;
-  int64_t seq;
-} cdds_request_header_t;
-
-typedef struct cdds_request_wrapper
-{
-  cdds_request_header_t header;
-  void * data;
-} cdds_request_wrapper_t;
-
 struct sertype_rmw * create_sertype(
   const std::string type_name,
   bool is_request_header,

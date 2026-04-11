@@ -132,7 +132,7 @@ static void serdata_rmw_set_key_from_ser(serdata_rmw * d)
   auto type = static_cast<const struct sertype_rmw *>(d->type);
   if (type_contains_keys(type)) {
     try {
-      std::vector<byte> key;
+      std::vector<std::byte> key;
       type->cdr_reader->extractkey(
         key, d->data(), d->size(),
         (d->kind ==
@@ -582,7 +582,7 @@ static void serdata_rmw_get_keyhash(
   auto type = static_cast<const sertype_rmw *>(d->type);
   std::memset(buf, 0, sizeof(*buf));
   if (type_contains_keys(d->type)) {
-    std::vector<byte> key_be;
+    std::vector<std::byte> key_be;
     type->cdr_reader->extractkey_be(
       key_be, d->key(), d->keysize(),
       rmw_cyclonedds_cpp::SampleOrKey::Key);
