@@ -16,9 +16,11 @@ cmake_minimum_required(VERSION 3.20)
 
 project(rmw_cyclonedds_cpp)
 
-# Default to C++17
+option(USE_NEW_CDR_IMPL "Use the new CDRSerializer/CDRDeserializer instead of the old CDRWriter/CDRReader" ON)
+
+# Default to C++20
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD 20)
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
 
@@ -79,6 +81,9 @@ add_library(rmw_cyclonedds_cpp
   src/u16string.cpp
   src/demangle.cpp
   src/Serialization.cpp
+  src/SizeTypeSupport.cpp
+  src/SerTypeSupport.cpp
+  src/DeserTypeSupport.cpp
   src/TypeSupport2.cpp
   src/type_name.cpp
   src/dyntype.cpp
@@ -124,6 +129,7 @@ target_compile_definitions(${PROJECT_NAME}
     RMW_VERSION_MAJOR=${rmw_VERSION_MAJOR}
     RMW_VERSION_MINOR=${rmw_VERSION_MINOR}
     RMW_VERSION_PATCH=${rmw_VERSION_PATCH}
+    $<$<BOOL:${USE_NEW_CDR_IMPL}>:USE_NEW_CDR_IMPL>
 )
 
 ament_export_targets(export_rmw_cyclonedds_cpp)
@@ -135,6 +141,82 @@ register_rmw_implementation(
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
+
+  find_package(ament_cmake_gtest REQUIRED)
+  find_package(ament_cmake_google_benchmark REQUIRED)
+  find_package(std_msgs REQUIRED)
+  find_package(visualization_msgs REQUIRED)
+  find_package(rcl_interfaces REQUIRED)
+  find_package(example_interfaces REQUIRED)
+  find_package(sensor_msgs REQUIRED)
+  find_package(test_msgs REQUIRED)
+  find_package(iceoryx_binding_c REQUIRED)
+
+  # Static library with serialization sources shared across all test targets.
+  add_library(ts_test_support STATIC
+    src/SizeTypeSupport.cpp
+    src/SerTypeSupport.cpp
+    src/DeserTypeSupport.cpp
+    src/TypeSupport2.cpp
+    src/Serialization.cpp)
+  target_include_directories(ts_test_support PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/test
+    ${CMAKE_BINARY_DIR}/src)
+  target_link_libraries(ts_test_support PUBLIC
+    CycloneDDS::ddsc
+    iceoryx_binding_c::iceoryx_binding_c
+    rosidl_typesupport_introspection_cpp::rosidl_typesupport_introspection_cpp
+    rosidl_typesupport_introspection_c::rosidl_typesupport_introspection_c)
+
+  # -- std_msgs + visualization_msgs tests ------------------------------------
+  ament_add_gtest(test_ts_std_msgs test/test_std_msgs.cpp)
+  target_link_libraries(test_ts_std_msgs
+    ts_test_support
+    ${std_msgs_LIBRARIES}
+    ${visualization_msgs_LIBRARIES})
+  ament_target_dependencies(test_ts_std_msgs std_msgs visualization_msgs)
+
+  # -- rcl_interfaces tests ---------------------------------------------------
+  ament_add_gtest(test_ts_rcl_interfaces test/test_rcl_interfaces.cpp)
+  target_link_libraries(test_ts_rcl_interfaces
+    ts_test_support
+    ${rcl_interfaces_LIBRARIES})
+  ament_target_dependencies(test_ts_rcl_interfaces rcl_interfaces)
+
+  # -- wstring (example_interfaces) tests -------------------------------------
+  ament_add_gtest(test_ts_wstring test/test_wstring.cpp)
+  target_link_libraries(test_ts_wstring
+    ts_test_support
+    ${example_interfaces_LIBRARIES})
+  ament_target_dependencies(test_ts_wstring example_interfaces)
+
+  # -- keyed message tests (test_msgs) ----------------------------------------
+  ament_add_gtest(test_ts_keyed_msgs test/test_keyed_msgs.cpp)
+  target_link_libraries(test_ts_keyed_msgs
+    ts_test_support
+    ${test_msgs_LIBRARIES})
+  ament_target_dependencies(test_ts_keyed_msgs test_msgs)
+
+  # -- test_msgs serialization tests ------------------------------------------
+  ament_add_gtest(test_ts_test_msgs test/test_test_msgs.cpp)
+  target_link_libraries(test_ts_test_msgs
+    ts_test_support
+    ${test_msgs_LIBRARIES}
+    ${rmw_dds_common_LIBRARIES})
+  ament_target_dependencies(test_ts_test_msgs test_msgs rmw_dds_common)
+
+  # -- benchmark --------------------------------------------------------------
+  ament_add_google_benchmark(benchmark_size_computation
+    test/benchmark_size_computation.cpp)
+  target_link_libraries(benchmark_size_computation
+    ts_test_support
+    rmw_cyclonedds_cpp
+    ${std_msgs_LIBRARIES}
+    ${visualization_msgs_LIBRARIES}
+    ${sensor_msgs_LIBRARIES})
+  ament_target_dependencies(benchmark_size_computation
+    std_msgs visualization_msgs sensor_msgs)
 endif()
 
 ament_package()

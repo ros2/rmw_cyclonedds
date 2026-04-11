@@ -41,5 +41,8 @@ public:
 std::unique_ptr<BaseCDRWriter> make_cdr_writer(
   MessageMembersVariant members, SampleOrRequest variant);
 
+std::unique_ptr<BaseCDRWriter> make_cdr_writer_old(
+  MessageMembersVariant members, SampleOrRequest variant);
+
 }  // namespace rmw_cyclonedds_cpp
 #endif  // BASE_CDR_WRITER_HPP_

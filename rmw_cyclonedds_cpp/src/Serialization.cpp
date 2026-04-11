@@ -37,6 +37,10 @@
 
 #include "TypeSupport2.hpp"
 #include "trivsercache.hpp"
+#ifdef USE_NEW_CDR_IMPL
+#include "SerTypeSupport.hpp"
+#include "DeserTypeSupport.hpp"
+#endif
 #include "bytewise.hpp"
 
 namespace rmw_cyclonedds_cpp
@@ -1559,11 +1563,43 @@ std::unique_ptr<BaseCDRWriter> make_cdr_writer(
   MessageMembersVariant members,
   SampleOrRequest variant)
 {
+  [[maybe_unused]] static const bool once = [] {
+#ifdef USE_NEW_CDR_IMPL
+    std::cerr << "[rmw_cyclonedds] CDR impl: NEW (CDRSerializer/CDRDeserializer)\n";
+#else
+    std::cerr << "[rmw_cyclonedds] CDR impl: OLD (CDRWriter/CDRReader + trivsercache)\n";
+#endif
+    return true;
+  }();
+#ifdef USE_NEW_CDR_IMPL
+  return std::make_unique<CDRSerializer>(members, variant);
+#else
   return std::make_unique<CDRWriter>(make_struct_value_type(members), variant);
+#endif
 }
 
 __attribute__((visibility("default")))
 std::unique_ptr<BaseCDRReader> make_cdr_reader(
+  MessageMembersVariant members,
+  SampleOrRequest variant)
+{
+#ifdef USE_NEW_CDR_IMPL
+  return std::make_unique<CDRDeserializer>(members, variant);
+#else
+  return std::make_unique<CDRReader>(make_struct_value_type(members), variant);
+#endif
+}
+
+__attribute__((visibility("default")))
+std::unique_ptr<BaseCDRWriter> make_cdr_writer_old(
+  MessageMembersVariant members,
+  SampleOrRequest variant)
+{
+  return std::make_unique<CDRWriter>(make_struct_value_type(members), variant);
+}
+
+__attribute__((visibility("default")))
+std::unique_ptr<BaseCDRReader> make_cdr_reader_old(
   MessageMembersVariant members,
   SampleOrRequest variant)
 {

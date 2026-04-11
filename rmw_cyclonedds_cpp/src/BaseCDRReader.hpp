@@ -46,5 +46,9 @@ std::unique_ptr<BaseCDRReader> make_cdr_reader(
   MessageMembersVariant members,
   SampleOrRequest variant);
 
+std::unique_ptr<BaseCDRReader> make_cdr_reader_old(
+  MessageMembersVariant members,
+  SampleOrRequest variant);
+
 }  // namespace rmw_cyclonedds_cpp
 #endif  // BASE_CDR_READER_HPP_

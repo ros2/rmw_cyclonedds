@@ -168,6 +168,37 @@ enum class ROSIDL_TypeKind : uint8_t
 enum class SampleOrKey { Sample, Key };
 enum class SampleOrRequest { Sample, Request };
 
+// ---------------------------------------------------------------------------
+// Count how many type-tree nodes and member entries a message type will need.
+// Shared by Sz / Ser / Deser builders so they can reserve() storage up front.
+// ---------------------------------------------------------------------------
+struct TypeTreeCounts
+{
+  size_t nodes = 0;    // number of *AnyType objects
+  size_t members = 0;  // total number of *Member entries across all structs
+};
+
+template<typename MetaMembers>
+TypeTreeCounts count_type_tree(const MetaMembers * impl)
+{
+  TypeTreeCounts c;
+  for (uint32_t i = 0; i < impl->member_count_; ++i) {
+    const auto & m = impl->members_[i];
+    c.nodes += 1;    // element node
+    c.members += 1;  // member entry
+    if (m.is_array_) {
+      c.nodes += 1;  // array / sequence / bool-vector wrapper
+    }
+    if (ROSIDL_TypeKind(m.type_id_) == ROSIDL_TypeKind::MESSAGE) {
+      auto sub = count_type_tree(
+        static_cast<const MetaMembers *>(m.members_->data));
+      c.nodes += sub.nodes + 1;    // +1 for the sub-struct node itself
+      c.members += sub.members;
+    }
+  }
+  return c;
+}
+
 class StructValueType;
 std::unique_ptr<StructValueType> make_message_value_type(const rosidl_message_type_support_t * mts);
 MessageMembersVariant make_message_members_variant(const rosidl_message_type_support_t * mts);
