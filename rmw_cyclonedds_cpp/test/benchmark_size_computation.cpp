@@ -318,6 +318,140 @@ static void BM_OldImpl_Deserialize(benchmark::State & state)
 BENCHMARK(BM_NewImpl_Deserialize);
 BENCHMARK(BM_OldImpl_Deserialize);
 
+// ---------------------------------------------------------------------------
+// Single Marker serialize/deserialize benchmarks
+// Each Marker has kPointsPerMarker points and colors.
+// ---------------------------------------------------------------------------
+static std::array<visualization_msgs::msg::Marker, kNumMessages> g_markers;
+
+static void init_markers()
+{
+  static bool done = false;
+  if (done) {return;}
+  done = true;
+  for (size_t i = 0; i < kNumMessages; ++i) {
+    auto & m = g_markers[i];
+    m.header.frame_id = "benchmark_frame";
+    m.ns = "benchmark_ns";
+    m.id = static_cast<int32_t>(i);
+    m.type = visualization_msgs::msg::Marker::POINTS;
+    m.action = visualization_msgs::msg::Marker::ADD;
+    m.text = "some label text";
+    m.mesh_resource = "package://some_pkg/meshes/model.dae";
+    m.points.resize(kPointsPerMarker);
+    m.colors.resize(kPointsPerMarker);
+    for (size_t k = 0; k < kPointsPerMarker; ++k) {
+      m.points[k].x = static_cast<double>(k);
+      m.points[k].y = static_cast<double>(k) * 0.5;
+      m.points[k].z = 0.0;
+      m.colors[k].r = 1.0f;
+      m.colors[k].g = 0.5f;
+      m.colors[k].b = 0.0f;
+      m.colors[k].a = 1.0f;
+    }
+  }
+}
+
+static std::vector<std::vector<unsigned char>> g_serialized_markers;
+
+static void init_serialized_markers()
+{
+  if (!g_serialized_markers.empty()) {
+    return;
+  }
+  init_markers();
+  MessageMembersVariant members =
+    make_message_members_variant(GET_TS(visualization_msgs, msg, Marker));
+  CDRSerializer serializer(members, SampleOrRequest::Sample);
+  g_serialized_markers.resize(kNumMessages);
+  for (size_t i = 0; i < kNumMessages; ++i) {
+    size_t sz = serializer.get_serialized_size(&g_markers[i], SampleOrKey::Sample);
+    g_serialized_markers[i].resize(sz);
+    serializer.serialize(g_serialized_markers[i].data(), &g_markers[i], SampleOrKey::Sample);
+  }
+}
+
+static void BM_Marker_Serialize_Old(benchmark::State & state)
+{
+  init_markers();
+  MessageMembersVariant members =
+    make_message_members_variant(GET_TS(visualization_msgs, msg, Marker));
+  auto writer = make_cdr_writer_old(members, SampleOrRequest::Sample);
+
+  size_t max_size = writer->get_max_serialized_size(SampleOrKey::Sample);
+  if (max_size == SIZE_MAX) {
+    max_size = 1024 * 1024;
+  }
+  std::vector<unsigned char> buf(max_size);
+
+  size_t idx = 0;
+  for (auto _ : state) {
+    writer->serialize(buf.data(), &g_markers[idx], SampleOrKey::Sample);
+    benchmark::DoNotOptimize(buf.data());
+    idx = (idx + 1) % kNumMessages;
+  }
+}
+
+static void BM_Marker_Serialize(benchmark::State & state)
+{
+  init_markers();
+  MessageMembersVariant members =
+    make_message_members_variant(GET_TS(visualization_msgs, msg, Marker));
+  CDRSerializer serializer(members, SampleOrRequest::Sample);
+
+  size_t max_size = serializer.get_max_serialized_size(SampleOrKey::Sample);
+  if (max_size == SIZE_MAX) {
+    max_size = 1024 * 1024;
+  }
+  std::vector<unsigned char> buf(max_size);
+
+  size_t idx = 0;
+  for (auto _ : state) {
+    serializer.serialize(buf.data(), &g_markers[idx], SampleOrKey::Sample);
+    benchmark::DoNotOptimize(buf.data());
+    idx = (idx + 1) % kNumMessages;
+  }
+}
+
+static void BM_Marker_Deserialize_Old(benchmark::State & state)
+{
+  init_serialized_markers();
+  MessageMembersVariant members =
+    make_message_members_variant(GET_TS(visualization_msgs, msg, Marker));
+  auto reader = make_cdr_reader_old(members, SampleOrRequest::Sample);
+
+  visualization_msgs::msg::Marker msg;
+  size_t idx = 0;
+  for (auto _ : state) {
+    const auto & buf = g_serialized_markers[idx];
+    reader->deserialize(&msg, buf.data(), buf.size(), SampleOrKey::Sample);
+    benchmark::DoNotOptimize(msg.points.data());
+    idx = (idx + 1) % kNumMessages;
+  }
+}
+
+static void BM_Marker_Deserialize(benchmark::State & state)
+{
+  init_serialized_markers();
+  MessageMembersVariant members =
+    make_message_members_variant(GET_TS(visualization_msgs, msg, Marker));
+  CDRDeserializer deserializer(members, SampleOrRequest::Sample);
+
+  visualization_msgs::msg::Marker msg;
+  size_t idx = 0;
+  for (auto _ : state) {
+    const auto & buf = g_serialized_markers[idx];
+    deserializer.deserialize(&msg, buf.data(), buf.size(), SampleOrKey::Sample);
+    benchmark::DoNotOptimize(msg.points.data());
+    idx = (idx + 1) % kNumMessages;
+  }
+}
+
+BENCHMARK(BM_Marker_Serialize_Old);
+BENCHMARK(BM_Marker_Serialize);
+BENCHMARK(BM_Marker_Deserialize_Old);
+BENCHMARK(BM_Marker_Deserialize);
+
 // ===========================================================================
 // sensor_msgs benchmarks
 // ===========================================================================

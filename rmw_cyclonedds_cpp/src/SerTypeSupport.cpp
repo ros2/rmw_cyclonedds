@@ -512,11 +512,13 @@ struct SerializeCursor
 };
 
 // Write one primitive value, handling bswap and native_size != cdr_size.
+// Bswap is a compile-time constant: true on BE hosts or when native != cdr size.
+template<bool Bswap>
 static void ser_write_primitive(
   SerializeCursor & c, const void * src, const SerPrimitive & p)
 {
   c.align(p.cdr_align);
-  if (!p.needs_bswap) {
+  if constexpr (!Bswap) {
     c.put_bytes(src, p.cdr_size);
   } else {
     // Advance to make room, then bswap into the just-written slot.
@@ -536,23 +538,28 @@ static void ser_write_primitive(
 }
 
 // Forward declarations
+template<bool Bswap>
 static void ser_write(SerializeCursor & c, const void * data,
   const SerAnyType & t, SampleOrKey what);
+template<bool Bswap>
 static void ser_write_struct(SerializeCursor & c, const void * data,
   const SerStruct & s, SampleOrKey what);
+template<bool Bswap>
 static void ser_write_many(SerializeCursor & c, const void * base,
   size_t native_stride, size_t count, const SerAnyType & elem, SampleOrKey what);
 
+template<bool Bswap>
 static void ser_write_many(
   SerializeCursor & c, const void * base,
   size_t native_stride, size_t count, const SerAnyType & elem, SampleOrKey what)
 {
   for (size_t i = 0; i < count; ++i) {
     const void * p = static_cast<const char *>(base) + i * native_stride;
-    ser_write(c, p, elem, what);
+    ser_write<Bswap>(c, p, elem, what);
   }
 }
 
+template<bool Bswap>
 static void ser_write(
   SerializeCursor & c, const void * data,
   const SerAnyType & t, SampleOrKey what)
@@ -562,7 +569,7 @@ static void ser_write(
       using T = std::decay_t<decltype(v)>;
 
       if constexpr (std::is_same_v<T, SerPrimitive>) {
-        ser_write_primitive(c, data, v);
+        ser_write_primitive<Bswap>(c, data, v);
 
       } else if constexpr (std::is_same_v<T, SerString>) {
         const char * str_data = v.get_data(data);
@@ -580,7 +587,7 @@ static void ser_write(
         uint32_t byte_len = static_cast<uint32_t>(str_size * 2);
         c.align(4);
         c.put_bytes(&byte_len, 4);
-        if (!host_needs_bswap()) {
+        if constexpr (!Bswap) {
           c.put_bytes(str_data, byte_len);
         } else {
           for (size_t i = 0; i < str_size; ++i) {
@@ -614,11 +621,8 @@ static void ser_write(
         if (v.trivial_at_align[c.offset() % kSerMaxAlign]) {
           // Bulk memcpy: all elements trivially serialized from this alignment
           c.put_bytes(data, v.count * v.native_elem_stride);
-        } else if (v.fixed_cdr_stride > 0) {
-          // Fixed CDR size but not trivial (e.g. BE host): per-element with bswap
-          ser_write_many(c, data, v.native_elem_stride, v.count, *v.element, what);
         } else {
-          ser_write_many(c, data, v.native_elem_stride, v.count, *v.element, what);
+          ser_write_many<Bswap>(c, data, v.native_elem_stride, v.count, *v.element, what);
         }
 
       } else if constexpr (std::is_same_v<T, SerCSequence>) {
@@ -634,7 +638,7 @@ static void ser_write(
         if (v.trivial_at_align[c.offset() % kSerMaxAlign]) {
           c.put_bytes(seq->ptr, seq->size * v.native_elem_stride);
         } else {
-          ser_write_many(c, seq->ptr, v.native_elem_stride, seq->size, *v.element, what);
+          ser_write_many<Bswap>(c, seq->ptr, v.native_elem_stride, seq->size, *v.element, what);
         }
 
       } else if constexpr (std::is_same_v<T, SerCppSequence>) {
@@ -651,15 +655,16 @@ static void ser_write(
         if (v.trivial_at_align[c.offset() % kSerMaxAlign]) {
           c.put_bytes(vec->begin, count * v.native_elem_stride);
         } else {
-          ser_write_many(c, vec->begin, v.native_elem_stride, count, *v.element, what);
+          ser_write_many<Bswap>(c, vec->begin, v.native_elem_stride, count, *v.element, what);
         }
 
       } else if constexpr (std::is_same_v<T, SerStruct>) {
-        ser_write_struct(c, data, v, what);
+        ser_write_struct<Bswap>(c, data, v, what);
       }
     }, t);
 }
 
+template<bool Bswap>
 static void ser_write_struct(
   SerializeCursor & c, const void * data,
   const SerStruct & s, SampleOrKey what)
@@ -672,7 +677,7 @@ static void ser_write_struct(
   for (const auto & member : s.members) {
     if (all_fields || member.is_key) {
       const void * field = static_cast<const char *>(data) + member.native_offset;
-      ser_write(c, field, *member.type, what);
+      ser_write<Bswap>(c, field, *member.type, what);
     }
   }
 }
@@ -706,7 +711,7 @@ void CDRSerializer::serialize(void * dest, const void * data, SampleOrKey what) 
 
   if (what == SampleOrKey::Sample && m_variant == SampleOrRequest::Request) {
     auto * req = static_cast<const cdds_request_wrapper_t *>(data);
-    if (!host_needs_bswap()) {
+    if constexpr (!host_needs_bswap()) {
       c.put_bytes(&req->header.guid, sizeof(req->header.guid));
       c.put_bytes(&req->header.seq,  sizeof(req->header.seq));
     } else {
@@ -717,7 +722,7 @@ void CDRSerializer::serialize(void * dest, const void * data, SampleOrKey what) 
   }
 
   if (what == SampleOrKey::Sample || m_root.has_keys) {
-    ser_write_struct(c, data, m_root, what);
+    ser_write_struct<host_needs_bswap()>(c, data, m_root, what);
   }
   c.rebase(-4);
 }

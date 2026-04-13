@@ -560,23 +560,28 @@ struct WriteVecCursor
 // Deser read helpers
 // ---------------------------------------------------------------------------
 
+template<bool Bswap>
 static void deser_read(DeserializeCursor & c, void * dst,
   const DeserAnyType & t, SampleOrKey what);
+template<bool Bswap>
 static void deser_read_struct(DeserializeCursor & c, void * dst,
   const DeserStruct & s, SampleOrKey what);
+template<bool Bswap>
 static void deser_read_many(DeserializeCursor & c, void * base,
   size_t native_stride, size_t count, const DeserAnyType & elem, SampleOrKey what);
 
+template<bool Bswap>
 static void deser_read_many(
   DeserializeCursor & c, void * base,
   size_t native_stride, size_t count, const DeserAnyType & elem, SampleOrKey what)
 {
   for (size_t i = 0; i < count; ++i) {
     void * p = static_cast<char *>(base) + i * native_stride;
-    deser_read(c, p, elem, what);
+    deser_read<Bswap>(c, p, elem, what);
   }
 }
 
+template<bool Bswap>
 static void deser_read(
   DeserializeCursor & c, void * dst,
   const DeserAnyType & t, SampleOrKey what)
@@ -587,7 +592,7 @@ static void deser_read(
 
       if constexpr (std::is_same_v<T, SerPrimitive>) {
         c.align(v.cdr_align);
-        if (!v.needs_bswap) {
+        if constexpr (!Bswap) {
           c.get_bytes(dst, v.native_size);
         } else {
           const unsigned char * src = c.advance(v.cdr_size);
@@ -604,6 +609,9 @@ static void deser_read(
         uint32_t len;
         c.align(4);
         c.get_bytes(&len, 4);
+        if constexpr (Bswap) {
+          uint32_t swapped; bswap_n<4>(&swapped, &len); len = swapped;
+        }
         if (len == 0) {
           throw std::runtime_error("CDR deserialization: size-0 string");
         }
@@ -617,12 +625,15 @@ static void deser_read(
         uint32_t byte_len;
         c.align(4);
         c.get_bytes(&byte_len, 4);
+        if constexpr (Bswap) {
+          uint32_t swapped; bswap_n<4>(&swapped, &byte_len); byte_len = swapped;
+        }
         if (byte_len % 2) {
           throw std::runtime_error("CDR deserialization: odd wstring byte count");
         }
         const unsigned char * str_bytes = c.advance(byte_len);
         size_t n_chars = byte_len / 2;
-        if (host_needs_bswap()) {
+        if constexpr (Bswap) {
           std::vector<char16_t> tmp(n_chars);
           for (size_t i = 0; i < n_chars; ++i) {
             uint16_t ch;
@@ -638,6 +649,9 @@ static void deser_read(
         uint32_t count;
         c.align(4);
         c.get_bytes(&count, 4);
+        if constexpr (Bswap) {
+          uint32_t swapped; bswap_n<4>(&swapped, &count); count = swapped;
+        }
         if (!v.resize(dst, count)) { throw std::bad_alloc(); }
         for (uint32_t i = 0; i < count; ++i) {
           const unsigned char * b = c.advance(1);
@@ -648,6 +662,9 @@ static void deser_read(
         uint32_t count;
         c.align(4);
         c.get_bytes(&count, 4);
+        if constexpr (Bswap) {
+          uint32_t swapped; bswap_n<4>(&swapped, &count); count = swapped;
+        }
         v.resize(dst, count);
         for (uint32_t i = 0; i < count; ++i) {
           const unsigned char * b = c.advance(1);
@@ -659,13 +676,16 @@ static void deser_read(
         if (v.trivial_at_align[c.offset() % kSerMaxAlign]) {
           c.get_bytes(dst, v.count * v.native_elem_stride);
         } else {
-          deser_read_many(c, dst, v.native_elem_stride, v.count, *v.element, what);
+          deser_read_many<Bswap>(c, dst, v.native_elem_stride, v.count, *v.element, what);
         }
 
       } else if constexpr (std::is_same_v<T, DeserCSequence>) {
         uint32_t count;
         c.align(4);
         c.get_bytes(&count, 4);
+        if constexpr (Bswap) {
+          uint32_t swapped; bswap_n<4>(&swapped, &count); count = swapped;
+        }
         if (!v.resize(dst, count)) { throw std::bad_alloc(); }
         if (count == 0) {
           return;
@@ -674,13 +694,16 @@ static void deser_read(
         if (v.trivial_at_align[c.offset() % kSerMaxAlign]) {
           c.get_bytes(base, count * v.native_elem_stride);
         } else {
-          deser_read_many(c, base, v.native_elem_stride, count, *v.element, what);
+          deser_read_many<Bswap>(c, base, v.native_elem_stride, count, *v.element, what);
         }
 
       } else if constexpr (std::is_same_v<T, DeserCppSequence>) {
         uint32_t count;
         c.align(4);
         c.get_bytes(&count, 4);
+        if constexpr (Bswap) {
+          uint32_t swapped; bswap_n<4>(&swapped, &count); count = swapped;
+        }
         v.resize(dst, count);
         if (count == 0) {
           return;
@@ -689,15 +712,16 @@ static void deser_read(
         if (v.trivial_at_align[c.offset() % kSerMaxAlign]) {
           c.get_bytes(base, count * v.native_elem_stride);
         } else {
-          deser_read_many(c, base, v.native_elem_stride, count, *v.element, what);
+          deser_read_many<Bswap>(c, base, v.native_elem_stride, count, *v.element, what);
         }
 
       } else if constexpr (std::is_same_v<T, DeserStruct>) {
-        deser_read_struct(c, dst, v, what);
+        deser_read_struct<Bswap>(c, dst, v, what);
       }
     }, t);
 }
 
+template<bool Bswap>
 static void deser_read_struct(
   DeserializeCursor & c, void * dst,
   const DeserStruct & s, SampleOrKey what)
@@ -710,7 +734,7 @@ static void deser_read_struct(
   for (const auto & member : s.members) {
     if (all_fields || member.is_key) {
       void * field = static_cast<char *>(dst) + member.native_offset;
-      deser_read(c, field, *member.type, what);
+      deser_read<Bswap>(c, field, *member.type, what);
     }
   }
 }
@@ -924,7 +948,11 @@ void CDRDeserializer::deserialize(
   }
 
   if (what == SampleOrKey::Sample || m_root.has_keys) {
-    deser_read_struct(c, dst, m_root, what);
+    if (bswap_src) {
+      deser_read_struct<true>(c, dst, m_root, what);
+    } else {
+      deser_read_struct<false>(c, dst, m_root, what);
+    }
   }
   c.rebase(-4);
 }
