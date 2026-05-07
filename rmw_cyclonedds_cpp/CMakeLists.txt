@@ -84,6 +84,9 @@ add_library(rmw_cyclonedds_cpp
   src/dyntype.cpp
   src/dyntype_helper.c)
 
+# Specify that the file should be compiled as C to prevent warnings like -fvisibility-inlines-hidden
+set_source_files_properties(src/dyntype_helper.c PROPERTIES LANGUAGE C)
+
 configure_file("src/cdds_version.hpp.in" "src/cdds_version.hpp")
 target_include_directories(rmw_cyclonedds_cpp PRIVATE ${CMAKE_BINARY_DIR}/src)
 
