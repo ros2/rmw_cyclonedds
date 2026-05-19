@@ -570,9 +570,9 @@ extern "C" rmw_ret_t rmw_subscription_set_on_new_message_callback(
     // For KEEP_ALL history, depth is reported as 0 (since CycloneDDS internally
     // uses -1 for unlimited depth, which gets mapped to 0 in dds_qos_to_rmw_qos).
     // In that case, pass through the full unread_count instead of clipping to 0.
-    size_t events = (sub_qos.depth > 0)
-      ? std::min(data->unread_count, sub_qos.depth)
-      : data->unread_count;
+    size_t events = (sub_qos.depth > 0) ?
+      std::min(data->unread_count, sub_qos.depth) :
+      data->unread_count;
 
     callback(user_data, events);
     data->unread_count = 0;
