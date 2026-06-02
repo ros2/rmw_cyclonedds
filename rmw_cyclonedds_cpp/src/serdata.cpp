@@ -889,7 +889,13 @@ struct sertype_rmw * create_sertype(
 #if CDDS_VERSION > CDDS_VERSION_0_10
   const uint32_t flags = 0;
   dds_data_type_properties_t props = 0;
-  if (is_self_contained) {
+  // is_self_contained reflects the *payload* type, but service request/reply samples are
+  // transported as a cdds_request_wrapper_t { cdds_request_header_t header; void * data; }.
+  // That wrapper holds a raw pointer, so the sample is NOT memcpy-safe for transport even when
+  // the payload is: marking it memcpy-safe puts it on the iceoryx RAW zero-copy loan path, which
+  // ships the pointer through shared memory and crashes the taker (SIGSEGV / garbage request id).
+  // Keep request/reply types off the RAW path so they use the serialized loan path instead.
+  if (is_self_contained && !is_request_header) {
     props |= DDS_DATA_TYPE_IS_MEMCPY_SAFE;
   }
   if (is_keyed_type) {
