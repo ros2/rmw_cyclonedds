@@ -34,6 +34,12 @@ With large samples (100s of kilobytes), excessive latency can be caused by runni
 
 So Cyclone isn't playing nice or not giving you the performance you had hoped for? That's not good... Please [file an issue against this repository](https://github.com/ros2/rmw_cyclonedds/issues/new)!
 
+### CycloneDDS Insight
+
+[CycloneDDS Insight](https://github.com/eclipse-cyclonedds/cyclonedds-insight) is a **graphical DDS inspection and debugging tool** for ROS 2 and Cyclone DDS that can be used to inspect participants, topics, publishers and subscribers, diagnose discovery issues, verify **communication architectures**, and monitor DDS traffic and communication statistics such as **received bytes**, **sent bytes** and **retransmitted bytes**.
+
+### ddsperf
+
 The `ddsperf` tool distributed with Cyclone DDS can be used to check that communication works *without* ROS. Run `ddsperf sanity` on two different machines - if the "mean" value is above `100000us`, there are likely network issues.
 
 If you're having trouble with nodes discovering others or can't use multicast *at all* on your network setup, you can circumvent discovery:
