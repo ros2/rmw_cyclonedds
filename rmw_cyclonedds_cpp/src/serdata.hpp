@@ -39,7 +39,6 @@ class BaseCDRReader;
 struct sertype_rmw : ddsi_sertype
 {
   bool is_request_header;
-  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type;
   std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRWriter> cdr_writer;
   std::unique_ptr<const rmw_cyclonedds_cpp::BaseCDRReader> cdr_reader;
   bool is_fixed;
@@ -71,22 +70,10 @@ public:
   void set_key(size_t size, const void * key);
 };
 
-typedef struct cdds_request_header
-{
-  uint64_t guid;
-  int64_t seq;
-} cdds_request_header_t;
-
-typedef struct cdds_request_wrapper
-{
-  cdds_request_header_t header;
-  void * data;
-} cdds_request_wrapper_t;
-
 struct sertype_rmw * create_sertype(
   const std::string type_name,
   bool is_request_header,
-  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type_support);
+  rmw_cyclonedds_cpp::MessageMembersVariant members);
 
 struct ddsi_serdata * serdata_rmw_from_serialized_message(
   const struct ddsi_sertype * typecmn,

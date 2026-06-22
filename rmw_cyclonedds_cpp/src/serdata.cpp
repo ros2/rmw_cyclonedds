@@ -132,7 +132,7 @@ static void serdata_rmw_set_key_from_ser(serdata_rmw * d)
   auto type = static_cast<const struct sertype_rmw *>(d->type);
   if (type_contains_keys(type)) {
     try {
-      std::vector<byte> key;
+      std::vector<std::byte> key;
       type->cdr_reader->extractkey(
         key, d->data(), d->size(),
         (d->kind ==
@@ -582,7 +582,7 @@ static void serdata_rmw_get_keyhash(
   auto type = static_cast<const sertype_rmw *>(d->type);
   std::memset(buf, 0, sizeof(*buf));
   if (type_contains_keys(d->type)) {
-    std::vector<byte> key_be;
+    std::vector<std::byte> key_be;
     type->cdr_reader->extractkey_be(
       key_be, d->key(), d->keysize(),
       rmw_cyclonedds_cpp::SampleOrKey::Key);
@@ -683,7 +683,7 @@ bool sertype_rmw_equal(
   if (a->is_request_header != b->is_request_header) {
     return false;
   }
-  if (a->message_type->type_generator() != b->message_type->type_generator()) {
+  if (a->cdr_writer->type_generator() != b->cdr_writer->type_generator()) {
     return false;
   }
   return true;
@@ -695,8 +695,8 @@ uint32_t sertype_rmw_hash(const struct ddsi_sertype * tpcmn)
   uint32_t h2 = static_cast<uint32_t>(std::hash<bool>{}(tp->is_request_header));
   // FIXME: there's got to be an easier way
   auto gen =
-    static_cast<std::underlying_type<decltype(tp->message_type->type_generator())>::type>(tp->
-    message_type->type_generator());
+    static_cast<std::underlying_type<decltype(tp->cdr_writer->type_generator())>::type>(tp->
+    cdr_writer->type_generator());
   uint32_t h1 = static_cast<uint32_t>(std::hash<decltype(gen)>{}(gen));
   return h1 ^ h2;
 }
@@ -852,8 +852,9 @@ static const struct ddsi_sertype_ops sertype_rmw_ops = {
 struct sertype_rmw * create_sertype(
   const std::string type_name,
   bool is_request_header,
-  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type)
+  rmw_cyclonedds_cpp::MessageMembersVariant members)
 {
+  auto message_type = rmw_cyclonedds_cpp::make_struct_value_type(members);
   struct sertype_rmw * st = new struct sertype_rmw;
   const uint32_t sample_size = message_type->sizeof_type();
   const bool is_self_contained = message_type->is_self_contained();
@@ -891,12 +892,11 @@ struct sertype_rmw * create_sertype(
 #endif  // DDS_HAS_SHM
 #endif  // CDDS_VERSION > CDDS_VERSION_0_10
   st->is_request_header = is_request_header;
-  st->message_type = std::move(message_type);
   const auto variant =
     is_request_header ? rmw_cyclonedds_cpp::SampleOrRequest::Request :
     rmw_cyclonedds_cpp::SampleOrRequest::Sample;
-  st->cdr_writer = rmw_cyclonedds_cpp::make_cdr_writer(st->message_type.get(), variant);
-  st->cdr_reader = rmw_cyclonedds_cpp::make_cdr_reader(st->message_type.get(), variant);
+  st->cdr_writer = rmw_cyclonedds_cpp::make_cdr_writer(members, variant);
+  st->cdr_reader = rmw_cyclonedds_cpp::make_cdr_reader(members, variant);
 
   return st;
 }

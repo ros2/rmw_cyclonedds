@@ -37,6 +37,10 @@
 
 #include "TypeSupport2.hpp"
 #include "trivsercache.hpp"
+#ifdef USE_NEW_CDR_IMPL
+#include "SerTypeSupport.hpp"
+#include "DeserTypeSupport.hpp"
+#endif
 #include "bytewise.hpp"
 
 namespace rmw_cyclonedds_cpp
@@ -198,9 +202,9 @@ struct SerializeCursor final : public WriteCursorBase<SerializeCursor>
 struct ByteVectorCursor final : public WriteCursorBase<ByteVectorCursor>
 {
   size_t pos_;
-  std::vector<byte> & data_;
+  std::vector<std::byte> & data_;
 
-  explicit ByteVectorCursor(std::vector<byte> & data)
+  explicit ByteVectorCursor(std::vector<std::byte> & data)
   : pos_{0}, data_{data}
   {
   }
@@ -208,8 +212,7 @@ struct ByteVectorCursor final : public WriteCursorBase<ByteVectorCursor>
   size_t offset() const {return pos_;}
   void advance(size_t n_bytes)
   {
-    byte zero = static_cast<byte>(0);
-    data_.insert(data_.end(), n_bytes, zero);
+    data_.insert(data_.end(), n_bytes, std::byte{0});
     pos_ += n_bytes;
   }
   void * put_bytes(const void * bytes, size_t n_bytes)
@@ -217,7 +220,7 @@ struct ByteVectorCursor final : public WriteCursorBase<ByteVectorCursor>
     if (n_bytes == 0) {
       return nullptr;
     } else {
-      auto ucbytes = static_cast<const byte *>(bytes);
+      auto ucbytes = static_cast<const std::byte *>(bytes);
       data_.insert(data_.end(), ucbytes, ucbytes + n_bytes);
       pos_ += n_bytes;
       return data_.data() + data_.size() - n_bytes;
@@ -249,6 +252,7 @@ class CDRWriter final : public BaseCDRWriter
 {
 public:
   const EncodingVersion eversion;
+  std::unique_ptr<StructValueType> m_owned_value_type;
   const StructValueType * m_root_value_type;
   const TriviallySerializedCache tsc;
   const SampleOrRequest m_variant;
@@ -258,10 +262,11 @@ public:
   const size_t max_serialized_key_size;   // Includes 4 bytes encoding header; SIZE_MAX if unbounded
 
 public:
-  explicit CDRWriter(const StructValueType * root_value_type, SampleOrRequest variant)
+  explicit CDRWriter(std::unique_ptr<StructValueType> root_value_type, SampleOrRequest variant)
   : eversion{EncodingVersion::XCDR1},
-    m_root_value_type{root_value_type},
-    tsc{root_value_type},
+    m_owned_value_type{std::move(root_value_type)},
+    m_root_value_type{m_owned_value_type.get()},
+    tsc{m_root_value_type},
     m_variant{variant},
     min_serialized_data_size{compute_serialized_size_bound(SampleOrKey::Sample, MinOrMax::Min)},
     min_serialized_key_size{compute_serialized_size_bound(SampleOrKey::Key, MinOrMax::Min)},
@@ -312,6 +317,11 @@ public:
   {
     SerializeCursor cursor(dst);
     serialize_top_level(cursor, src, what);
+  }
+
+  TypeGenerator type_generator() const override
+  {
+    return m_root_value_type->type_generator();
   }
 
 protected:
@@ -685,13 +695,6 @@ protected:
   }
 };
 
-std::unique_ptr<BaseCDRWriter> make_cdr_writer(
-  const StructValueType * value_type,
-  SampleOrRequest variant)
-{
-  return std::make_unique<CDRWriter>(value_type, variant);
-}
-
 template<typename Derived>
 struct ReadCursorBase : public CursorBase<Derived>
 {
@@ -741,17 +744,19 @@ class CDRReader final : public BaseCDRReader
 {
 public:
   const EncodingVersion eversion;
-  const StructValueType * m_root_value_type;
+  std::unique_ptr<StructValueType> m_root_value_type;
   const TriviallySerializedCache tsc;
   const SampleOrRequest m_variant;
 
 public:
-  explicit CDRReader(const StructValueType * root_value_type, SampleOrRequest variant)
+
+  explicit CDRReader(std::unique_ptr<StructValueType> root_value_type, SampleOrRequest variant)
   : eversion{EncodingVersion::XCDR1},
-    m_root_value_type{root_value_type},
-    tsc{root_value_type},
+    m_root_value_type{std::move(root_value_type)},
+    tsc{m_root_value_type.get()},
     m_variant{variant}
   {
+    assert(m_root_value_type);
   }
 
   void deserialize(void * dst, const void * cdr, size_t cdrsize, SampleOrKey what) const override
@@ -763,7 +768,7 @@ public:
   }
 
   void extractkey(
-    std::vector<byte> & dst, const void * cdr, size_t cdrsize,
+    std::vector<std::byte> & dst, const void * cdr, size_t cdrsize,
     SampleOrKey what) const override
   {
     DeserializeCursor rdcursor(cdr, cdrsize);
@@ -772,7 +777,7 @@ public:
   }
 
   void extractkey_be(
-    std::vector<byte> & dst, const void * cdr, size_t cdrsize,
+    std::vector<std::byte> & dst, const void * cdr, size_t cdrsize,
     SampleOrKey what) const override
   {
     DeserializeCursor rdcursor(cdr, cdrsize);
@@ -829,7 +834,7 @@ protected:
     }
     if (what == SampleOrKey::Sample || m_root_value_type->has_keys()) {
       deserialize_maybe_bswap(
-        src, static_cast<unsigned char *>(dst), m_root_value_type, what,
+        src, static_cast<unsigned char *>(dst), m_root_value_type.get(), what,
         bswap_src);
     }
     src.rebase(-4);
@@ -873,7 +878,7 @@ protected:
     // the top-level type has keys and so "all_fields_are_key" will be false
     ExtractKeyMode kmode = (what ==
       SampleOrKey::Key) ? ExtractKeyMode::Key : ExtractKeyMode::Sample;
-    extractkey_maybe_bswap(src, dst, m_root_value_type, kmode, bswap_src, bswap_dst);
+    extractkey_maybe_bswap(src, dst, m_root_value_type.get(), kmode, bswap_src, bswap_dst);
     dst.rebase(-4);
     src.rebase(-4);
   }
@@ -894,7 +899,7 @@ protected:
       print_maybe_bswap(src, dst, &u64, what, limit, bswap_src);
     }
     if (what == SampleOrKey::Sample || m_root_value_type->has_keys()) {
-      print_maybe_bswap(src, dst, m_root_value_type, what, limit, bswap_src);
+      print_maybe_bswap(src, dst, m_root_value_type.get(), what, limit, bswap_src);
     }
     src.rebase(-4);
   }
@@ -1553,10 +1558,51 @@ protected:
   }
 };
 
-std::unique_ptr<BaseCDRReader> make_cdr_reader(
-  const StructValueType * value_type,
+__attribute__((visibility("default")))
+std::unique_ptr<BaseCDRWriter> make_cdr_writer(
+  MessageMembersVariant members,
   SampleOrRequest variant)
 {
-  return std::make_unique<CDRReader>(value_type, variant);
+  [[maybe_unused]] static const bool once = [] {
+#ifdef USE_NEW_CDR_IMPL
+    std::cerr << "[rmw_cyclonedds] CDR impl: NEW (CDRSerializer/CDRDeserializer)\n";
+#else
+    std::cerr << "[rmw_cyclonedds] CDR impl: OLD (CDRWriter/CDRReader + trivsercache)\n";
+#endif
+    return true;
+  }();
+#ifdef USE_NEW_CDR_IMPL
+  return std::make_unique<CDRSerializer>(members, variant);
+#else
+  return std::make_unique<CDRWriter>(make_struct_value_type(members), variant);
+#endif
+}
+
+__attribute__((visibility("default")))
+std::unique_ptr<BaseCDRReader> make_cdr_reader(
+  MessageMembersVariant members,
+  SampleOrRequest variant)
+{
+#ifdef USE_NEW_CDR_IMPL
+  return std::make_unique<CDRDeserializer>(members, variant);
+#else
+  return std::make_unique<CDRReader>(make_struct_value_type(members), variant);
+#endif
+}
+
+__attribute__((visibility("default")))
+std::unique_ptr<BaseCDRWriter> make_cdr_writer_old(
+  MessageMembersVariant members,
+  SampleOrRequest variant)
+{
+  return std::make_unique<CDRWriter>(make_struct_value_type(members), variant);
+}
+
+__attribute__((visibility("default")))
+std::unique_ptr<BaseCDRReader> make_cdr_reader_old(
+  MessageMembersVariant members,
+  SampleOrRequest variant)
+{
+  return std::make_unique<CDRReader>(make_struct_value_type(members), variant);
 }
 }  // namespace rmw_cyclonedds_cpp

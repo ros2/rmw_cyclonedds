@@ -62,7 +62,6 @@
 #include "rmw/impl/cpp/macros.hpp"
 #include "rmw/impl/cpp/key_value.hpp"
 
-#include "TypeSupport2.hpp"
 
 #include "rmw_version_test.hpp"
 
@@ -1892,9 +1891,9 @@ extern "C" rmw_ret_t rmw_serialize(
   rmw_serialized_message_t * serialized_message)
 {
   try {
-    auto message_value_type = rmw_cyclonedds_cpp::make_message_value_type(type_support);
+    auto members = rmw_cyclonedds_cpp::make_message_members_variant(type_support);
     auto writer = rmw_cyclonedds_cpp::make_cdr_writer(
-      message_value_type.get(),
+      members,
       rmw_cyclonedds_cpp::SampleOrRequest::Sample);
     auto size = writer->get_serialized_size(ros_message, rmw_cyclonedds_cpp::SampleOrKey::Sample);
     rmw_ret_t ret = rmw_serialized_message_resize(serialized_message, size);
@@ -1920,9 +1919,9 @@ extern "C" rmw_ret_t rmw_deserialize(
   void * ros_message)
 {
   try {
-    auto message_value_type = rmw_cyclonedds_cpp::make_message_value_type(type_support);
+    auto members = rmw_cyclonedds_cpp::make_message_members_variant(type_support);
     auto reader = rmw_cyclonedds_cpp::make_cdr_reader(
-      message_value_type.get(),
+      members,
       rmw_cyclonedds_cpp::SampleOrRequest::Sample);
     reader->deserialize(
       ros_message, serialized_message->buffer, serialized_message->buffer_length,
@@ -2489,14 +2488,15 @@ static CddsPublisher * create_cdds_publisher(
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
   const std::string type_name = get_message_type_name(type_support);
-  auto message_type_support = rmw_cyclonedds_cpp::make_message_value_type(type_supports);
-  const bool is_self_contained = message_type_support->is_self_contained();
-  const size_t sample_size = message_type_support->sizeof_type();
+  auto message_members = rmw_cyclonedds_cpp::make_message_members_variant(type_supports);
+  auto message_type_info = rmw_cyclonedds_cpp::make_struct_value_type(message_members);
+  const bool is_self_contained = message_type_info->is_self_contained();
+  const size_t sample_size = message_type_info->sizeof_type();
 
   auto sertype = create_sertype(
     type_name,
     false,
-    std::move(message_type_support));
+    message_members);
   create_msg_dds_dynamic_type(
     type_support->typesupport_identifier, type_support->data, dds_ppant,
     sertype);
@@ -2988,13 +2988,14 @@ static CddsSubscription * create_cdds_subscription(
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
   const std::string type_name = get_message_type_name(type_support);
-  auto message_type_support = rmw_cyclonedds_cpp::make_message_value_type(type_supports);
-  bool is_self_contained = message_type_support->is_self_contained();
+  auto message_members = rmw_cyclonedds_cpp::make_message_members_variant(type_supports);
+  auto message_type_info = rmw_cyclonedds_cpp::make_struct_value_type(message_members);
+  bool is_self_contained = message_type_info->is_self_contained();
 
   auto sertype = create_sertype(
     type_name,
     false,
-    std::move(message_type_support));
+    message_members);
   create_msg_dds_dynamic_type(
     type_support->typesupport_identifier, type_support->data, dds_ppant,
     sertype);
@@ -5126,16 +5127,15 @@ static rmw_ret_t rmw_init_cs(
   const rosidl_type_hash_t * ser_type_hash;
   std::string ser_typehash_str;
 
-  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> pub_msg_ts, sub_msg_ts;
   struct sertype_rmw * pub_st, * sub_st;
 
   dds_listener_t * listener = dds_create_listener(cb_data);
   dds_lset_data_available_arg(listener, dds_listener_callback, cb_data, false);
 
-  if (is_service) {
-    std::tie(sub_msg_ts, pub_msg_ts) =
-      rmw_cyclonedds_cpp::make_request_response_value_types(type_supports);
+  auto [req_members, res_members] = rmw_cyclonedds_cpp::make_request_response_value_types(
+    type_supports);
 
+  if (is_service) {
     sub_type_hash = type_supports->request_typesupport->get_type_hash_func(
       type_supports->request_typesupport);
     pub_type_hash = type_supports->response_typesupport->get_type_hash_func(
@@ -5147,21 +5147,18 @@ static rmw_ret_t rmw_init_cs(
     pub_st = create_sertype(
       response_type_name,
       true,
-      std::move(pub_msg_ts));
+      res_members);
     create_res_dds_dynamic_type(
       type_support->typesupport_identifier, type_support->data,
       node->context->impl->ppant, pub_st);
     sub_st = create_sertype(
       request_type_name,
       true,
-      std::move(sub_msg_ts));
+      req_members);
     create_req_dds_dynamic_type(
       type_support->typesupport_identifier, type_support->data,
       node->context->impl->ppant, sub_st);
   } else {
-    std::tie(pub_msg_ts, sub_msg_ts) =
-      rmw_cyclonedds_cpp::make_request_response_value_types(type_supports);
-
     pub_type_hash = type_supports->request_typesupport->get_type_hash_func(
       type_supports->request_typesupport);
     sub_type_hash = type_supports->response_typesupport->get_type_hash_func(
@@ -5173,14 +5170,14 @@ static rmw_ret_t rmw_init_cs(
     pub_st = create_sertype(
       request_type_name,
       true,
-      std::move(pub_msg_ts));
+      req_members);
     create_req_dds_dynamic_type(
       type_support->typesupport_identifier, type_support->data,
       node->context->impl->ppant, pub_st);
     sub_st = create_sertype(
       response_type_name,
       true,
-      std::move(sub_msg_ts));
+      res_members);
     create_res_dds_dynamic_type(
       type_support->typesupport_identifier, type_support->data,
       node->context->impl->ppant, sub_st);

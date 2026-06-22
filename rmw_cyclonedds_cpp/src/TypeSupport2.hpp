@@ -15,12 +15,26 @@
 #define TYPESUPPORT2_HPP_
 
 #include <cassert>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 #include <stdexcept>
+
+typedef struct cdds_request_header
+{
+  uint64_t guid;
+  int64_t seq;
+} cdds_request_header_t;
+
+typedef struct cdds_request_wrapper
+{
+  cdds_request_header_t header;
+  void * data;
+} cdds_request_wrapper_t;
 
 #include "rosidl_runtime_c/string_functions.h"
 #include "rosidl_runtime_c/u16string_functions.h"
@@ -120,6 +134,11 @@ using MetaMember = typename TypeGeneratorInfo<g>::MetaMember;
 template<TypeGenerator g>
 using MetaService = typename TypeGeneratorInfo<g>::MetaService;
 
+using MessageMembersVariant = std::variant<
+  const MetaMessage<TypeGenerator::ROSIDL_C> *,
+  const MetaMessage<TypeGenerator::ROSIDL_Cpp> *
+>;
+
 namespace tsi_enum = rosidl_typesupport_introspection_cpp;
 
 // these are shared between c and cpp
@@ -146,11 +165,46 @@ enum class ROSIDL_TypeKind : uint8_t
 };
 
 
+enum class SampleOrKey { Sample, Key };
+enum class SampleOrRequest { Sample, Request };
+
+// ---------------------------------------------------------------------------
+// Count how many type-tree nodes and member entries a message type will need.
+// Shared by Sz / Ser / Deser builders so they can reserve() storage up front.
+// ---------------------------------------------------------------------------
+struct TypeTreeCounts
+{
+  size_t nodes = 0;    // number of *AnyType objects
+  size_t members = 0;  // total number of *Member entries across all structs
+};
+
+template<typename MetaMembers>
+TypeTreeCounts count_type_tree(const MetaMembers * impl)
+{
+  TypeTreeCounts c;
+  for (uint32_t i = 0; i < impl->member_count_; ++i) {
+    const auto & m = impl->members_[i];
+    c.nodes += 1;    // element node
+    c.members += 1;  // member entry
+    if (m.is_array_) {
+      c.nodes += 1;  // array / sequence / bool-vector wrapper
+    }
+    if (ROSIDL_TypeKind(m.type_id_) == ROSIDL_TypeKind::MESSAGE) {
+      auto sub = count_type_tree(
+        static_cast<const MetaMembers *>(m.members_->data));
+      c.nodes += sub.nodes + 1;    // +1 for the sub-struct node itself
+      c.members += sub.members;
+    }
+  }
+  return c;
+}
+
 class StructValueType;
 std::unique_ptr<StructValueType> make_message_value_type(const rosidl_message_type_support_t * mts);
+MessageMembersVariant make_message_members_variant(const rosidl_message_type_support_t * mts);
 
-std::pair<std::unique_ptr<StructValueType>, std::unique_ptr<StructValueType>>
-make_request_response_value_types(const rosidl_service_type_support_t * svc);
+
+std::unique_ptr<StructValueType> make_struct_value_type(MessageMembersVariant members);
 
 enum class EValueType
 {
