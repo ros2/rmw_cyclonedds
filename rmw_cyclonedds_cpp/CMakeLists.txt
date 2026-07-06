@@ -85,7 +85,7 @@ target_link_libraries(rmw_cyclonedds_cpp PUBLIC
   rmw::rmw)
 
 target_link_libraries(rmw_cyclonedds_cpp PRIVATE
-  ament_ros_cxx_standard
+  ament_cmake_ros_core::ament_ros_cxx_standard
   CycloneDDS::ddsc
   rcutils::rcutils
   rcpputils::rcpputils
