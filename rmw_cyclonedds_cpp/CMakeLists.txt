@@ -16,12 +16,6 @@ cmake_minimum_required(VERSION 3.20)
 
 project(rmw_cyclonedds_cpp)
 
-# Default to C++17
-if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
-  set(CMAKE_CXX_STANDARD_REQUIRED ON)
-endif()
-
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic -Wimplicit-fallthrough)
 endif()
@@ -91,6 +85,7 @@ target_link_libraries(rmw_cyclonedds_cpp PUBLIC
   rmw::rmw)
 
 target_link_libraries(rmw_cyclonedds_cpp PRIVATE
+  ament_cmake_ros_core::ament_ros_cxx_standard
   CycloneDDS::ddsc
   rcutils::rcutils
   rcpputils::rcpputils
