@@ -79,7 +79,9 @@
 
 #include "rmw_security_common/security.hpp"
 
+#include "rosidl_runtime_c/message_initialization.h"
 #include "rosidl_runtime_c/type_hash.h"
+#include "rosidl_runtime_cpp/message_initialization.hpp"
 
 #include "rosidl_typesupport_cpp/message_type_support.hpp"
 
@@ -4737,6 +4739,29 @@ static const std::string csid_to_string(const client_service_id_t & id)
   return os.str();
 }
 
+static void refini_message(
+  const rosidl_message_type_support_t * type_supports, void * message)
+{
+  const rosidl_message_type_support_t * ts;
+  if ((ts =
+    get_message_typesupport_handle(
+      type_supports, rosidl_typesupport_introspection_cpp::typesupport_identifier)) != nullptr)
+  {
+    auto members =
+      static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(ts->data);
+    members->fini_function(message);
+    members->init_function(message, rosidl_runtime_cpp::MessageInitialization::ALL);
+  } else if ((ts = // NOLINT
+    get_message_typesupport_handle(
+      type_supports, rosidl_typesupport_introspection_c__identifier)) != nullptr)
+  {
+    auto members =
+      static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(ts->data);
+    members->fini_function(message);
+    members->init_function(message, ROSIDL_RUNTIME_C_MSG_INIT_ALL);
+  }
+}
+
 static rmw_ret_t rmw_take_response_request(
   CddsCS * cs, rmw_service_info_t * request_header,
   void * ros_data, bool * taken, dds_time_t * source_timestamp,
@@ -4773,6 +4798,7 @@ static rmw_ret_t rmw_take_response_request(
         *taken = true;
         return RMW_RET_OK;
       }
+      refini_message(&cs->sub->type_supports, ros_data);
     }
   }
   *taken = false;
@@ -5138,6 +5164,7 @@ static rmw_ret_t rmw_init_cs(
 
     sub_type_hash = type_supports->request_typesupport->get_type_hash_func(
       type_supports->request_typesupport);
+    sub->type_supports = *type_supports->request_typesupport;
     pub_type_hash = type_supports->response_typesupport->get_type_hash_func(
       type_supports->response_typesupport);
     subtopic_name =
@@ -5166,6 +5193,7 @@ static rmw_ret_t rmw_init_cs(
       type_supports->request_typesupport);
     sub_type_hash = type_supports->response_typesupport->get_type_hash_func(
       type_supports->response_typesupport);
+    sub->type_supports = *type_supports->response_typesupport;
     pubtopic_name =
       make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", qos_policies);
     subtopic_name = make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", qos_policies);
