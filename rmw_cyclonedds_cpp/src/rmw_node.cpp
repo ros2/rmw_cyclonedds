@@ -934,7 +934,7 @@ static void handle_builtintopic_endpoint(
         if (RMW_RET_OK != rmw_dds_common::parse_type_hash_from_user_data(
             reinterpret_cast<const uint8_t *>(userdata), userdata_size, type_hash))
         {
-          RCUTILS_LOG_WARN_NAMED(
+          RCUTILS_LOG_DEBUG_NAMED(
             "rmw_cyclonedds_cpp",
             "Failed to parse type hash for topic '%s' with type '%s' from USER_DATA '%*s'.",
             s->topic_name, s->type_name,
