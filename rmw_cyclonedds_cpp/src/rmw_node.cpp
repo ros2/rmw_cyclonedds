@@ -362,6 +362,9 @@ struct CddsSubscription : CddsEntity
   rmw_gid_t gid;
   dds_entity_t rdcondh;
   rosidl_message_type_support_t type_supports;
+  // set only for client/service readers (rmw_init_cs): fini's and re-inits a
+  // taken message so the take loop can skip foreign replies without leaking
+  std::function<void(void *)> refini_message;
 #if CDDS_VERSION == CDDS_VERSION_0_10
   dds_data_allocator_t data_allocator;
 #endif
@@ -4739,26 +4742,27 @@ static const std::string csid_to_string(const client_service_id_t & id)
   return os.str();
 }
 
-static void refini_message(
-  const rosidl_message_type_support_t * type_supports, void * message)
+static std::function<void(void *)> make_refini_message(
+  const rosidl_message_type_support_t * type_supports)
 {
-  const rosidl_message_type_support_t * ts;
-  if ((ts =
-    get_message_typesupport_handle(
-      type_supports, rosidl_typesupport_introspection_cpp::typesupport_identifier)) != nullptr)
-  {
-    auto members =
-      static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(ts->data);
-    members->fini_function(message);
-    members->init_function(message, rosidl_runtime_cpp::MessageInitialization::ALL);
-  } else if ((ts = // NOLINT
-    get_message_typesupport_handle(
-      type_supports, rosidl_typesupport_introspection_c__identifier)) != nullptr)
-  {
+  const rosidl_message_type_support_t * ts = get_typesupport(type_supports);
+  if (ts == nullptr) {
+    return nullptr;
+  }
+  if (strcmp(ts->typesupport_identifier, rosidl_typesupport_introspection_c__identifier) == 0) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(ts->data);
-    members->fini_function(message);
-    members->init_function(message, ROSIDL_RUNTIME_C_MSG_INIT_ALL);
+    return [members](void * message) {
+        members->fini_function(message);
+        members->init_function(message, ROSIDL_RUNTIME_C_MSG_INIT_ALL);
+      };
+  } else {
+    auto members =
+      static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(ts->data);
+    return [members](void * message) {
+        members->fini_function(message);
+        members->init_function(message, rosidl_runtime_cpp::MessageInitialization::ALL);
+      };
   }
 }
 
@@ -4798,7 +4802,7 @@ static rmw_ret_t rmw_take_response_request(
         *taken = true;
         return RMW_RET_OK;
       }
-      refini_message(&cs->sub->type_supports, ros_data);
+      cs->sub->refini_message(ros_data);
     }
   }
   *taken = false;
@@ -5144,6 +5148,13 @@ static rmw_ret_t rmw_init_cs(
 
   auto pub = std::make_unique<CddsPublisher>();
   auto sub = std::make_unique<CddsSubscription>();
+  // the reader takes requests for a service, responses for a client; resolve
+  // its refini closure up front, while failing needs no cleanup yet
+  sub->refini_message = make_refini_message(
+    is_service ? type_supports->request_typesupport : type_supports->response_typesupport);
+  if (!sub->refini_message) {
+    return RMW_RET_ERROR;
+  }
   std::string subtopic_name, pubtopic_name;
   dds_qos_t * pub_qos, * sub_qos;
   const rosidl_type_hash_t * pub_type_hash;
@@ -5164,7 +5175,6 @@ static rmw_ret_t rmw_init_cs(
 
     sub_type_hash = type_supports->request_typesupport->get_type_hash_func(
       type_supports->request_typesupport);
-    sub->type_supports = *type_supports->request_typesupport;
     pub_type_hash = type_supports->response_typesupport->get_type_hash_func(
       type_supports->response_typesupport);
     subtopic_name =
@@ -5193,7 +5203,6 @@ static rmw_ret_t rmw_init_cs(
       type_supports->request_typesupport);
     sub_type_hash = type_supports->response_typesupport->get_type_hash_func(
       type_supports->response_typesupport);
-    sub->type_supports = *type_supports->response_typesupport;
     pubtopic_name =
       make_fqtopic(ROS_SERVICE_REQUESTER_PREFIX, service_name, "Request", qos_policies);
     subtopic_name = make_fqtopic(ROS_SERVICE_RESPONSE_PREFIX, service_name, "Reply", qos_policies);
