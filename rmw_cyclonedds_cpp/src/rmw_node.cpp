@@ -14,7 +14,9 @@
 
 #include <cassert>
 #include <cstring>
+#ifdef __linux__
 #include <fstream>
+#endif
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
@@ -1387,20 +1389,22 @@ rmw_context_impl_s::init(rmw_init_options_t * options, size_t domain_id)
     return RMW_RET_OK;
   }
 
+#ifdef __linux__
   {
     std::ifstream rmem_max_file("/proc/sys/net/core/rmem_max");
     if (rmem_max_file.is_open()) {
-      unsigned long rmem_max = 0;
+      size_t rmem_max = 0;
       rmem_max_file >> rmem_max;
       if (rmem_max < 8388608) {
         RCUTILS_LOG_WARN_NAMED(
           "rmw_cyclonedds_cpp",
-          "system rmem_max (%lu) is lower than the recommended minimum of 8388608. "
+          "system rmem_max (%zu) is lower than the recommended minimum of 8388608. "
           "Increase it: sudo sysctl -w net.core.rmem_max=8388608",
           rmem_max);
       }
     }
   }
+#endif
 
   /* Take domains_lock and hold it until after the participant creation succeeded or
     failed: otherwise there is a race with rmw_destroy_node deleting the last participant
