@@ -3301,7 +3301,7 @@ extern "C" rmw_ret_t rmw_destroy_subscription(rmw_node_t * node, rmw_subscriptio
   rmw_error_string_t error_string;
   auto common = &node->context->impl->common;
   const auto cddssub = static_cast<const CddsSubscription *>(subscription->data);
-  ret = common->remove_publisher_graph(
+  ret = common->remove_subscriber_graph(
     cddssub->gid,
     node->name, node->namespace_);
   if (RMW_RET_OK != ret) {
