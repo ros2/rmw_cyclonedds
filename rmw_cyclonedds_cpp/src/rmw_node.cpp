@@ -1391,18 +1391,23 @@ rmw_context_impl_s::init(rmw_init_options_t * options, size_t domain_id)
 
 #ifdef __linux__
   {
-    std::ifstream rmem_max_file("/proc/sys/net/core/rmem_max");
-    if (rmem_max_file.is_open()) {
-      size_t rmem_max = 0;
-      rmem_max_file >> rmem_max;
-      if (rmem_max < 8388608) {
-        RCUTILS_LOG_WARN_NAMED(
-          "rmw_cyclonedds_cpp",
-          "system rmem_max (%zu) is lower than the recommended minimum of 8388608. "
-          "Increase it: sudo sysctl -w net.core.rmem_max=8388608",
-          rmem_max);
-      }
-    }
+    // rmem_max is a system-wide setting, so warn only once per process
+    static std::once_flag rmem_max_warn_once;
+    std::call_once(
+      rmem_max_warn_once, []() {
+        std::ifstream rmem_max_file("/proc/sys/net/core/rmem_max");
+        if (rmem_max_file.is_open()) {
+          size_t rmem_max = 0;
+          rmem_max_file >> rmem_max;
+          if (rmem_max < 8388608) {
+            RCUTILS_LOG_WARN_NAMED(
+              "rmw_cyclonedds_cpp",
+              "system rmem_max (%zu) is lower than the recommended minimum of 8388608. "
+              "Increase it: sudo sysctl -w net.core.rmem_max=8388608",
+              rmem_max);
+          }
+        }
+      });
   }
 #endif
 
