@@ -2,6 +2,12 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.0.3 (2026-08-21)
+------------------
+* Downgrade 'Failed to parse type hash' log from WARN to DEBUG (`#591 <https://github.com/ros2/rmw_cyclonedds/issues/591>`_) (`#596 <https://github.com/ros2/rmw_cyclonedds/issues/596>`_)
+* improve MessageTypeSupport performance. (`#562 <https://github.com/ros2/rmw_cyclonedds/issues/562>`_) (`#569 <https://github.com/ros2/rmw_cyclonedds/issues/569>`_)
+* Contributors: mergify[bot]
+
 4.0.2 (2025-04-18)
 ------------------
 * Switch to ament_cmake_ros_core package (`#538 <https://github.com/ros2/rmw_cyclonedds/issues/538>`_)
