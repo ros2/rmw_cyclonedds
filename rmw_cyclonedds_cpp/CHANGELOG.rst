@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.3.5 (2026-08-21)
+------------------
+* improve MessageTypeSupport performance. (`#562 <https://github.com/ros2/rmw_cyclonedds/issues/562>`_) (`#571 <https://github.com/ros2/rmw_cyclonedds/issues/571>`_)
+* Contributors: mergify[bot]
+
 1.3.4 (2022-11-07)
 ------------------
 * Export CycloneDDS dependency (`#424 <https://github.com/ros2/rmw_cyclonedds/issues/424>`_) (`#425 <https://github.com/ros2/rmw_cyclonedds/issues/425>`_)
