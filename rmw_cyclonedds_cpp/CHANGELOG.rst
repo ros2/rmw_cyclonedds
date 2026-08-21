@@ -2,6 +2,16 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.2.1 (2026-08-21)
+------------------
+* print rmem warning per-process, and adjust the output filter. (`#602 <https://github.com/ros2/rmw_cyclonedds/issues/602>`_)
+* Warn when system net.core.rmem_max is too low for CycloneDDS (`#590 <https://github.com/ros2/rmw_cyclonedds/issues/590>`_)
+* Fix subscription graph cleanup on destruction (`#594 <https://github.com/ros2/rmw_cyclonedds/issues/594>`_)
+* Downgrade 'Failed to parse type hash' log from WARN to DEBUG (`#591 <https://github.com/ros2/rmw_cyclonedds/issues/591>`_)
+* use C++ 20 in default. (`#588 <https://github.com/ros2/rmw_cyclonedds/issues/588>`_)
+* Fix KEEP_ALL history handling in subscription callback (`#584 <https://github.com/ros2/rmw_cyclonedds/issues/584>`_)
+* Contributors: FAN YUCHEN, Tomoya Fujita, Tony Najjar, Yuchen Fan, ganla
+
 4.2.0 (2026-05-06)
 ------------------
 
