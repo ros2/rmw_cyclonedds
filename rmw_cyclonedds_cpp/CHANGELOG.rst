@@ -2,6 +2,12 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.1.5 (2026-08-21)
+------------------
+* Fix subscription graph cleanup on destruction (`#594 <https://github.com/ros2/rmw_cyclonedds/issues/594>`_) (`#598 <https://github.com/ros2/rmw_cyclonedds/issues/598>`_)
+* Downgrade 'Failed to parse type hash' log from WARN to DEBUG (`#591 <https://github.com/ros2/rmw_cyclonedds/issues/591>`_) (`#595 <https://github.com/ros2/rmw_cyclonedds/issues/595>`_)
+* Contributors: mergify[bot]
+
 4.1.4 (2026-04-14)
 ------------------
 
