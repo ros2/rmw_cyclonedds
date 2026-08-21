@@ -13,6 +13,7 @@
 // limitations under the License.
 #include "serdata.hpp"
 
+#include <cstddef>
 #include <cstring>
 #include <memory>
 #include <regex>
@@ -24,11 +25,35 @@
 #include "Serialization.hpp"
 #include "TypeSupport2.hpp"
 #include "bytewise.hpp"
+#include "dds/ddsi/ddsi_guid.h"
+#if __has_include("dds/ddsi/ddsi_protocol.h")
+#include "dds/ddsi/ddsi_protocol.h"
+#define RMW_CYCLONEDDS_HAS_DDSI_PROTOCOL_NAMES 1
+#else
+#include "dds/ddsi/q_protocol.h"
+#define RMW_CYCLONEDDS_HAS_DDSI_PROTOCOL_NAMES 0
+#endif
+#if __has_include("dds/ddsi/ddsi_radmin.h")
+#include "dds/ddsi/ddsi_radmin.h"
+#else
 #include "dds/ddsi/q_radmin.h"
+#endif
 #include "rmw/error_handling.h"
 #include "MessageTypeSupport.hpp"
 #include "ServiceTypeSupport.hpp"
 #include "serdes.hpp"
+
+#if !RMW_CYCLONEDDS_HAS_DDSI_PROTOCOL_NAMES
+#define ddsi_rtps_submessage_header_t SubmessageHeader_t
+#define ddsi_rdata nn_rdata
+#define DDSI_RDATA_SUBMSG_OFF NN_RDATA_SUBMSG_OFF
+#define DDSI_RDATA_PAYLOAD_OFF NN_RDATA_PAYLOAD_OFF
+#define DDSI_RMSG_PAYLOADOFF NN_RMSG_PAYLOADOFF
+#define DDSI_RTPS_SUBMESSAGE_FLAG_ENDIANNESS SMFLAG_ENDIANNESS
+#define DDSI_RTPS_SMID_DATA SMID_DATA
+#define DDSI_RTPS_SMID_DATA_FRAG SMID_DATA_FRAG
+#define DDSI_RTPS_CDR_LE CDR_LE
+#endif
 
 using TypeSupport_c =
   rmw_cyclonedds_cpp::TypeSupport<rosidl_typesupport_introspection_c__MessageMembers>;
@@ -50,6 +75,191 @@ using ResponseTypeSupport_c = rmw_cyclonedds_cpp::ResponseTypeSupport<
 using ResponseTypeSupport_cpp = rmw_cyclonedds_cpp::ResponseTypeSupport<
   rosidl_typesupport_introspection_cpp::ServiceMembers,
   rosidl_typesupport_introspection_cpp::MessageMembers>;
+
+static constexpr uint16_t PID_SENTINEL_RTPS = 0x0001u;
+static constexpr uint16_t PID_RELATED_SAMPLE_IDENTITY_RTPS = 0x0083u;
+static constexpr uint16_t PID_CUSTOM_RELATED_SAMPLE_IDENTITY_RTPS = 0x800fu;
+static constexpr uint16_t SAMPLE_IDENTITY_PARAMETER_LENGTH = 24u;
+static constexpr uint8_t RTPS_INLINE_QOS_FLAG = 0x02u;
+
+struct rtps_parameter_header_t
+{
+  uint16_t parameter_id;
+  uint16_t length;
+};
+
+struct rtps_sequence_number_t
+{
+  int32_t high;
+  uint32_t low;
+};
+
+struct rtps_data_datafrag_common_t
+{
+  ddsi_rtps_submessage_header_t smhdr;
+  uint16_t extraFlags;
+  uint16_t octetsToInlineQos;
+  ddsi_entityid_t readerId;
+  ddsi_entityid_t writerId;
+  rtps_sequence_number_t writerSN;
+};
+
+static uint16_t read_u16_rtps(const unsigned char * data, bool little_endian)
+{
+  if (little_endian) {
+    return static_cast<uint16_t>(data[0]) |
+           (static_cast<uint16_t>(data[1]) << 8);
+  }
+  return (static_cast<uint16_t>(data[0]) << 8) |
+         static_cast<uint16_t>(data[1]);
+}
+
+static uint32_t read_u32_rtps(const unsigned char * data, bool little_endian)
+{
+  if (little_endian) {
+    return static_cast<uint32_t>(data[0]) |
+           (static_cast<uint32_t>(data[1]) << 8) |
+           (static_cast<uint32_t>(data[2]) << 16) |
+           (static_cast<uint32_t>(data[3]) << 24);
+  }
+  return (static_cast<uint32_t>(data[0]) << 24) |
+         (static_cast<uint32_t>(data[1]) << 16) |
+         (static_cast<uint32_t>(data[2]) << 8) |
+         static_cast<uint32_t>(data[3]);
+}
+
+static int32_t read_i32_rtps(const unsigned char * data, bool little_endian)
+{
+  return static_cast<int32_t>(read_u32_rtps(data, little_endian));
+}
+
+static void parse_sample_sequence_number_from_submessage(
+  serdata_rmw * d,
+  const struct ddsi_rdata * fragchain)
+{
+  if (fragchain == nullptr || fragchain->rmsg == nullptr) {
+    return;
+  }
+
+  const size_t submessage_offset = DDSI_RDATA_SUBMSG_OFF(fragchain);
+  const size_t payload_offset = DDSI_RDATA_PAYLOAD_OFF(fragchain);
+  if (submessage_offset >= payload_offset) {
+    return;
+  }
+
+  const auto * submessage = DDSI_RMSG_PAYLOADOFF(fragchain->rmsg, submessage_offset);
+  const auto * common = reinterpret_cast<const rtps_data_datafrag_common_t *>(submessage);
+  const bool little_endian =
+    (common->smhdr.flags & DDSI_RTPS_SUBMESSAGE_FLAG_ENDIANNESS) != 0;
+
+  switch (common->smhdr.submessageId) {
+    case DDSI_RTPS_SMID_DATA:
+    case DDSI_RTPS_SMID_DATA_FRAG:
+      break;
+    default:
+      return;
+  }
+
+  const auto * writer_sn = reinterpret_cast<const unsigned char *>(&common->writerSN);
+  const int32_t seq_high = read_i32_rtps(writer_sn, little_endian);
+  const uint32_t seq_low = read_u32_rtps(writer_sn + sizeof(seq_high), little_endian);
+  d->sample_sequence_number =
+    (static_cast<int64_t>(seq_high) << 32) | seq_low;
+  d->has_sample_sequence_number = true;
+}
+
+static void parse_related_sample_identity_from_inline_qos(
+  serdata_rmw * d,
+  const struct ddsi_rdata * fragchain)
+{
+  if (fragchain == nullptr || fragchain->rmsg == nullptr) {
+    return;
+  }
+
+  const size_t submessage_offset = DDSI_RDATA_SUBMSG_OFF(fragchain);
+  const size_t payload_offset = DDSI_RDATA_PAYLOAD_OFF(fragchain);
+  if (submessage_offset >= payload_offset) {
+    return;
+  }
+
+  const auto * submessage = DDSI_RMSG_PAYLOADOFF(fragchain->rmsg, submessage_offset);
+  const auto * common = reinterpret_cast<const rtps_data_datafrag_common_t *>(submessage);
+  const bool little_endian =
+    (common->smhdr.flags & DDSI_RTPS_SUBMESSAGE_FLAG_ENDIANNESS) != 0;
+
+  uint8_t inline_qos_flag = 0;
+  switch (common->smhdr.submessageId) {
+    case DDSI_RTPS_SMID_DATA:
+      inline_qos_flag = RTPS_INLINE_QOS_FLAG;
+      break;
+    case DDSI_RTPS_SMID_DATA_FRAG:
+      inline_qos_flag = RTPS_INLINE_QOS_FLAG;
+      break;
+    default:
+      return;
+  }
+
+  if ((common->smhdr.flags & inline_qos_flag) == 0) {
+    return;
+  }
+
+  const auto * octets_to_inline_qos_ptr =
+    reinterpret_cast<const unsigned char *>(&common->octetsToInlineQos);
+  const uint16_t octets_to_inline_qos =
+    read_u16_rtps(octets_to_inline_qos_ptr, little_endian);
+  const size_t inline_qos_offset =
+    submessage_offset +
+    offsetof(rtps_data_datafrag_common_t, octetsToInlineQos) +
+    sizeof(common->octetsToInlineQos) +
+    octets_to_inline_qos;
+  if (inline_qos_offset >= payload_offset) {
+    return;
+  }
+
+  const auto * cursor = DDSI_RMSG_PAYLOADOFF(fragchain->rmsg, inline_qos_offset);
+  const auto * end = DDSI_RMSG_PAYLOADOFF(fragchain->rmsg, payload_offset);
+  while (cursor + sizeof(rtps_parameter_header_t) <= end) {
+    const uint16_t parameter_id = read_u16_rtps(cursor, little_endian);
+    const uint16_t parameter_length =
+      read_u16_rtps(cursor + sizeof(uint16_t), little_endian);
+    cursor += sizeof(rtps_parameter_header_t);
+
+    if (parameter_id == PID_SENTINEL_RTPS) {
+      return;
+    }
+    if (cursor + parameter_length > end) {
+      return;
+    }
+
+    const bool is_standard_related_sample_identity =
+      parameter_id == PID_RELATED_SAMPLE_IDENTITY_RTPS;
+    const bool is_custom_related_sample_identity =
+      parameter_id == PID_CUSTOM_RELATED_SAMPLE_IDENTITY_RTPS;
+    if (
+      (is_standard_related_sample_identity || is_custom_related_sample_identity) &&
+      parameter_length >= SAMPLE_IDENTITY_PARAMETER_LENGTH &&
+      (!d->has_related_sample_identity || is_standard_related_sample_identity))
+    {
+      std::memcpy(
+        d->related_sample_identity.writer_guid,
+        cursor,
+        sizeof(d->related_sample_identity.writer_guid));
+      const int32_t seq_high = read_i32_rtps(
+        cursor + sizeof(d->related_sample_identity.writer_guid), little_endian);
+      const uint32_t seq_low = read_u32_rtps(
+        cursor + sizeof(d->related_sample_identity.writer_guid) + sizeof(seq_high),
+        little_endian);
+      d->related_sample_identity.seq =
+        (static_cast<int64_t>(seq_high) << 32) | seq_low;
+      d->has_related_sample_identity = true;
+      if (is_standard_related_sample_identity) {
+        return;
+      }
+    }
+
+    cursor += parameter_length;
+  }
+}
 
 static bool using_introspection_c_typesupport(const char * typesupport_identifier)
 {
@@ -185,10 +395,12 @@ static void serdata_rmw_free(struct ddsi_serdata * dcmn)
 static struct ddsi_serdata * serdata_rmw_from_ser(
   const struct ddsi_sertype * type,
   enum ddsi_serdata_kind kind,
-  const struct nn_rdata * fragchain, size_t size)
+  const struct ddsi_rdata * fragchain, size_t size)
 {
   try {
     auto d = std::make_unique<serdata_rmw>(type, kind);
+    parse_sample_sequence_number_from_submessage(d.get(), fragchain);
+    parse_related_sample_identity_from_inline_qos(d.get(), fragchain);
     uint32_t off = 0;
     assert(fragchain->min == 0);
     assert(fragchain->maxp1 >= off);    /* CDR header must be in first fragment */
@@ -199,7 +411,7 @@ static struct ddsi_serdata * serdata_rmw_from_ser(
       if (fragchain->maxp1 > off) {
         /* only copy if this fragment adds data */
         const unsigned char * payload =
-          NN_RMSG_PAYLOADOFF(fragchain->rmsg, NN_RDATA_PAYLOAD_OFF(fragchain));
+          DDSI_RMSG_PAYLOADOFF(fragchain->rmsg, DDSI_RDATA_PAYLOAD_OFF(fragchain));
         auto src = payload + off - fragchain->min;
         auto n_bytes = fragchain->maxp1 - off;
         memcpy(cursor, src, n_bytes);
@@ -475,6 +687,40 @@ static void serdata_rmw_get_keyhash(
   memset(buf, 0, sizeof(*buf));
 }
 
+#ifdef DDSI_SERDATA_HAS_GET_RELATED_SAMPLE_IDENTITY
+static bool serdata_rmw_get_related_sample_identity(
+  const struct ddsi_serdata * dcmn,
+  ddsi_guid_t * writer_guid,
+  ddsi_seqno_t * seq)
+{
+  auto d = static_cast<const serdata_rmw *>(dcmn);
+  if (!d->has_related_sample_identity) {
+    return false;
+  }
+  std::memcpy(writer_guid, d->related_sample_identity.writer_guid, sizeof(*writer_guid));
+  *seq = static_cast<ddsi_seqno_t>(d->related_sample_identity.seq);
+  return true;
+}
+#endif
+
+/*
+ * Keep the older Humble-era SHM tail intact, but append the related sample
+ * identity getter when building against companion CycloneDDS headers that
+ * advertise DDSI_SERDATA_HAS_GET_RELATED_SAMPLE_IDENTITY.
+ */
+#ifdef DDSI_SERDATA_HAS_GET_RELATED_SAMPLE_IDENTITY
+#define SERDATA_RMW_OPS_TAIL \
+  , nullptr, \
+  nullptr, \
+  serdata_rmw_get_related_sample_identity
+#elif defined(DDS_HAS_SHM)
+#define SERDATA_RMW_OPS_TAIL \
+  , ddsi_serdata_iox_size, \
+  serdata_rmw_from_iox
+#else
+#define SERDATA_RMW_OPS_TAIL
+#endif
+
 static const struct ddsi_serdata_ops serdata_rmw_ops = {
   serdata_rmw_eqkey,
   serdata_rmw_size,
@@ -491,11 +737,10 @@ static const struct ddsi_serdata_ops serdata_rmw_ops = {
   serdata_rmw_free,
   serdata_rmw_print,
   serdata_rmw_get_keyhash
-#ifdef DDS_HAS_SHM
-  , ddsi_serdata_iox_size,
-  serdata_rmw_from_iox
-#endif  // DDS_HAS_SHM
+  SERDATA_RMW_OPS_TAIL
 };
+
+#undef SERDATA_RMW_OPS_TAIL
 
 static void sertype_rmw_free(struct ddsi_sertype * tpcmn)
 {
@@ -628,6 +873,39 @@ bool sertype_serialize_into(
   return true;
 }
 
+#ifdef RMW_CYCLONEDDS_HAS_DDSI_SERTYPE_V2_OPS
+static dds_return_t sertype_get_serialized_size_v2(
+  const struct ddsi_sertype * d,
+  enum ddsi_serdata_kind sdkind,
+  const void * sample,
+  size_t * size,
+  uint16_t * enc_identifier)
+{
+  if (sdkind != SDK_DATA) {
+    return DDS_RETCODE_BAD_PARAMETER;
+  }
+  if (size == nullptr || enc_identifier == nullptr) {
+    return DDS_RETCODE_BAD_PARAMETER;
+  }
+  *size = sertype_get_serialized_size(d, sample);
+  *enc_identifier = static_cast<uint16_t>(DDSI_RTPS_CDR_LE);
+  return rcutils_error_is_set() ? DDS_RETCODE_ERROR : DDS_RETCODE_OK;
+}
+
+static bool sertype_serialize_into_v2(
+  const struct ddsi_sertype * d,
+  enum ddsi_serdata_kind sdkind,
+  const void * sample,
+  void * dst_buffer,
+  size_t dst_size)
+{
+  if (sdkind != SDK_DATA) {
+    return false;
+  }
+  return sertype_serialize_into(d, sample, dst_buffer, dst_size);
+}
+#endif
+
 static const struct ddsi_sertype_ops sertype_rmw_ops = {
 #if DDS_HAS_DDSI_SERTYPE
   ddsi_sertype_v0,
@@ -645,8 +923,13 @@ static const struct ddsi_sertype_ops sertype_rmw_ops = {
   nullptr,
   nullptr,
   nullptr,
+#ifdef RMW_CYCLONEDDS_HAS_DDSI_SERTYPE_V2_OPS
+  sertype_get_serialized_size_v2,
+  sertype_serialize_into_v2
+#else
   sertype_get_serialized_size,
   sertype_serialize_into
+#endif
 #endif
 };
 
