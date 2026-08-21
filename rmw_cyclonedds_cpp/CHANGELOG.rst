@@ -2,6 +2,13 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+2.2.4 (2026-08-21)
+------------------
+* Downgrade 'Failed to parse type hash' log from WARN to DEBUG (`#591 <https://github.com/ros2/rmw_cyclonedds/issues/591>`_) (`#597 <https://github.com/ros2/rmw_cyclonedds/issues/597>`_)
+* improve MessageTypeSupport performance. (`#562 <https://github.com/ros2/rmw_cyclonedds/issues/562>`_) (`#570 <https://github.com/ros2/rmw_cyclonedds/issues/570>`_)
+* Performance improvements in serialization (`#553 <https://github.com/ros2/rmw_cyclonedds/issues/553>`_) (`#554 <https://github.com/ros2/rmw_cyclonedds/issues/554>`_)
+* Contributors: mergify[bot]
+
 2.2.3 (2025-03-12)
 ------------------
 * Added rmw_event_type_is_supported (`#532 <https://github.com/ros2/rmw_cyclonedds/issues/532>`_) (`#534 <https://github.com/ros2/rmw_cyclonedds/issues/534>`_)
