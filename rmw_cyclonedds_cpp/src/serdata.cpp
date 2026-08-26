@@ -406,12 +406,24 @@ static struct ddsi_serdata * serdata_rmw_from_psmx(
       assert(0);
       break;
     case DDS_LOANED_SAMPLE_STATE_SERIALIZED_KEY:
-    case DDS_LOANED_SAMPLE_STATE_SERIALIZED_DATA:
-      // for simplicity we copy the serialized data into the heap so we can rely on
-      // existing code for making a serdata_rmw
-      return serdata_rmw_from_serialized_message(
-        typecmn, kind, loaned_sample->sample_ptr,
-        md->sample_size);
+    case DDS_LOANED_SAMPLE_STATE_SERIALIZED_DATA: {
+      // The PSMX loan holds the CDR payload *without* the 4-byte encapsulation header;
+      // the header is conveyed out-of-band in md->cdr_identifier + md->cdr_options (see
+      // sertype_serialize_into and serdata_default_from_psmx).  Rebuild the full CDR blob
+      // (header followed by payload) so the rest of serdata_rmw, which expects a complete
+      // CDR, works unchanged.
+      unsigned char hdr[4];
+      std::memcpy(hdr, &md->cdr_identifier, sizeof(md->cdr_identifier));
+      std::memcpy(
+        hdr + sizeof(md->cdr_identifier), &md->cdr_options, sizeof(md->cdr_options));
+      ddsrt_iovec_t iov[2];
+      iov[0].iov_base = hdr;
+      iov[0].iov_len = sizeof(hdr);
+      iov[1].iov_base = loaned_sample->sample_ptr;
+      iov[1].iov_len = static_cast<ddsrt_iov_len_t>(md->sample_size);
+      return serdata_rmw_from_ser_iov(
+        typecmn, kind, 2, iov, sizeof(hdr) + md->sample_size);
+    }
     case DDS_LOANED_SAMPLE_STATE_RAW_KEY:
     case DDS_LOANED_SAMPLE_STATE_RAW_DATA:
       try {
@@ -717,6 +729,7 @@ static size_t sertype_get_serialized_size_impl(const struct ddsi_sertype * d, co
   return serialized_size;
 }
 
+#if CDDS_VERSION == CDDS_VERSION_0_10
 static bool sertype_serialize_into_impl(
   const struct ddsi_sertype * d,
   const void * sample,
@@ -731,7 +744,7 @@ static bool sertype_serialize_into_impl(
   return true;
 }
 
-#if CDDS_VERSION == CDDS_VERSION_0_10
+
 size_t sertype_get_serialized_size(const struct ddsi_sertype * d, const void * sample)
 {
   return sertype_get_serialized_size_impl(d, sample);
@@ -773,8 +786,23 @@ bool sertype_serialize_into(
   size_t dst_size)
 {
   static_cast<void>(sdkind);
-  static_cast<void>(dst_size);
-  return sertype_serialize_into_impl(d, sample, dst_buffer);
+  // cdr_writer->serialize() emits a complete CDR blob: a 4-byte encapsulation header
+  // followed by the payload.  The PSMX loan, however, holds the payload only -- the
+  // encapsulation is carried out-of-band (md->cdr_identifier/md->cdr_options) and
+  // sertype_get_serialized_size() already reported the size excluding those 4 bytes
+  // (dst_size).  Serialize into a temporary full-size buffer and copy just the payload,
+  // so we neither overrun the loan nor ship a stray header.  This mirrors the reader in
+  // serdata_rmw_from_psmx and matches serdata_default's payload-only loan convention.
+  auto type = static_cast<const struct sertype_rmw *>(d);
+  try {
+    std::vector<unsigned char> tmp(dst_size + 4);
+    type->cdr_writer->serialize(tmp.data(), sample, rmw_cyclonedds_cpp::SampleOrKey::Sample);
+    std::memcpy(dst_buffer, tmp.data() + 4, dst_size);
+  } catch (std::exception & e) {
+    RMW_SET_ERROR_MSG(e.what());
+    return false;
+  }
+  return true;
 }
 #endif
 
@@ -861,7 +889,13 @@ struct sertype_rmw * create_sertype(
 #if CDDS_VERSION > CDDS_VERSION_0_10
   const uint32_t flags = 0;
   dds_data_type_properties_t props = 0;
-  if (is_self_contained) {
+  // is_self_contained reflects the *payload* type, but service request/reply samples are
+  // transported as a cdds_request_wrapper_t { cdds_request_header_t header; void * data; }.
+  // That wrapper holds a raw pointer, so the sample is NOT memcpy-safe for transport even when
+  // the payload is: marking it memcpy-safe puts it on the iceoryx RAW zero-copy loan path, which
+  // ships the pointer through shared memory and crashes the taker (SIGSEGV / garbage request id).
+  // Keep request/reply types off the RAW path so they use the serialized loan path instead.
+  if (is_self_contained && !is_request_header) {
     props |= DDS_DATA_TYPE_IS_MEMCPY_SAFE;
   }
   if (is_keyed_type) {
