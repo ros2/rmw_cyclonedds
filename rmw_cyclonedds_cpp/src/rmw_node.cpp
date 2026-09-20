@@ -2787,12 +2787,12 @@ extern "C" rmw_ret_t rmw_publisher_count_matched_subscriptions(
   RMW_CHECK_ARGUMENT_FOR_NULL(subscription_count, RMW_RET_INVALID_ARGUMENT);
 
   auto pub = static_cast<CddsPublisher *>(publisher->data);
-  dds_publication_matched_status_t status;
-  if (dds_get_publication_matched_status(pub->enth, &status) < 0) {
+  const dds_return_t count = dds_get_matched_subscriptions(pub->enth, nullptr, 0);
+  if (count < 0) {
     return RMW_RET_ERROR;
   }
 
-  *subscription_count = status.current_count;
+  *subscription_count = static_cast<size_t>(count);
   return RMW_RET_OK;
 }
 
@@ -3237,12 +3237,12 @@ extern "C" rmw_ret_t rmw_subscription_count_matched_publishers(
   RMW_CHECK_ARGUMENT_FOR_NULL(publisher_count, RMW_RET_INVALID_ARGUMENT);
 
   auto sub = static_cast<CddsSubscription *>(subscription->data);
-  dds_subscription_matched_status_t status;
-  if (dds_get_subscription_matched_status(sub->enth, &status) < 0) {
+  const dds_return_t count = dds_get_matched_publications(sub->enth, nullptr, 0);
+  if (count < 0) {
     return RMW_RET_ERROR;
   }
 
-  *publisher_count = status.current_count;
+  *publisher_count = static_cast<size_t>(count);
   return RMW_RET_OK;
 }
 
