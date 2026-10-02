@@ -104,7 +104,7 @@ std::string get_message_type_name(const rosidl_message_type_support_t * type_sup
     return get_message_type_name_impl(members);
   }
   RMW_SET_ERROR_MSG("Unknown typesupport identifier");
-  return nullptr;
+  return {};
 }
 
 std::string get_request_type_name(const rosidl_service_type_support_t * type_support)
@@ -119,7 +119,7 @@ std::string get_request_type_name(const rosidl_service_type_support_t * type_sup
     return get_request_type_name_impl(members);
   }
   RMW_SET_ERROR_MSG("Unknown typesupport identifier");
-  return nullptr;
+  return {};
 }
 
 std::string get_response_type_name(const rosidl_service_type_support_t * type_support)
@@ -134,5 +134,5 @@ std::string get_response_type_name(const rosidl_service_type_support_t * type_su
     return get_response_type_name_impl(members);
   }
   RMW_SET_ERROR_MSG("Unknown typesupport identifier");
-  return nullptr;
+  return {};
 }

@@ -2508,12 +2508,15 @@ static CddsPublisher * create_cdds_publisher(
   RET_NULL_X(qos_policies, return nullptr);
   const rosidl_message_type_support_t * type_support = get_typesupport(type_supports);
   RET_NULL_X(type_support, return nullptr);
+  const std::string type_name = get_message_type_name(type_support);
+  if (type_name.empty()) {
+    return nullptr;
+  }
   CddsPublisher * pub = new CddsPublisher();
   dds_entity_t topic;
   dds_qos_t * qos;
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
-  const std::string type_name = get_message_type_name(type_support);
   auto message_type_support = rmw_cyclonedds_cpp::make_message_value_type(type_supports);
   const bool is_self_contained = message_type_support->is_self_contained();
   const size_t sample_size = message_type_support->sizeof_type();
@@ -3007,12 +3010,15 @@ static CddsSubscription * create_cdds_subscription(
   RET_NULL_X(qos_policies, return nullptr);
   const rosidl_message_type_support_t * type_support = get_typesupport(type_supports);
   RET_NULL_X(type_support, return nullptr);
+  const std::string type_name = get_message_type_name(type_support);
+  if (type_name.empty()) {
+    return nullptr;
+  }
   CddsSubscription * sub = new CddsSubscription();
   dds_entity_t topic;
   dds_qos_t * qos;
 
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
-  const std::string type_name = get_message_type_name(type_support);
   auto message_type_support = rmw_cyclonedds_cpp::make_message_value_type(type_supports);
   bool is_self_contained = message_type_support->is_self_contained();
 
@@ -5139,7 +5145,13 @@ static rmw_ret_t rmw_init_cs(
   const rosidl_service_type_support_t * type_support = get_service_typesupport(type_supports);
   RET_NULL(type_support);
   const std::string request_type_name = get_request_type_name(type_support);
+  if (request_type_name.empty()) {
+    return RMW_RET_ERROR;
+  }
   const std::string response_type_name = get_response_type_name(type_support);
+  if (response_type_name.empty()) {
+    return RMW_RET_ERROR;
+  }
 
   auto pub = std::make_unique<CddsPublisher>();
   auto sub = std::make_unique<CddsSubscription>();
