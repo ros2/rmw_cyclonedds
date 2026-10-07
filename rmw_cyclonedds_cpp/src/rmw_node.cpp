@@ -13,15 +13,18 @@
 // limitations under the License.
 
 #include <cassert>
+#include <cstdlib>
 #include <cstring>
 #ifdef __linux__
 #include <fstream>
 #endif
 #include <mutex>
+#include <shared_mutex>
 #include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
 #include <chrono>
+#include <thread>
 #include <iomanip>
 #include <map>
 #include <set>
@@ -34,6 +37,8 @@
 #include <utility>
 #include <regex>
 #include <limits>
+#include <system_error>
+#include <exception>
 
 #include "rcutils/allocator.h"
 #include "rcutils/env.h"
@@ -66,6 +71,7 @@
 #include "rmw/impl/cpp/key_value.hpp"
 
 #include "TypeSupport2.hpp"
+#include "BufferEndpointDiscovery.hpp"
 
 #include "rmw_version_test.hpp"
 
@@ -82,6 +88,7 @@
 
 #include "rmw_security_common/security.hpp"
 
+#include "rosidl_buffer/buffer_impl_base.hpp"
 #include "rosidl_runtime_c/type_hash.h"
 
 #include "rosidl_typesupport_cpp/message_type_support.hpp"
@@ -155,7 +162,7 @@ static rmw_ret_t discovery_thread_stop(rmw_dds_common::Context & context);
 static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qos_policies);
 
 static rmw_publisher_t * create_publisher(
-  dds_entity_t dds_ppant, dds_entity_t dds_pub,
+  const rmw_node_t * node, dds_entity_t dds_ppant, dds_entity_t dds_pub,
   const rosidl_message_type_support_t * type_supports,
   const char * topic_name, const rmw_qos_profile_t * qos_policies,
   const rmw_publisher_options_t * publisher_options
@@ -163,7 +170,7 @@ static rmw_publisher_t * create_publisher(
 static rmw_ret_t destroy_publisher(rmw_publisher_t * publisher);
 
 static rmw_subscription_t * create_subscription(
-  dds_entity_t dds_ppant, dds_entity_t dds_pub,
+  const rmw_node_t * node, dds_entity_t dds_ppant, dds_entity_t dds_pub,
   const rosidl_message_type_support_t * type_supports,
   const char * topic_name, const rmw_qos_profile_t * qos_policies,
   const rmw_subscription_options_t * subscription_options
@@ -356,6 +363,57 @@ struct CddsPublisher : CddsEntity
   uint32_t sample_size;
   bool is_loaning_available;
   user_callback_data_t user_callback_data;
+  // Base (fully-qualified) topic name, kept around so a
+  // publication_matched callback -- fired long after
+  // create_cdds_publisher() returns -- can derive the private per-peer
+  // topic name the matching subscription side computes independently.
+  std::string base_topic_name;
+  rmw_cyclonedds_cpp::BufferEndpointDiscovery buffer_discovery;
+  // Set once at creation, so rmw_publish() -- the universal hot path,
+  // called for every publisher whether buffer-backed or not -- can skip
+  // buffer_discovery.mutex entirely for the common case instead of taking
+  // it just to find private_writers_or_readers empty. A publisher with this
+  // false never has the buffer-discovery on_publication_matched (below,
+  // create_cdds_publisher's `if (has_buffer_fields) dds_lset_publication_
+  // matched_arg(...)`) registered as a listener at all, so its map is
+  // provably always empty; this flag lets rmw_publish() know that without
+  // reading the map.
+  //
+  // on_publication_matched (buffer-discovery, gated on has_buffer_fields)
+  // and on_publication_matched_fn (generic, registered unconditionally by
+  // listener_set_event_callbacks()) are different functions, but that does
+  // NOT mean they cannot conflict: dds_lset_publication_matched_arg()
+  // replaces the listener's registration BY EVENT TYPE, not by function
+  // identity, so create_cdds_publisher()'s later, has_buffer_fields-gated
+  // call to it silently overwrites listener_set_event_callbacks()'s
+  // earlier one on the same listener, disabling the standard
+  // RMW_EVENT_PUBLICATION_MATCHED callback and unread-count bookkeeping
+  // for every buffer-backed publisher. Fixed at on_publication_matched()'s
+  // own definition: it calls on_publication_matched_fn() explicitly, so
+  // both behaviors run off the one slot instead of one silently losing
+  // the other.
+  bool has_buffer_fields {false};
+  // on_publication_matched() needs a rmw_node_t* to call
+  // build_endpoint_info_from_match(), which reaches the node's own
+  // rmw_dds_common::GraphCache -- nothing else on CddsPublisher carries
+  // that back-reference. Set once, in create_cdds_publisher(), before
+  // dds_create_writer() -- same ordering rule as base_topic_name above,
+  // since the matched callback can fire the instant the writer exists.
+  const rmw_node_t * node {nullptr};
+  // Built once here, at creation time, rather than rebuilt via
+  // make_message_value_type() on EVERY publish call for a buffer-backed
+  // publisher with an active peer -- a recursive introspection type-tree
+  // walk on the hot path has_buffer_fields exists specifically to keep
+  // cheap.
+  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> buffer_message_value_type;
+  // consume_buffer_descriptor() correlates a shared-topic message with its
+  // private-topic descriptor by exact dds_time_t equality. dds_time()'s
+  // finite resolution means two rapid rmw_publish() calls on the SAME
+  // publisher can legitimately return the identical value -- a collision
+  // lets a later message's descriptor be installed into an earlier
+  // message's buffer field. See rmw_publish()'s own comment on how this
+  // enforces strict per-publisher monotonicity to close it.
+  std::atomic<dds_time_t> last_buffer_tstamp {0};
 };
 
 struct CddsSubscription : CddsEntity
@@ -363,11 +421,37 @@ struct CddsSubscription : CddsEntity
   rmw_gid_t gid;
   dds_entity_t rdcondh;
   rosidl_message_type_support_t type_supports;
+  // The reader's own sertype, ref-counted by on_subscription_matched() to
+  // create a second topic of the same message type for a private, per-peer
+  // reader.
+  struct ddsi_sertype * sertype;
 #if CDDS_VERSION == CDDS_VERSION_0_10
   dds_data_allocator_t data_allocator;
 #endif
   bool is_loaning_available;
   user_callback_data_t user_callback_data;
+  // Mirrors CddsPublisher's own fields above.
+  std::string base_topic_name;
+  rmw_cyclonedds_cpp::BufferEndpointDiscovery buffer_discovery;
+  // Mirrors CddsPublisher::has_buffer_fields -- rmw_take()'s consumer of
+  // the private readers is the hot path here, called for every
+  // subscription whether buffer-backed or not. A subscription with this
+  // false never has the buffer-discovery on_subscription_matched
+  // registered as a listener at all (see create_cdds_subscription), so
+  // its map is provably always empty; this flag lets rmw_take() know that
+  // without touching buffer_discovery at all. See
+  // CddsPublisher::has_buffer_fields's own comment for the real conflict
+  // with listener_set_event_callbacks()'s registration and the fix at
+  // on_subscription_matched()'s own definition.
+  bool has_buffer_fields {false};
+  // Mirrors CddsPublisher::node -- on_subscription_matched() needs it
+  // for build_endpoint_info_from_match(), same reason as the publisher side.
+  const rmw_node_t * node {nullptr};
+  // Mirrors CddsPublisher::buffer_message_value_type -- built once
+  // here, at creation time, so rmw_take()'s install_first_buffer_impl()
+  // walk on every received sample never rebuilds the introspection type
+  // tree via make_message_value_type() on the hot path.
+  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> buffer_message_value_type;
 };
 
 struct client_service_id_t
@@ -869,6 +953,107 @@ static void get_entity_gid(dds_entity_t h, rmw_gid_t & gid)
   dds_guid_t guid;
   dds_get_guid(h, &guid);
   convert_guid_to_gid(guid, gid);
+}
+
+// Builds a rmw_topic_endpoint_info_t for a peer found via a
+// publication_matched/subscription_matched callback -- needed by
+// create_descriptor_with_endpoint()/from_descriptor_with_endpoint() calls,
+// neither of which this RMW has ever had a call site for before. There is
+// no existing "look up one entity's node identity by
+// GUID" entry point on rmw_dds_common::GraphCache; the public API this
+// RMW already calls elsewhere (rmw_get_publishers_info_by_topic()) is
+// per-topic instead, so this reuses exactly that: fetch every writer/
+// reader known for the peer's own topic, then pick out the one entry
+// whose endpoint_gid matches. `handle_builtintopic_endpoint()` above feeds
+// the graph cache from the identical `dds_builtintopic_endpoint_t::key`
+// via `convert_guid_to_gid()`, which is what makes the two sides
+// comparable.
+//
+// `peer_is_reader` names what the PEER is, not the caller -- a publisher's
+// on_publication_matched() has a peer that is a subscription (reader), so
+// it passes true; a subscriber's on_subscription_matched() has a peer
+// that is a publication (writer), so it passes false.
+static rmw_ret_t build_endpoint_info_from_match(
+  const rmw_node_t * node, const dds_builtintopic_endpoint_t * ep, bool peer_is_reader,
+  rmw_topic_endpoint_info_t * out)
+{
+  // `node` is null for the internal ros_discovery_info publisher
+  // (create_publisher(nullptr, ...) in rmw_context_impl_s::init()). That
+  // publisher's type (ParticipantEntitiesInfo) is never buffer-backed, so
+  // has_buffer_fields() is false and on_publication_matched() is never
+  // registered as its listener -- this callback cannot currently fire for
+  // it. Guarding anyway: that non-firing is an invariant of a different
+  // function, not something this one can see or enforce, and a future
+  // change to either one would otherwise turn an unreachable null into a
+  // crash with no local signal of why.
+  if (node == nullptr) {
+    RMW_SET_ERROR_MSG(
+      "build_endpoint_info_from_match: node is null (called for an "
+      "internal, non-buffer-backed publisher?)");
+    return RMW_RET_ERROR;
+  }
+  auto common_context = &node->context->impl->common;
+  rcutils_allocator_t allocator = rcutils_get_default_allocator();
+  rmw_topic_endpoint_info_array_t array = rmw_get_zero_initialized_topic_endpoint_info_array();
+  const std::string topic_name = ep->topic_name;
+  const rmw_ret_t lookup_ret = peer_is_reader ?
+    common_context->graph_cache.get_readers_info_by_topic(
+    topic_name, _demangle_if_ros_type, &allocator, &array) :
+    common_context->graph_cache.get_writers_info_by_topic(
+    topic_name, _demangle_if_ros_type, &allocator, &array);
+  if (RMW_RET_OK != lookup_ret) {
+    return lookup_ret;
+  }
+
+  rmw_gid_t peer_gid;
+  convert_guid_to_gid(ep->key, peer_gid);
+  const rmw_topic_endpoint_info_t * match = nullptr;
+  for (size_t i = 0; i < array.size; i++) {
+    if (0 == memcmp(array.info_array[i].endpoint_gid, peer_gid.data, RMW_GID_STORAGE_SIZE)) {
+      match = &array.info_array[i];
+      break;
+    }
+  }
+  if (match == nullptr) {
+    rmw_topic_endpoint_info_array_fini(&array, &allocator);
+    RMW_SET_ERROR_MSG(
+      "build_endpoint_info_from_match: matched peer's own GID not found in the graph "
+      "cache's per-topic listing -- discovery has not caught up yet");
+    return RMW_RET_ERROR;
+  }
+
+  rmw_ret_t ret;
+  if (RMW_RET_OK != (ret = rmw_topic_endpoint_info_set_node_name(
+      out, match->node_name, &allocator)) ||
+    RMW_RET_OK != (ret = rmw_topic_endpoint_info_set_node_namespace(
+      out, match->node_namespace, &allocator)) ||
+    RMW_RET_OK != (ret = rmw_topic_endpoint_info_set_topic_type(
+      out, match->topic_type, &allocator)) ||
+    RMW_RET_OK != (ret = rmw_topic_endpoint_info_set_topic_type_hash(
+      out, &match->topic_type_hash)) ||
+    RMW_RET_OK != (ret = rmw_topic_endpoint_info_set_endpoint_type(
+      out, peer_is_reader ? RMW_ENDPOINT_SUBSCRIPTION : RMW_ENDPOINT_PUBLISHER)) ||
+    RMW_RET_OK != (ret = rmw_topic_endpoint_info_set_gid(
+      out, peer_gid.data, RMW_GID_STORAGE_SIZE)) ||
+    RMW_RET_OK != (ret = rmw_topic_endpoint_info_set_qos_profile(out, &match->qos_profile)))
+  {
+    // `out` is NOT finalized here. Every current caller
+    // (on_publication_matched/on_subscription_matched's synchronous path
+    // and both background retry loops) unconditionally finalizes
+    // `out`/`retry_info` on ANY non-OK return, regardless of which failure
+    // branch produced it. Finalizing here too would double-free whatever
+    // the earlier successful set_* calls allocated. `out` is left
+    // populated (mid-chain state) for the caller to finalize instead, same
+    // as every other failure path in this function already leaves it.
+    rmw_topic_endpoint_info_array_fini(&array, &allocator);
+    return ret;
+  }
+
+  rmw_ret_t fini_ret = rmw_topic_endpoint_info_array_fini(&array, &allocator);
+  if (RMW_RET_OK != fini_ret) {
+    return fini_ret;
+  }
+  return RMW_RET_OK;
 }
 
 static std::map<std::string, std::vector<uint8_t>> parse_user_data(const dds_qos_t * qos)
@@ -1500,7 +1685,7 @@ rmw_context_impl_s::init(rmw_init_options_t * options, size_t domain_id)
     discovery */
   rmw_publisher_options_t publisher_options = rmw_get_default_publisher_options();
   this->common.pub = create_publisher(
-    this->ppant, this->dds_pub,
+    nullptr, this->ppant, this->dds_pub,
     rosidl_typesupport_cpp::get_message_type_support_handle<ParticipantEntitiesInfo>(),
     "ros_discovery_info",
     &pubsub_qos,
@@ -1521,7 +1706,7 @@ rmw_context_impl_s::init(rmw_init_options_t * options, size_t domain_id)
   // FIXME: keyed topics => KEEP_LAST and depth 1.
   pubsub_qos.history = RMW_QOS_POLICY_HISTORY_KEEP_ALL;
   this->common.sub = create_subscription(
-    this->ppant, this->dds_sub,
+    nullptr, this->ppant, this->dds_sub,
     rosidl_typesupport_cpp::get_message_type_support_handle<ParticipantEntitiesInfo>(),
     "ros_discovery_info",
     &pubsub_qos,
@@ -2050,14 +2235,230 @@ extern "C" rmw_ret_t rmw_publish(
     return RMW_RET_INVALID_ARGUMENT);
   auto pub = static_cast<CddsPublisher *>(publisher->data);
   assert(pub);
-  const dds_time_t tstamp = dds_time();
+  dds_time_t tstamp = dds_time();
+  // The timestamp-collision fix below must NOT be gated only on
+  // `pub->has_buffer_fields` -- that is true for any publisher whose
+  // MESSAGE TYPE merely contains a buffer-backed field, regardless of
+  // whether any peer has actually negotiated a non-CPU backend, and gating
+  // on it alone would make EVERY publish on a buffer-capable topic get its
+  // source_timestamp silently replaced by a synthetic counter and written
+  // to the ordinary SHARED topic -- visible to every subscriber of that
+  // topic, including ones with no buffer backend and no interest in the
+  // zero-copy path -- even when zero-copy is never used with any peer.
+  // Gated instead on the same condition the private-write block below
+  // already uses (a non-empty peer map), checked under the same
+  // shared_lock reused for that block, so the correlation mechanism only
+  // touches source_timestamp when there is actually something to
+  // correlate.
+  std::shared_lock<std::shared_mutex> buffer_lock;
+  bool has_negotiated_peer = false;
+  if (pub->has_buffer_fields) {
+    buffer_lock = std::shared_lock<std::shared_mutex>(pub->buffer_discovery.mutex);
+    has_negotiated_peer = !pub->buffer_discovery.private_writers_or_readers.empty();
+  }
+  // consume_buffer_descriptor() correlates a message with its
+  // private-topic descriptor by exact dds_time_t equality (both writes
+  // below share `tstamp`). dds_time()'s finite resolution means two rapid
+  // rmw_publish() calls on the SAME publisher can legitimately return the
+  // identical value; if the first one's private write is skipped
+  // (documented CPU-fallback) while the second's succeeds under the same
+  // timestamp, the exact-match lookup can install the second message's
+  // descriptor into the first's buffer field.
+  //
+  // The skew from true wall-clock time introduced by the counter below is
+  // NOT bounded to "at most one nanosecond per colliding call, never
+  // accumulating drift" in general -- that would be false if dds_time()
+  // ever REGRESSES below `prev` (an NTP step backward, clock resync, VM
+  // migration): every subsequent publish would take the `prev+1` branch
+  // forever, since real time must first count back up to the artificially
+  // -advanced counter, corrupting source_timestamp (seen by every
+  // subscriber, including DEADLINE/LIFESPAN/TIME_BASED_FILTER QoS
+  // consumers, not just the descriptor-matching one this exists for) for
+  // the rest of the publisher's lifetime. A same-nanosecond collision and
+  // a real clock regression are told apart by MAGNITUDE: a collision means
+  // `tstamp <= prev` by at most a handful of nanoseconds (both readings
+  // happen microseconds apart on the same call path); a real regression is
+  // orders of magnitude larger. Past this bound, trust the fresh reading
+  // over the counter instead of perpetuating the divergence -- accepting
+  // the same, bounded collision risk this mechanism exists to close, for
+  // the one call right after a genuine clock regression, rather than an
+  // unbounded one for every call after it.
+  if (has_negotiated_peer) {
+    static constexpr dds_time_t kMaxCollisionCatchupNs = 1'000'000LL;  // 1ms
+    dds_time_t prev = pub->last_buffer_tstamp.load(std::memory_order_relaxed);
+    dds_time_t candidate;
+    do {
+      if (tstamp > prev) {
+        candidate = tstamp;
+      } else if (prev - tstamp > kMaxCollisionCatchupNs) {
+        // A real clock regression, not a same-instant collision -- resync
+        // to the fresh reading rather than keep advancing the counter.
+        candidate = tstamp;
+      } else {
+        candidate = prev + 1;
+      }
+    } while (!pub->last_buffer_tstamp.compare_exchange_weak(
+        prev, candidate, std::memory_order_relaxed));
+    tstamp = candidate;
+  }
   TRACETOOLS_TRACEPOINT(rmw_publish, (const void *)publisher, ros_message, tstamp);
-  if (dds_write_ts(pub->enth, ros_message, tstamp) >= 0) {
-    return RMW_RET_OK;
-  } else {
+  if (dds_write_ts(pub->enth, ros_message, tstamp) < 0) {
     RMW_SET_ERROR_MSG("failed to publish data");
     return RMW_RET_ERROR;
   }
+
+  // Writes a descriptor object -- not the original message -- through
+  // each matched peer's private writer. This is the actual consumer of
+  // the discovery mechanism and endpoint-info helpers above; before this,
+  // on_publication_matched() created private writers that nothing ever
+  // wrote to.
+  //
+  // has_buffer_fields is checked BEFORE taking the mutex, not just before
+  // reading the map: this is the universal publish hot path, called for
+  // every publisher whether buffer-backed or not, and a publisher with this
+  // false can never have on_publication_matched registered as a listener at
+  // all (see create_cdds_publisher) -- its map is provably always empty, so
+  // there is nothing here for the lock to protect for it.
+  // A failed private write deliberately does NOT return RMW_RET_ERROR
+  // from this function: rclcpp/application callers treat a non-OK
+  // rmw_publish() return as "nothing was sent" and may resend -- but the
+  // shared-topic write above this comment already succeeded, so a resend
+  // after this error would be a DUPLICATE delivery to every shared-topic
+  // subscriber, not a retry of a failed send. That would invert the
+  // existing rmw_publish() contract rather than extend it, so a failed
+  // private write is logged only.
+  if (pub->has_buffer_fields) {
+    // A plain mutex held across this whole loop would serialize
+    // rmw_publish against on_publication_matched's own use of the same
+    // mutex (its cheap early duplicate-check gate) for as long as the
+    // backend calls below take; it must also tolerate
+    // destroy_publisher()/destroy_subscription(), which DO clear() this
+    // map. A shared_lock resolves both: compatible with the match
+    // callbacks' own read-only checks (also shared_lock -- see those call
+    // sites), but mutually exclusive with the callbacks' emplace() and
+    // destroy's clear() (both unique_lock) -- see
+    // BufferEndpointDiscovery.hpp's own comment on the mutex.
+    //
+    // Reuses buffer_lock (acquired above, before the timestamp-
+    // monotonicity block) instead of taking its own separate shared_lock
+    // here: both blocks read the identical map under the identical mutex,
+    // and has_negotiated_peer above is exactly this emptiness check,
+    // computed once under one lock rather than twice under two.
+    //
+    // consume_buffer_descriptor()'s matching shared_lock carries the same
+    // symmetric writer-starvation risk -- std::shared_mutex has no
+    // default writer-priority guarantee on Linux, and this lock is held
+    // across the identical backend-call loop below.
+    if (has_negotiated_peer) {
+      // create_cdds_publisher() builds the introspection type tree once
+      // and caches it on pub->buffer_message_value_type, rather than
+      // rebuilding it via make_message_value_type() on EVERY publish
+      // call.
+      //
+      // find_buffer_impl() returns only the FIRST buffer-backed field
+      // found (deliberate scope boundary -- see its own comment). Every
+      // peer below shares this one impl pointer.
+      const void * impl = rmw_cyclonedds_cpp::find_buffer_impl(
+        pub->buffer_message_value_type.get(), ros_message);
+      // `impl` is ONE concrete BufferImplBase<uint8_t> subtype --
+      // whatever the application actually constructed the message's
+      // buffer field with -- but each
+      // peer below may have negotiated a DIFFERENT backend TYPE NAME
+      // (common_backend_types is intersected per-peer in
+      // on_publication_matched, from RMW_CYCLONEDDS_CPP_BUFFER_BACKENDS'
+      // possibly-multi-name list). Passing impl to a peer whose backend
+      // does not match impl's own real type let a backend's
+      // create_descriptor_with_endpoint() static_cast impl to the WRONG
+      // concrete class with no runtime check -- exactly what the new test
+      // backend's own doc comment discloses as unsafe outside this test
+      // suite's own controlled traffic.
+      // This cast assumes the element type is uint8_t, and
+      // rosidl::BufferImplBase<T> is templated on arbitrary T, so a buffer
+      // field instantiated with a different element type would
+      // reinterpret the wrong template instantiation (UB) with no runtime
+      // tag to catch it. This is not reachable through any message
+      // rosidl's own generator can currently produce, not merely
+      // undemonstrated in this project's own message set.
+      // rosidl_generator_cpp's idl__struct.hpp.em (resource/
+      // idl__struct.hpp.em, the template that maps a .msg field's
+      // declared type to a C++ member type) comments its own rule
+      // explicitly: "unbounded uint8 sequences map to rosidl::Buffer" --
+      // singular, uint8 only. No other primitive sequence type is ever
+      // generated as a rosidl::Buffer<T> field by current tooling, so the
+      // T this cast assumes is the ONLY T the generator that produces
+      // these fields is capable of emitting. Genuinely scope-limited, the
+      // same way the single-buffer-field limitation above is: closing it
+      // for real would need a generator change upstream, at which point
+      // this cast would need a matching runtime element-size or type-id
+      // check before dispatching.
+      const rosidl::BufferImplBase<uint8_t> * typed_impl =
+        static_cast<const rosidl::BufferImplBase<uint8_t> *>(impl);
+      for (auto & entry : pub->buffer_discovery.private_writers_or_readers) {
+        if (impl == nullptr || !entry.second.backend) {
+          continue;
+        }
+        // get_backend_type() is NOT assumed non-throwing on either
+        // interface -- neither BufferBackend::get_backend_type() nor
+        // BufferImplBase<T>::get_backend_type() is declared noexcept.
+        // Guarded the same way every other virtual call into
+        // plugin/producer-supplied code on this extern "C" hot path
+        // already is: an exception is treated like a type mismatch (skip
+        // this peer, fall back to the shared write already delivered
+        // above).
+        bool backend_type_matches;
+        try {
+          backend_type_matches =
+            typed_impl->get_backend_type() == entry.second.backend->get_backend_type();
+        } catch (const std::exception & e) {
+          RCUTILS_LOG_ERROR_NAMED(
+            "rmw_cyclonedds_cpp", "rmw_publish: get_backend_type threw: %s", e.what());
+          continue;
+        }
+        if (!backend_type_matches) {
+          continue;
+        }
+        // A backend legitimately returning nullptr here ("the peer does not
+        // support this backend", its own doc comment) is not an error -- it
+        // is the documented signal to fall back to the ordinary CPU path,
+        // which the shared writer above already delivered to this peer.
+        //
+        // A per-peer mutex on entry.second alone would NOT actually
+        // serialize concurrent callers of this backend -- pluginlib caches
+        // backend instances by class name, so two different peers
+        // negotiating the same backend TYPE share the identical
+        // rosidl::BufferBackend object underneath two different
+        // PrivateEndpoint entries, each with its own mutex. The lock that
+        // actually matters is keyed by backend TYPE, not by peer -- see
+        // backend_instance_mutex()'s own comment in BufferEndpointDiscovery.
+        // create_descriptor_with_endpoint() is vendor/plugin code
+        // (rosidl::BufferBackend, loaded via pluginlib) with no noexcept
+        // guarantee, called here from rmw_publish -- an extern "C" API
+        // boundary, and a hot one. An exception is treated exactly like
+        // the documented nullptr return: fall back to the ordinary CPU
+        // path for this peer.
+        std::shared_ptr<void> descriptor;
+        try {
+          std::lock_guard<std::mutex> backend_lock(
+            rmw_cyclonedds_cpp::backend_instance_mutex(entry.second.backend->get_backend_type()));
+          descriptor = entry.second.backend->create_descriptor_with_endpoint(
+            impl, entry.second.endpoint_info);
+        } catch (const std::exception & e) {
+          RCUTILS_LOG_ERROR_NAMED(
+            "rmw_cyclonedds_cpp", "rmw_publish: create_descriptor_with_endpoint threw: %s",
+            e.what());
+          continue;
+        }
+        if (!descriptor) {
+          continue;
+        }
+        if (dds_write_ts(entry.second.entity, descriptor.get(), tstamp) < 0) {
+          RCUTILS_LOG_ERROR_NAMED(
+            "rmw_cyclonedds_cpp", "rmw_publish: failed to write descriptor to private writer");
+        }
+      }
+    }
+  }
+  return RMW_RET_OK;
 }
 
 extern "C" rmw_ret_t rmw_publish_serialized_message(
@@ -2241,7 +2642,8 @@ static dds_qos_t * create_readwrite_qos(
   const rmw_qos_profile_t * qos_policies,
   const rosidl_type_hash_t & type_hash,
   bool ignore_local_publications,
-  const std::string & extra_user_data)
+  const std::string & extra_user_data,
+  bool has_buffer_fields = false)
 {
   dds_duration_t ldur;
   dds_qos_t * qos = dds_create_qos();
@@ -2341,6 +2743,61 @@ static dds_qos_t * create_readwrite_qos(
     rmw_reset_error();
   }
   std::string user_data = extra_user_data + typehash_str;
+  // Advertise buffer-backend capability, appended as its own
+  // key=value entry in the SAME format rmw_dds_common::
+  // encode_type_hash_for_user_data_qos() already uses (confirmed from its
+  // real upstream source: "typehash=" + value + ";") and that
+  // parse_user_data()/rmw::impl::cpp::parse_key_value() already parses as a
+  // map, not a single opaque blob. Appending a new ";"-terminated key is
+  // exactly what this format is for -- it cannot disturb the existing
+  // typehash entry's own decode, which is keyed, not positional. "cpu" is
+  // always included: every buffer-backed field always has a CPU fallback
+  // (the safe CPU-fallback path already exists), so it is always true.
+  //
+  // Advertising alone gives every buffer-backed endpoint the SAME
+  // "bufbackends=cpu" -- there is no way yet for one specific endpoint to
+  // declare it wants or offers a real non-CPU backend, which is exactly the
+  // signal G2/G3's discovery callbacks need to decide whether to create a
+  // private topic. RMW_CYCLONEDDS_CPP_BUFFER_BACKENDS is that signal: a
+  // comma-separated list of ADDITIONAL backend names (beyond "cpu") this
+  // process's own buffer-backed endpoints advertise, read once per endpoint
+  // creation. Unset (the default): behavior is unchanged from G1 alone,
+  // "bufbackends=cpu" only -- this is the measured regression floor
+  // measured, and stays true since nothing sets this variable in that path.
+  if (has_buffer_fields) {
+    std::string backends = "cpu";
+    if (const char * extra = std::getenv("RMW_CYCLONEDDS_CPP_BUFFER_BACKENDS")) {
+      // Only advertise a name this process can actually resolve via
+      // find_backend_by_type(). Without
+      // this, two peers' mutually-ADVERTISED intersection could still
+      // contain a name only one side's registry can actually load a
+      // plugin for -- an env-var typo or an uninstalled plugin silently
+      // reproducing the exact sertype-mismatch class this PR fixes, from
+      // a different cause than the ordering bug it already fixes.
+      std::string extra_str(extra);
+      size_t start = 0;
+      while (start < extra_str.size()) {
+        size_t comma = extra_str.find(',', start);
+        std::string name = extra_str.substr(
+          start, comma == std::string::npos ? std::string::npos : comma - start);
+        if (!name.empty() && name != "cpu") {
+          if (rmw_cyclonedds_cpp::backend_locally_available(name)) {
+            backends += "," + name;
+          } else {
+            RCUTILS_LOG_WARN_NAMED(
+              "rmw_cyclonedds_cpp",
+              "RMW_CYCLONEDDS_CPP_BUFFER_BACKENDS names '%s', but no locally-loadable "
+              "backend plugin reports that type -- not advertising it", name.c_str());
+          }
+        }
+        if (comma == std::string::npos) {
+          break;
+        }
+        start = comma + 1;
+      }
+    }
+    user_data += "bufbackends=" + backends + ";";
+  }
   dds_qset_userdata(qos, user_data.data(), user_data.size());
 
   return qos;
@@ -2494,8 +2951,533 @@ static bool dds_qos_to_rmw_qos(const dds_qos_t * dds_qos, rmw_qos_profile_t * qo
   return true;
 }
 
+// on_publication_matched and on_subscription_matched must NOT each
+// independently pick a backend by trying the PEER's advertised list
+// against their OWN local registry -- a registry can hold a plugin for a
+// backend this side never chose to
+// ADVERTISE (RMW_CYCLONEDDS_CPP_BUFFER_BACKENDS is per-process, and an
+// installed plugin is not the same fact as an advertised one). The two
+// sides also read DIFFERENT peer lists (the publisher reads the matched
+// subscriber's advertisement, the subscriber reads the matched publisher's)
+// in different orders, so "first common name in the peer's list order" is
+// not symmetric -- both sides could independently and silently converge on
+// DIFFERENT backends for the one private topic they must agree on.
+//
+// Instead, this computes the intersection of what BOTH sides actually
+// advertised (own_non_cpu_backend_types(handle) reads the SAME QoS
+// user_data key this side itself set, so it's exactly what this endpoint
+// offered), sort it into one canonical order, and pick from that. The
+// intersection of two sets is commutative -- {peer} ∩ {own} is IDENTICAL
+// regardless of which side computes it or which order either side listed
+// its own names in -- so a fixed sort of that fixed set gives both sides
+// the same answer.
+static std::vector<std::string> own_non_cpu_backend_types(dds_entity_t handle)
+{
+  dds_qos_t * qos = dds_create_qos();
+  std::vector<std::string> result;
+  if (dds_get_qos(handle, qos) >= 0) {
+    result = rmw_cyclonedds_cpp::all_non_cpu_backend_types(qos);
+  }
+  dds_delete_qos(qos);
+  return result;
+}
+
+// The tail of on_publication_matched from the duplicate re-check through
+// the emplace, factored out so both the
+// synchronous fast path (graph cache already had the peer) and the
+// deferred retry thread below (graph cache caught up later) can call the
+// same code once `endpoint_info` is actually built. Takes `endpoint_info`
+// by value and is responsible for finalizing it on every return path.
+static void finish_publication_match(
+  CddsPublisher * pub, dds_entity_t writer, const rmw_cyclonedds_cpp::PeerGuid & peer_guid,
+  const std::string & private_name, const std::vector<std::string> & common_backend_types,
+  rmw_topic_endpoint_info_t endpoint_info)
+{
+  rcutils_allocator_t allocator = rcutils_get_default_allocator();
+  {
+    std::shared_lock<std::shared_mutex> lock(pub->buffer_discovery.mutex);
+    if (pub->buffer_discovery.private_writers_or_readers.count(peer_guid) > 0) {
+      rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+      return;
+    }
+  }
+
+  // Resolve a live backend instance for the peer's advertised type.
+  // find_backend_by_type() is what makes this a name lookup instead of a
+  // hardcoded plugin.
+  //
+  // find_backend_by_type() -> BufferBackendRegistry::create_backend_instance()
+  // is a pluginlib::ClassLoader instantiate call on the registry this
+  // CddsPublisher shares across every peer match -- and this callback fires
+  // concurrently for the same publisher (the race the emplace() below
+  // already guards against). Locking only around this one call, rather than
+  // the whole function, keeps the mutex off the slow path (topic/writer
+  // creation) while still serializing the one call that is not itself
+  // documented as safe for concurrent use.
+  // A per-CddsPublisher registry would make it possible for "advertised"
+  // (create_readwrite_qos's env-var read) and "locally resolvable" (this
+  // lookup) to diverge silently. Both are instead backed by the SAME
+  // process-wide registry (rmw_cyclonedds_cpp::process_backend_registry())
+  // -- create_readwrite_qos only ever advertises a name
+  // backend_locally_available() already confirmed, so every name in
+  // common_backend_types is guaranteed resolvable here.
+  std::shared_ptr<rosidl::BufferBackend> backend;
+  std::string backend_type;
+  // This whole call is guarded by try/catch rather than treated as dead
+  // code on the theory that create_backend_instance()
+  // (find_backend_by_type()'s only pluginlib call) already catches
+  // internally. True for that call alone -- find_backend_by_type()
+  // (backend_utils.hpp) also calls the resolved backend's own
+  // get_backend_type() afterward, outside that try/catch, and that
+  // virtual call is unguarded. This runs on the synchronous CycloneDDS
+  // listener-callback path AND from the detached async-retry thread -- an
+  // uncaught exception is UB at the C-callback ABI boundary in the first
+  // case and calls std::terminate() in the second. The try/catch is
+  // per-candidate, inside the loop below, rather than wrapped around the
+  // WHOLE for-loop: a single try/catch around the loop would break this
+  // function's own multi-candidate fallback design
+  // (all_non_cpu_backend_types' own doc comment: "try each in turn ...
+  // rather than giving up after the first one") -- a throw on a non-last
+  // candidate would abandon every remaining candidate, where a plain null
+  // return continues to the next one. Per-candidate placement means a
+  // throwing candidate is treated exactly like one that returns null.
+  {
+    std::lock_guard<std::mutex> lock(rmw_cyclonedds_cpp::process_backend_registry_mutex());
+    for (const auto & candidate : common_backend_types) {
+      try {
+        backend = rosidl_buffer_backend_registry::find_backend_by_type(
+          rmw_cyclonedds_cpp::process_backend_registry(), candidate);
+      } catch (const std::exception & e) {
+        RCUTILS_LOG_ERROR_NAMED(
+          "rmw_cyclonedds_cpp",
+          "on_publication_matched: find_backend_by_type threw for candidate '%s': %s, "
+          "trying next candidate", candidate.c_str(), e.what());
+        backend.reset();
+        continue;
+      }
+      if (backend) {
+        backend_type = candidate;
+        break;
+      }
+    }
+  }
+  if (!backend) {
+    std::string tried;
+    for (const auto & candidate : common_backend_types) {
+      tried += (tried.empty() ? "" : ",") + candidate;
+    }
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp",
+      "on_publication_matched: no buffer backend plugin registered for any of the common "
+      "set '%s', skipping private topic '%s'", tried.c_str(), private_name.c_str());
+    rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+    return;
+  }
+
+  // The private topic's sertype comes from the resolved backend's OWN
+  // descriptor type support -- an ordinary, unmodified ROS message type
+  // (confirmed from rosidl::BufferBackend's own doc comment). CycloneDDS's
+  // generic serializer for it is exactly the one every other ordinary
+  // message type already gets; the descriptor path needs no change to the
+  // wire-level writer at all, only a private topic whose sertype names
+  // the backend's own type. on_subscription_matched above mirrors this
+  // same sertype-resolution logic.
+  //
+  // get_descriptor_type_support() is an unguarded virtual call into
+  // third-party pluginlib-loaded code, at the same
+  // synchronous-listener-callback / detached-retry-thread boundaries the
+  // sibling create_descriptor_with_endpoint() call (rmw_publish) is
+  // already guarded for. Treated the same way as a null return below: log
+  // and skip the private topic for this peer.
+  //
+  // The try/catch alone only guards the ABI boundary, not concurrent
+  // access to the shared instance -- pluginlib's createSharedInstance()
+  // caches backend instances by class name (backend_instance_mutex()'s
+  // own doc comment), so two peers resolving the same backend type share
+  // one rosidl::BufferBackend object. Every other call into it
+  // (create_descriptor_with_endpoint, create_empty_descriptor,
+  // from_descriptor_with_endpoint) holds backend_instance_mutex() for this
+  // reason, and so does this call.
+  const rosidl_message_type_support_t * descriptor_type_supports;
+  try {
+    std::lock_guard<std::mutex> backend_lock(
+      rmw_cyclonedds_cpp::backend_instance_mutex(backend->get_backend_type()));
+    descriptor_type_supports = backend->get_descriptor_type_support();
+  } catch (const std::exception & e) {
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp",
+      "on_publication_matched: backend '%s' get_descriptor_type_support threw: %s",
+      backend_type.c_str(), e.what());
+    rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+    return;
+  }
+  const rosidl_message_type_support_t * resolved = get_typesupport(descriptor_type_supports);
+  if (resolved == nullptr) {
+    RMW_SET_ERROR_MSG_WITH_FORMAT_STRING(
+      "on_publication_matched: backend '%s' descriptor type support not from this RMW: %s",
+      backend_type.c_str(), rmw_get_error_string().str);
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp", "on_publication_matched: %s", rmw_get_error_string().str);
+    rmw_reset_error();
+    rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+    return;
+  }
+  auto message_value_type = rmw_cyclonedds_cpp::make_message_value_type(descriptor_type_supports);
+  const std::string type_name = get_message_type_name(resolved);
+  auto * private_sertype = create_sertype(type_name, false, std::move(message_value_type));
+  create_msg_dds_dynamic_type(
+    resolved->typesupport_identifier, resolved->data, dds_get_participant(writer),
+    private_sertype);
+  dds_entity_t private_topic =
+    create_topic(dds_get_participant(writer), private_name.c_str(), private_sertype);
+  if (private_topic < 0) {
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp",
+      "on_publication_matched: failed to create private topic '%s'", private_name.c_str());
+    rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+    return;
+  }
+
+  dds_qos_t * private_writer_qos = rmw_cyclonedds_cpp::make_private_endpoint_qos();
+  dds_entity_t private_writer =
+    dds_create_writer(dds_get_parent(writer), private_topic, private_writer_qos, nullptr);
+  dds_delete_qos(private_writer_qos);
+  dds_delete(private_topic);
+  if (private_writer < 0) {
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp",
+      "on_publication_matched: failed to create private writer for '%s'", private_name.c_str());
+    rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+    return;
+  }
+
+  std::unique_lock<std::shared_mutex> lock(pub->buffer_discovery.mutex);
+  // PrivateEndpoint carries a std::mutex (reader_cache_mutex, see its own
+  // comment), which is neither copyable nor movable -- constructing a
+  // PrivateEndpoint temporary and handing it to emplace() does not
+  // compile, since the map would have to move it into place.
+  // piecewise_construct builds it in place instead.
+  if (!pub->buffer_discovery.private_writers_or_readers.emplace(
+      std::piecewise_construct,
+      std::forward_as_tuple(peer_guid),
+      std::forward_as_tuple(private_writer, backend, endpoint_info)).second)
+  {
+    // Lost a race against another invocation of this same callback.
+    dds_delete(private_writer);
+    rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+    return;
+  }
+  RCUTILS_LOG_INFO_NAMED(
+    "rmw_cyclonedds_cpp",
+    "on_publication_matched: created private buffer-backend topic '%s' (backend '%s')",
+    private_name.c_str(), backend_type.c_str());
+}
+
+// build_endpoint_info_from_match()'s "peer's own GID not found in the
+// graph cache's per-topic listing" failure is not a rare corner case --
+// rmw_dds_common's GraphCache is populated by its OWN discovery topic,
+// which propagates asynchronously and commonly lags the raw DDS
+// built-in-topic match this callback fires on, especially at process
+// startup.
+//
+// Retrying a few times with sleep_for() right inside
+// on_publication_matched/on_subscription_matched would be bounded (80ms
+// max), but still blocks CycloneDDS's shared listener-callback thread,
+// which delays delivery of every OTHER pending listener event on that
+// participant, not just this one peer's discovery. Both callers instead
+// try once synchronously (the common case: the graph cache already has
+// the peer) and, on failure, defer the retry loop to a detached
+// background thread instead of sleeping here -- see their own comments
+// for how that thread's lifetime is kept safe.
+//
+// Fires whenever `writer` matches or unmatches a subscription. On a
+// match whose advertised user_data names a non-CPU buffer backend,
+// create a private topic + writer for that one peer, named identically
+// to what on_subscription_matched computes on the other side, so the
+// two converge on the same DDS topic without
+// ever exchanging the name out of band. Guarded so a redundant re-fire
+// (DDS fires this on unmatch too, and can re-fire on a transient network
+// blip) never creates a second private writer for the same peer.
+// Forward-declared so on_publication_matched can hand a late-discovered
+// (retried) ep to the same processing path a synchronously found one
+// uses, without duplicating that path's body.
+static void process_matched_publication(
+  CddsPublisher * pub, dds_entity_t writer, dds_instance_handle_t peer_handle,
+  dds_builtintopic_endpoint_t * ep);
+
+static void on_publication_matched(
+  dds_entity_t writer, const dds_publication_matched_status_t status, void * arg)
+{
+  auto * pub = static_cast<CddsPublisher *>(arg);
+  // create_cdds_publisher() registers this callback via
+  // dds_lset_publication_matched_arg() AFTER listener_set_event_callbacks()
+  // already registered on_publication_matched_fn on the SAME listener for
+  // the SAME event -- CycloneDDS's dds_listener_t holds exactly one
+  // function pointer per event type, so a plain second registration would
+  // silently replace that one instead of composing with it, disabling the
+  // standard RMW_EVENT_PUBLICATION_MATCHED callback and unread-count
+  // bookkeeping (data->event_callback/event_unread_count) for every
+  // has_buffer_fields publisher. The two functions are different code, but
+  // dds_lset_publication_matched_arg() replaces by EVENT TYPE, not by
+  // function identity, so a second call on the same listener always
+  // overwrites the first regardless of which function either call named.
+  // Fixed by calling the generic handler explicitly, first and
+  // unconditionally -- before any of this function's own early returns --
+  // so both behaviors run off the one registered slot instead of one
+  // silently losing the other.
+  on_publication_matched_fn(writer, status, &pub->user_callback_data);
+  const dds_instance_handle_t peer_handle = status.last_subscription_handle;
+  dds_builtintopic_endpoint_t * ep = dds_get_matched_subscription_data(writer, peer_handle);
+  if (ep != nullptr) {
+    process_matched_publication(pub, writer, peer_handle, ep);
+    return;
+  }
+  // A null ep here is ambiguous -- it can mean the peer is already gone
+  // (an unmatch raced ahead of this callback), but it can also mean the
+  // graph cache simply has not caught up yet with a peer discovered
+  // moments ago, which a single synchronous call can lose the race
+  // against. Retried on a detached thread, reusing the same
+  // begin_async_retry()/end_async_retry()-style lifecycle the retry
+  // below uses for a different failure -- this callback itself never
+  // blocks, since blocking it here would delay delivery of every OTHER
+  // pending listener event on this participant, not just this one
+  // peer's (the exact hazard the retry below is already written to
+  // avoid).
+  if (!rmw_cyclonedds_cpp::begin_null_ep_retry(pub->buffer_discovery)) {
+    // Capped out, or shutting down -- treat this null ep as an unmatch,
+    // same as if the retry below had found nothing.
+    return;
+  }
+  try {
+    std::thread(
+      [pub, writer, peer_handle]()
+      {
+        // Bounded and short: this thread exists only to re-ask a
+        // question a plain unmatch answers identically to a late
+        // discovery (null), so it is deliberately cheaper than the
+        // retry below, which only runs after a non-null ep's endpoint
+        // info fails to build. Spawning one of these per ordinary
+        // unmatch under topic churn is a real cost, bounded by
+        // begin_null_ep_retry()'s own cap rather than avoided by
+        // guessing which case a null ep is.
+        constexpr int kNullEpRetries = 3;
+        constexpr auto kNullEpRetryDelay = std::chrono::milliseconds(2);
+        dds_builtintopic_endpoint_t * retry_ep = nullptr;
+        for (int attempt = 0; attempt < kNullEpRetries && retry_ep == nullptr; attempt++) {
+          std::this_thread::sleep_for(kNullEpRetryDelay);
+          retry_ep = dds_get_matched_subscription_data(writer, peer_handle);
+        }
+        if (retry_ep != nullptr) {
+          process_matched_publication(pub, writer, peer_handle, retry_ep);
+        }
+        // else: still gone -- an unmatch raced ahead of this callback,
+        // matching this function's own top-of-function case for the
+        // same condition.
+        rmw_cyclonedds_cpp::end_null_ep_retry(pub->buffer_discovery);
+      }).detach();
+  } catch (const std::exception & e) {
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp",
+      "on_publication_matched: failed to start null-ep retry thread: %s, giving up on "
+      "this match", e.what());
+    rmw_cyclonedds_cpp::end_null_ep_retry(pub->buffer_discovery);
+  }
+}
+
+static void process_matched_publication(
+  CddsPublisher * pub, dds_entity_t writer, dds_instance_handle_t peer_handle,
+  dds_builtintopic_endpoint_t * ep)
+{
+  if (!rmw_cyclonedds_cpp::advertises_non_cpu_backend(ep->qos)) {
+    dds_builtintopic_free_endpoint(ep);
+    return;
+  }
+
+  rmw_cyclonedds_cpp::PeerGuid peer_guid;
+  memcpy(peer_guid.data(), ep->key.v, peer_guid.size());
+
+  // This check runs here, as the cheapest possible gate, before the
+  // deferred-to-a-background-thread retry logic and the
+  // descriptor-resolution work below -- not after them. A redundant
+  // re-fire for a peer already privately matched is the normal case this
+  // callback's own comment documents, not a rare one, so it must not pay
+  // that fuller cost before being discarded.
+  {
+    std::shared_lock<std::shared_mutex> lock(pub->buffer_discovery.mutex);
+    if (pub->buffer_discovery.private_writers_or_readers.count(peer_guid) > 0) {
+      dds_builtintopic_free_endpoint(ep);
+      return;
+    }
+  }
+
+  const std::string private_name =
+    rmw_cyclonedds_cpp::private_topic_name(pub->base_topic_name, ep->key);
+  // A peer may advertise several alternative backends (e.g. "cuda,shm"),
+  // and this process may only have a plugin for a LATER one in that
+  // list -- trying
+  // only the first and giving up abandons a private topic that a shared
+  // backend could actually have supported.
+  const std::vector<std::string> peer_backend_types =
+    rmw_cyclonedds_cpp::all_non_cpu_backend_types(ep->qos);
+  // Intersected with what THIS publisher itself advertised (not with the
+  // registry's installed plugins), then sorted into one canonical order --
+  // see own_non_cpu_backend_types()'s own comment on why this, and not the
+  // peer's list order, is what both sides must key off of.
+  std::vector<std::string> common_backend_types =
+    rosidl_buffer_backend_registry::get_common_backends(
+    peer_backend_types, own_non_cpu_backend_types(writer));
+  std::sort(common_backend_types.begin(), common_backend_types.end());
+  // A peer advertising a backend this side has none in common with (e.g.
+  // peer only offers "cuda", this side only has "shm") is a NORMAL case,
+  // not an error -- but building endpoint info
+  // allocates a full rmw_topic_endpoint_info_t before the (only) place
+  // that used to check for this, several lines further down. Checked here
+  // instead, before any of that cost is paid.
+  if (common_backend_types.empty()) {
+    RCUTILS_LOG_INFO_NAMED(
+      "rmw_cyclonedds_cpp",
+      "on_publication_matched: no backend in common with peer for '%s', staying on the "
+      "shared topic", private_name.c_str());
+    dds_builtintopic_free_endpoint(ep);
+    return;
+  }
+
+  // build_endpoint_info_from_match() needs this SAME ep -- read
+  // before freeing it, rather than fetching a second copy from DDS below,
+  // which would race against an intervening unmatch. Tried once,
+  // synchronously: the common case is the graph cache already has the
+  // peer, and this keeps that case exactly as fast as the unmatched path.
+  rmw_topic_endpoint_info_t endpoint_info = rmw_get_zero_initialized_topic_endpoint_info();
+  rcutils_allocator_t allocator = rcutils_get_default_allocator();
+  const rmw_ret_t info_ret =
+    build_endpoint_info_from_match(pub->node, ep, /*peer_is_reader=*/ true, &endpoint_info);
+  dds_builtintopic_free_endpoint(ep);
+
+  if (RMW_RET_OK == info_ret) {
+    // Symmetric fix to on_subscription_matched's own -- see
+    // its comment for the full reasoning and the live trace that
+    // confirmed the reentrant-entity-creation mechanism. Calling
+    // finish_publication_match() synchronously here has the identical
+    // hazard for a same-process, same-participant match: its own nested
+    // dds_create_writer() (for the private topic) can be invoked
+    // reentrant on a thread still inside this process's own
+    // dds_create_writer()/dds_create_reader() call. Deferred the same way.
+    if (!rmw_cyclonedds_cpp::begin_async_retry(pub->buffer_discovery)) {
+      rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+      return;
+    }
+    try {
+      std::thread(
+        [pub, writer, peer_guid, private_name, common_backend_types, endpoint_info]()
+        {
+          finish_publication_match(
+            pub, writer, peer_guid, private_name, common_backend_types, endpoint_info);
+          rmw_cyclonedds_cpp::end_async_retry(pub->buffer_discovery);
+        }).detach();
+    } catch (const std::exception & e) {
+      RCUTILS_LOG_ERROR_NAMED(
+        "rmw_cyclonedds_cpp",
+        "on_publication_matched: failed to start deferred-match thread for '%s': %s, "
+        "giving up on this match", private_name.c_str(), e.what());
+      rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+      rmw_cyclonedds_cpp::end_async_retry(pub->buffer_discovery);
+    }
+    return;
+  }
+
+  // The graph cache had not caught up yet on the first attempt.
+  // Retrying with sleep_for() right here would block CycloneDDS's shared
+  // listener-callback thread and delay every OTHER pending listener event
+  // on this participant, not just this one peer's discovery. Deferred to
+  // a detached background thread instead: `writer`/`peer_handle` are
+  // stable value types (a DDS
+  // handle and an instance handle, not pointers into `ep`, which is
+  // already freed above), so the thread re-fetches its OWN fresh `ep` each
+  // attempt rather than reaching past this function's freeing of the
+  // original one. `pub` is captured as a raw pointer with no other
+  // lifetime guard -- begin_async_retry()/end_async_retry() bracket this
+  // thread's lifetime so destroy_publisher() can wait for it (via
+  // wait_for_async_retries()) before freeing `pub` or deleting `writer`.
+  rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+  rmw_reset_error();
+  // begin_async_retry() refuses (returns false) once destroy_publisher()
+  // has called begin_shutdown() -- see BufferEndpointDiscovery.hpp. Not
+  // spawning at all is correct here: the publisher is on its way out, so
+  // a delayed private topic for it would never be used anyway.
+  if (!rmw_cyclonedds_cpp::begin_async_retry(pub->buffer_discovery)) {
+    return;
+  }
+  // std::thread's constructor can throw std::system_error (e.g. the OS
+  // refuses to start a new thread
+  // under load or during a mass teardown). Uncaught, that exception would
+  // propagate out of this CycloneDDS C listener callback (UB at that ABI
+  // boundary) AND leave pending_async_retries incremented forever with no
+  // matching end_async_retry() -- every future destroy_publisher() on this
+  // publisher would then hang in wait_for_async_retries(). Caught here:
+  // undo the increment and give up on this one retry, exactly like the
+  // "peer unmatched" and "still failing after kMaxAttempts" cases below
+  // already do.
+  try {
+    std::thread(
+      [pub, writer, peer_handle, peer_guid, private_name, common_backend_types]()
+      {
+        constexpr int kMaxAttempts = 4;
+        constexpr auto kRetryDelay = std::chrono::milliseconds(20);
+        rcutils_allocator_t retry_allocator = rcutils_get_default_allocator();
+        rmw_topic_endpoint_info_t retry_info = rmw_get_zero_initialized_topic_endpoint_info();
+        rmw_ret_t ret = RMW_RET_ERROR;
+        for (int attempt = 0; attempt < kMaxAttempts; attempt++) {
+          std::this_thread::sleep_for(kRetryDelay);
+          dds_builtintopic_endpoint_t * retry_ep =
+          dds_get_matched_subscription_data(writer, peer_handle);
+          if (retry_ep == nullptr) {
+            // The peer unmatched while this thread was sleeping -- give up
+            // quietly, matching on_publication_matched's own top-of-function
+            // check for the same condition.
+            ret = RMW_RET_ERROR;
+            break;
+          }
+          ret = build_endpoint_info_from_match(
+            pub->node, retry_ep, /*peer_is_reader=*/ true, &retry_info);
+          dds_builtintopic_free_endpoint(retry_ep);
+          if (RMW_RET_OK == ret) {
+            break;
+          }
+          rmw_topic_endpoint_info_fini(&retry_info, &retry_allocator);
+          retry_info = rmw_get_zero_initialized_topic_endpoint_info();
+          rmw_reset_error();
+        }
+        if (RMW_RET_OK == ret) {
+          finish_publication_match(
+            pub, writer, peer_guid, private_name, common_backend_types, retry_info);
+        } else {
+          RCUTILS_LOG_ERROR_NAMED(
+            "rmw_cyclonedds_cpp",
+            "on_publication_matched: failed to build endpoint info for '%s' after "
+            "backgrounded retries", private_name.c_str());
+          rmw_topic_endpoint_info_fini(&retry_info, &retry_allocator);
+        }
+        rmw_cyclonedds_cpp::end_async_retry(pub->buffer_discovery);
+      }).detach();
+  } catch (const std::exception & e) {
+    // Catching std::exception, not just std::system_error, matters here:
+    // constructing std::thread also decay-copies the lambda's captures
+    // (including common_backend_types, a std::vector<std::string>) on
+    // THIS thread before the new one starts -- if that copy throws
+    // std::bad_alloc or any other std::exception that is not a
+    // system_error, catching only system_error would leave it uncaught,
+    // propagating out of this CycloneDDS listener callback (ABI-boundary
+    // UB) and leaking pending_async_retries forever.
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp",
+      "on_publication_matched: failed to start background retry thread for '%s': %s, "
+      "giving up on this match", private_name.c_str(), e.what());
+    rmw_cyclonedds_cpp::end_async_retry(pub->buffer_discovery);
+  }
+}
+
 static CddsPublisher * create_cdds_publisher(
-  dds_entity_t dds_ppant, dds_entity_t dds_pub,
+  const rmw_node_t * node, dds_entity_t dds_ppant, dds_entity_t dds_pub,
   const rosidl_message_type_support_t * type_supports,
   const char * topic_name,
   const rmw_qos_profile_t * qos_policies)
@@ -2520,6 +3502,10 @@ static CddsPublisher * create_cdds_publisher(
   auto message_type_support = rmw_cyclonedds_cpp::make_message_value_type(type_supports);
   const bool is_self_contained = message_type_support->is_self_contained();
   const size_t sample_size = message_type_support->sizeof_type();
+  // Computed before the std::move below, which invalidates
+  // message_type_support.
+  const bool has_buffer_fields =
+    rmw_cyclonedds_cpp::has_buffer_backed_fields(message_type_support.get());
 
   auto sertype = create_sertype(
     type_name,
@@ -2530,21 +3516,34 @@ static CddsPublisher * create_cdds_publisher(
     sertype);
   struct ddsi_sertype * stact = nullptr;
   topic = create_topic(dds_ppant, fqtopic_name.c_str(), sertype, &stact);
+  // Set before dds_create_writer below so on_publication_matched --
+  // which can fire as soon as the writer exists -- never reads these
+  // unset. pub->pubiid/gid, in contrast, genuinely cannot be known until
+  // after dds_create_writer returns, which is why they stay assigned below.
+  pub->base_topic_name = fqtopic_name;
+  pub->node = node;
+  pub->has_buffer_fields = has_buffer_fields;
+  pub->sertype = stact;
 
   dds_listener_t * listener = dds_create_listener(&pub->user_callback_data);
   // Set the corresponding callbacks to listen for events
   listener_set_event_callbacks(listener, &pub->user_callback_data);
+  if (has_buffer_fields) {
+    dds_lset_publication_matched_arg(listener, on_publication_matched, pub, false);
+  }
 
   if (topic < 0) {
     set_error_message_from_create_topic(topic, fqtopic_name);
     goto fail_topic;
   }
   qos = create_readwrite_qos(
-    qos_policies, *type_support->get_type_hash_func(type_support), false, "");
+    qos_policies, *type_support->get_type_hash_func(type_support), false, "",
+    has_buffer_fields);
   if (qos == nullptr) {
     goto fail_qos;
   }
-  if ((pub->enth = dds_create_writer(dds_pub, topic, qos, listener)) < 0) {
+  pub->enth = dds_create_writer(dds_pub, topic, qos, listener);
+  if (pub->enth < 0) {
     RMW_SET_ERROR_MSG("failed to create writer");
     goto fail_writer;
   }
@@ -2554,9 +3553,23 @@ static CddsPublisher * create_cdds_publisher(
   }
 
   get_entity_gid(pub->enth, pub->gid);
-  pub->sertype = stact;
   dds_delete_listener(listener);
   pub->type_supports = *type_supports;
+  // This rebuilds the identical introspection tree
+  // make_message_value_type() already built above (moved into
+  // create_sertype()) -- a real, avoidable second walk. Not fixed here:
+  // create_sertype() takes ownership of its tree via
+  // std::unique_ptr<StructValueType>, so the SAME instance cannot also be
+  // owned by pub->buffer_message_value_type -- closing this for real would
+  // mean changing create_sertype()'s (and sertype_rmw's own) ownership
+  // model to std::shared_ptr across all of its call sites in this file, a
+  // materially bigger change than this feature's own scope. Paid once per
+  // publisher/subscription creation, never on the per-message publish/take
+  // hot path the caching elsewhere in this file is about.
+  if (has_buffer_fields) {
+    pub->buffer_message_value_type =
+      rmw_cyclonedds_cpp::make_message_value_type(&pub->type_supports);
+  }
 #if CDDS_VERSION == CDDS_VERSION_0_10
   pub->is_loaning_available = is_self_contained && dds_is_loan_available(pub->enth);
 #else
@@ -2573,9 +3586,26 @@ static CddsPublisher * create_cdds_publisher(
   return pub;
 
 fail_instance_handle:
+  // dds_create_writer() above already made pub->enth and its
+  // on_publication_matched listener live, so a concurrent match in this
+  // window can spawn a detached async-retry thread capturing raw
+  // `pub`/`pub->enth` before this label ever runs -- the identical
+  // use-after-free class create_publisher()'s own scope_exit closes for
+  // its own failure path, needed again here because this is a different,
+  // deeper failure path inside create_cdds_publisher() itself.
+  rmw_cyclonedds_cpp::begin_shutdown(pub->buffer_discovery);
+  rmw_cyclonedds_cpp::wait_for_async_retries(pub->buffer_discovery);
   if (dds_delete(pub->enth) < 0) {
     RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp", "failed to destroy writer during error handling");
   }
+  // A SYNCHRONOUS match completed before this failure path ran (the
+  // window the comment above already names) can have inserted a private
+  // writer into this map. The shutdown/wait/delete sequence above stops
+  // and drains ASYNC retries but does not touch the map itself, so it
+  // must be drained separately here -- leaking that writer and its
+  // endpoint_info the same way an unmatched destroy_publisher() would
+  // otherwise.
+  rmw_cyclonedds_cpp::drain_private_endpoints(pub->buffer_discovery);
 fail_writer:
   dds_delete_qos(qos);
 fail_qos:
@@ -2604,7 +3634,7 @@ extern "C" rmw_ret_t rmw_fini_publisher_allocation(rmw_publisher_allocation_t * 
 }
 
 static rmw_publisher_t * create_publisher(
-  dds_entity_t dds_ppant, dds_entity_t dds_pub,
+  const rmw_node_t * node, dds_entity_t dds_ppant, dds_entity_t dds_pub,
   const rosidl_message_type_support_t * type_supports,
   const char * topic_name, const rmw_qos_profile_t * qos_policies,
   const rmw_publisher_options_t * publisher_options
@@ -2613,16 +3643,32 @@ static rmw_publisher_t * create_publisher(
   CddsPublisher * pub;
   if ((pub =
     create_cdds_publisher(
-      dds_ppant, dds_pub, type_supports, topic_name, qos_policies)) == nullptr)
+      node, dds_ppant, dds_pub, type_supports, topic_name, qos_policies)) == nullptr)
   {
     return nullptr;
   }
   auto cleanup_cdds_publisher = rcpputils::make_scope_exit(
     [pub]() {
+      // on_publication_matched can fire (and spawn a detached async-retry
+      // thread capturing `pub`/`pub->enth`) the instant
+      // create_cdds_publisher() returns, before this scope_exit ever
+      // runs -- the same race destroy_publisher()'s
+      // begin_shutdown()/wait_for_async_retries()/dds_delete() ordering
+      // exists to close. This construction-failure path must use that
+      // same pair, or `pub` is deleted into the identical
+      // use-after-free window.
+      rmw_cyclonedds_cpp::begin_shutdown(pub->buffer_discovery);
+      rmw_cyclonedds_cpp::wait_for_async_retries(pub->buffer_discovery);
       if (dds_delete(pub->enth) < 0) {
         RCUTILS_LOG_ERROR_NAMED(
           "rmw_cyclonedds_cpp", "failed to delete writer during error handling");
       }
+      // Mirrors fail_instance_handle's own drain inside
+      // create_cdds_publisher -- a synchronous match completed after
+      // create_cdds_publisher() returned but before this scope_exit runs
+      // can have inserted a private writer into this map, and the
+      // sequence above does not drain it on its own.
+      rmw_cyclonedds_cpp::drain_private_endpoints(pub->buffer_discovery);
       delete pub;
     });
 
@@ -2692,7 +3738,7 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
   }
 
   rmw_publisher_t * pub = create_publisher(
-    node->context->impl->ppant, node->context->impl->dds_pub,
+    node, node->context->impl->ppant, node->context->impl->dds_pub,
     type_supports, topic_name, &adapted_qos_policies,
     publisher_options);
   if (pub == nullptr) {
@@ -2937,10 +3983,44 @@ static rmw_ret_t destroy_publisher(rmw_publisher_t * publisher)
   rmw_ret_t ret = RMW_RET_OK;
   auto pub = static_cast<CddsPublisher *>(publisher->data);
   if (pub != nullptr) {
+    // dds_delete(pub->enth) THEN wait_for_async_retries() would still
+    // leave a race open. dds_delete's own
+    // "blocks until any invocation already executing has returned"
+    // guarantee only covers the SYNCHRONOUS listener callback -- it says
+    // nothing about a std::thread that a PRIOR match event's callback
+    // already detached and returned from. That thread, still sleeping
+    // inside its retry loop, holds `writer` (== pub->enth) and calls
+    // dds_get_matched_subscription_data(writer, ...)/dds_get_parent(writer)
+    // regardless of whether dds_delete(pub->enth) has already run.
+    //
+    // Fixed by reordering: begin_shutdown() (stops any NEW retry thread
+    // from spawning, including one a currently-executing synchronous
+    // callback might be about to start) THEN wait_for_async_retries()
+    // (blocks until every retry thread already spawned -- from this match
+    // or an earlier one -- has fully finished using `writer`) THEN
+    // dds_delete(pub->enth). By the time the entity is actually deleted,
+    // no thread, spawned or synchronous, can still be touching it: the
+    // flag stops future ones, the wait drains existing ones, and
+    // dds_delete's own blocking-until-callback-returns guarantee covers
+    // whatever synchronous invocation might be running at this exact
+    // instant (it will see the flag and refuse to spawn before returning).
+    rmw_cyclonedds_cpp::begin_shutdown(pub->buffer_discovery);
+    rmw_cyclonedds_cpp::wait_for_async_retries(pub->buffer_discovery);
     if (dds_delete(pub->enth) < 0) {
       RMW_SET_ERROR_MSG("failed to delete writer");
       ret = RMW_RET_ERROR;
     }
+    // Private per-peer writers created by on_publication_matched()
+    // are parented under the same publisher as pub->enth (dds_get_parent(
+    // writer) in that callback), so deleting pub->enth alone leaves them
+    // as orphan entities that outlive this publisher.
+    //
+    // rmw_publish() takes a shared_lock to read this map -- draining it
+    // (a mutation) must take the exclusive lock, or a concurrent publish's
+    // dereference of a
+    // PrivateEndpoint* into it races this drain's dds_delete()/fini().
+    // drain_private_endpoints() takes that lock itself.
+    rmw_cyclonedds_cpp::drain_private_endpoints(pub->buffer_discovery);
     delete pub;
   }
   rmw_free(const_cast<char *>(publisher->topic_name));
@@ -2998,8 +4078,402 @@ extern "C" rmw_ret_t rmw_destroy_publisher(rmw_node_t * node, rmw_publisher_t * 
 ///////////                                                                   ///////////
 /////////////////////////////////////////////////////////////////////////////////////////
 
+// Mirrors finish_publication_match's own factoring-out, for the same
+// reason -- shared by on_subscription_matched's synchronous fast path and
+// its deferred retry thread below.
+static void finish_subscription_match(
+  CddsSubscription * sub, dds_entity_t reader, const rmw_cyclonedds_cpp::PeerGuid & peer_guid,
+  const std::string & private_name, const std::vector<std::string> & common_backend_types,
+  rmw_topic_endpoint_info_t endpoint_info)
+{
+  rcutils_allocator_t allocator = rcutils_get_default_allocator();
+  {
+    std::shared_lock<std::shared_mutex> lock(sub->buffer_discovery.mutex);
+    if (sub->buffer_discovery.private_writers_or_readers.count(peer_guid) > 0) {
+      rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+      return;
+    }
+  }
+
+  // Same process-wide registry as on_publication_matched -- see its own
+  // comment on why this replaced a per-entity one.
+  std::shared_ptr<rosidl::BufferBackend> backend;
+  std::string backend_type;
+  // See on_publication_matched's own comment: removed as dead code, then
+  // restored, then moved inside the loop -- a whole-loop try/catch
+  // abandoned every remaining candidate when a non-last one threw,
+  // instead of trying the next one the way a plain null return would.
+  {
+    std::lock_guard<std::mutex> lock(rmw_cyclonedds_cpp::process_backend_registry_mutex());
+    for (const auto & candidate : common_backend_types) {
+      try {
+        backend = rosidl_buffer_backend_registry::find_backend_by_type(
+          rmw_cyclonedds_cpp::process_backend_registry(), candidate);
+      } catch (const std::exception & e) {
+        RCUTILS_LOG_ERROR_NAMED(
+          "rmw_cyclonedds_cpp",
+          "on_subscription_matched: find_backend_by_type threw for candidate '%s': %s, "
+          "trying next candidate", candidate.c_str(), e.what());
+        backend.reset();
+        continue;
+      }
+      if (backend) {
+        backend_type = candidate;
+        break;
+      }
+    }
+  }
+  if (!backend) {
+    std::string tried;
+    for (const auto & candidate : common_backend_types) {
+      tried += (tried.empty() ? "" : ",") + candidate;
+    }
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp",
+      "on_subscription_matched: no buffer backend plugin registered for any of the common "
+      "set '%s', skipping private topic '%s'", tried.c_str(), private_name.c_str());
+    rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+    return;
+  }
+
+  // Matches on_publication_matched's own reasoning exactly: the descriptor
+  // type is an ordinary ROS message type, so this reader needs no marker
+  // sertype of its own. See that function's own comment for why the call
+  // below is guarded, and its round-4 comment for why it also needs
+  // backend_instance_mutex().
+  const rosidl_message_type_support_t * descriptor_type_supports;
+  try {
+    std::lock_guard<std::mutex> backend_lock(
+      rmw_cyclonedds_cpp::backend_instance_mutex(backend->get_backend_type()));
+    descriptor_type_supports = backend->get_descriptor_type_support();
+  } catch (const std::exception & e) {
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp",
+      "on_subscription_matched: backend '%s' get_descriptor_type_support threw: %s",
+      backend_type.c_str(), e.what());
+    rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+    return;
+  }
+  const rosidl_message_type_support_t * resolved = get_typesupport(descriptor_type_supports);
+  if (resolved == nullptr) {
+    RMW_SET_ERROR_MSG_WITH_FORMAT_STRING(
+      "on_subscription_matched: backend '%s' descriptor type support not from this RMW: %s",
+      backend_type.c_str(), rmw_get_error_string().str);
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp", "on_subscription_matched: %s", rmw_get_error_string().str);
+    rmw_reset_error();
+    rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+    return;
+  }
+  auto message_value_type = rmw_cyclonedds_cpp::make_message_value_type(descriptor_type_supports);
+  const std::string type_name = get_message_type_name(resolved);
+  auto * private_sertype = create_sertype(type_name, false, std::move(message_value_type));
+  create_msg_dds_dynamic_type(
+    resolved->typesupport_identifier, resolved->data, dds_get_participant(reader),
+    private_sertype);
+  dds_entity_t private_topic =
+    create_topic(dds_get_participant(reader), private_name.c_str(), private_sertype);
+  if (private_topic < 0) {
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp",
+      "on_subscription_matched: failed to create private topic '%s'", private_name.c_str());
+    rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+    return;
+  }
+
+  dds_qos_t * private_reader_qos = rmw_cyclonedds_cpp::make_private_endpoint_qos();
+  dds_entity_t private_reader =
+    dds_create_reader(dds_get_parent(reader), private_topic, private_reader_qos, nullptr);
+  dds_delete_qos(private_reader_qos);
+  dds_delete(private_topic);
+  if (private_reader < 0) {
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp",
+      "on_subscription_matched: failed to create private reader for '%s'", private_name.c_str());
+    rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+    return;
+  }
+
+  // from_descriptor_with_endpoint() is still what consumes samples from this reader
+  // (from_descriptor_with_endpoint() installing a real backend-aware
+  // buffer) -- this PR only makes the two sides agree on the same wire
+  // type, which `backend` and `endpoint_info` are stored for.
+  std::unique_lock<std::shared_mutex> lock(sub->buffer_discovery.mutex);
+  // Mirrors on_publication_matched's own construction: PrivateEndpoint's
+  // reader_cache_mutex is not copyable or movable, so it must be
+  // constructed in place via piecewise_construct.
+  if (!sub->buffer_discovery.private_writers_or_readers.emplace(
+      std::piecewise_construct,
+      std::forward_as_tuple(peer_guid),
+      std::forward_as_tuple(private_reader, backend, endpoint_info)).second)
+  {
+    dds_delete(private_reader);
+    rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+    return;
+  }
+  RCUTILS_LOG_INFO_NAMED(
+    "rmw_cyclonedds_cpp",
+    "on_subscription_matched: created private buffer-backend topic '%s' (backend '%s')",
+    private_name.c_str(), backend_type.c_str());
+}
+
+// Mirrors on_publication_matched above. private_topic_name() is the same
+// free function both sides call, on the
+// same (base_topic_name, peer_guid) pair -- computed from `reader`'s own
+// GID here, from the matched publication's GID on the publisher side --
+// which is what makes the two sides converge on one DDS topic name without
+// exchanging it out of band.
+// Forward-declared, mirroring process_matched_publication -- lets
+// on_subscription_matched hand a late-discovered (retried) ep to the
+// same processing path a synchronously found one uses.
+static void process_matched_subscription(
+  CddsSubscription * sub, dds_entity_t reader, dds_instance_handle_t peer_handle,
+  dds_builtintopic_endpoint_t * ep);
+
+static void on_subscription_matched(
+  dds_entity_t reader, const dds_subscription_matched_status_t status, void * arg)
+{
+  auto * sub = static_cast<CddsSubscription *>(arg);
+  // Mirrors on_publication_matched's own fix, same round -- see its comment
+  // for why the generic handler must be called explicitly here rather than
+  // relying on listener_set_event_callbacks()'s own registration, which
+  // this function's own dds_lset_subscription_matched_arg() call silently
+  // replaced on the same listener.
+  on_subscription_matched_fn(reader, status, &sub->user_callback_data);
+  const dds_instance_handle_t peer_handle = status.last_publication_handle;
+  dds_builtintopic_endpoint_t * ep = dds_get_matched_publication_data(reader, peer_handle);
+  if (ep != nullptr) {
+    process_matched_subscription(sub, reader, peer_handle, ep);
+    return;
+  }
+  // Mirrors on_publication_matched's own fix -- a null ep here is
+  // ambiguous between a genuine unmatch and the graph cache not having
+  // caught up yet with a just-discovered peer. Retried on a detached
+  // thread rather than blocking this callback (see
+  // on_publication_matched's own comment for the full reasoning).
+  if (!rmw_cyclonedds_cpp::begin_null_ep_retry(sub->buffer_discovery)) {
+    return;
+  }
+  try {
+    std::thread(
+      [sub, reader, peer_handle]()
+      {
+        // Mirrors on_publication_matched's own null-ep retry thread --
+        // bounded and short.
+        constexpr int kNullEpRetries = 3;
+        constexpr auto kNullEpRetryDelay = std::chrono::milliseconds(2);
+        dds_builtintopic_endpoint_t * retry_ep = nullptr;
+        for (int attempt = 0; attempt < kNullEpRetries && retry_ep == nullptr; attempt++) {
+          std::this_thread::sleep_for(kNullEpRetryDelay);
+          retry_ep = dds_get_matched_publication_data(reader, peer_handle);
+        }
+        if (retry_ep != nullptr) {
+          process_matched_subscription(sub, reader, peer_handle, retry_ep);
+        }
+        rmw_cyclonedds_cpp::end_null_ep_retry(sub->buffer_discovery);
+      }).detach();
+  } catch (const std::exception & e) {
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp",
+      "on_subscription_matched: failed to start null-ep retry thread: %s, giving up on "
+      "this match", e.what());
+    rmw_cyclonedds_cpp::end_null_ep_retry(sub->buffer_discovery);
+  }
+}
+
+static void process_matched_subscription(
+  CddsSubscription * sub, dds_entity_t reader, dds_instance_handle_t peer_handle,
+  dds_builtintopic_endpoint_t * ep)
+{
+  if (!rmw_cyclonedds_cpp::advertises_non_cpu_backend(ep->qos)) {
+    dds_builtintopic_free_endpoint(ep);
+    return;
+  }
+
+  rmw_cyclonedds_cpp::PeerGuid peer_guid;
+  memcpy(peer_guid.data(), ep->key.v, peer_guid.size());
+
+  // Mirrors on_publication_matched's own early duplicate-check: the
+  // cheapest possible gate, before any of the expensive backend-resolution
+  // or retry-wrapped work below runs.
+  {
+    std::shared_lock<std::shared_mutex> lock(sub->buffer_discovery.mutex);
+    if (sub->buffer_discovery.private_writers_or_readers.count(peer_guid) > 0) {
+      dds_builtintopic_free_endpoint(ep);
+      return;
+    }
+  }
+
+  // This used to pass ep->key here -- for
+  // on_subscription_matched, `ep` comes from dds_get_matched_publication_
+  // data(reader, ...), so ep->key is the REMOTE WRITER's own GUID, not
+  // this reader's. on_publication_matched (below) independently computes
+  // the SAME name from ITS ep->key, which for dds_get_matched_subscription_
+  // data(writer, ...) is the REMOTE READER's GUID -- i.e. THIS reader's
+  // own GUID, from the writer's point of view. The two sides therefore
+  // converged on private_topic_name(base, <this reader's GUID>) only if
+  // THIS side also keys on its own reader's GUID, not on ep->key. Using
+  // ep->key here computed private_topic_name(base, <the writer's GUID>)
+  // instead -- a DIFFERENT topic than the one the writer actually
+  // creates -- so the private reader and private writer never matched.
+  // Measured live: both sides logged "created private buffer-backend
+  // topic" with DIFFERENT hex suffixes for the same peer pair, and the
+  // subscriber never observed backend_type() != "cpu" on a single sample
+  // despite negotiation completing successfully on both sides.
+  dds_guid_t self_guid;
+  dds_get_guid(reader, &self_guid);
+  const std::string private_name =
+    rmw_cyclonedds_cpp::private_topic_name(sub->base_topic_name, self_guid);
+  // on_publication_matched switches to the resolved backend's
+  // descriptor-type sertype, and this side must build the private reader
+  // from the SAME descriptor type, not the original message type --
+  // otherwise the two sides agree on the topic name but not on the type,
+  // which is a genuine "inconsistent topic" case. Mirroring the same
+  // backend resolution here fixes the type mismatch. CONSUMING what
+  // arrives on this reader
+  // (from_descriptor_with_endpoint() installing a real buffer) is a
+  // separate concern owned elsewhere -- nothing reads from private_reader
+  // yet, so this only makes discovery agree.
+  const std::vector<std::string> peer_backend_types =
+    rmw_cyclonedds_cpp::all_non_cpu_backend_types(ep->qos);
+  // Same canonical-common-set fix as on_publication_matched: intersect
+  // with what THIS subscriber itself advertised and sort, so both sides
+  // converge on the identical backend rather than each independently
+  // trying the peer's list order against their own registry.
+  std::vector<std::string> common_backend_types =
+    rosidl_buffer_backend_registry::get_common_backends(
+    peer_backend_types, own_non_cpu_backend_types(reader));
+  std::sort(common_backend_types.begin(), common_backend_types.end());
+  // Mirrors on_publication_matched's own early check: no common backend is
+  // a normal case, not worth the endpoint-info build's cost.
+  if (common_backend_types.empty()) {
+    RCUTILS_LOG_INFO_NAMED(
+      "rmw_cyclonedds_cpp",
+      "on_subscription_matched: no backend in common with peer for '%s', staying on the "
+      "shared topic", private_name.c_str());
+    dds_builtintopic_free_endpoint(ep);
+    return;
+  }
+
+  // Tried once, synchronously -- mirrors on_publication_matched's own
+  // reasoning: the common case is the graph cache already has the peer.
+  rmw_topic_endpoint_info_t endpoint_info = rmw_get_zero_initialized_topic_endpoint_info();
+  rcutils_allocator_t allocator = rcutils_get_default_allocator();
+  const rmw_ret_t info_ret =
+    build_endpoint_info_from_match(sub->node, ep, /*peer_is_reader=*/ false, &endpoint_info);
+  dds_builtintopic_free_endpoint(ep);
+
+  if (RMW_RET_OK == info_ret) {
+    // Calling finish_subscription_match() synchronously here
+    // deadlocks for a SAME-PROCESS, SAME-PARTICIPANT match -- confirmed
+    // live via instrumented tracing (not a hypothesis): CycloneDDS
+    // dispatches this listener callback reentrant, on the same thread,
+    // from INSIDE the outer dds_create_reader() call that is still
+    // creating `reader` itself, and finish_subscription_match()'s own
+    // nested dds_create_reader() (for the private topic) then tries to
+    // re-enter CycloneDDS's internal entity-creation lock on the thread
+    // that already holds it -- a lock this RMW does not own and cannot
+    // make recursive. For a REMOTE peer this callback fires from
+    // CycloneDDS's own separate discovery thread, where nested entity
+    // creation is safe; the hazard is specific to a local match
+    // discovered synchronously during this process's own entity
+    // creation. Deferring unconditionally onto the same detached-thread
+    // mechanism the retry path below already uses for a slower endpoint-
+    // info lookup sidesteps this for every case, not just the retry one:
+    // the private topic is then always created on a thread that is never
+    // inside an in-progress dds_create_reader()/dds_create_writer() call.
+    if (!rmw_cyclonedds_cpp::begin_async_retry(sub->buffer_discovery)) {
+      rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+      return;
+    }
+    try {
+      std::thread(
+        [sub, reader, peer_guid, private_name, common_backend_types, endpoint_info]()
+        {
+          finish_subscription_match(
+            sub, reader, peer_guid, private_name, common_backend_types, endpoint_info);
+          rmw_cyclonedds_cpp::end_async_retry(sub->buffer_discovery);
+        }).detach();
+    } catch (const std::exception & e) {
+      RCUTILS_LOG_ERROR_NAMED(
+        "rmw_cyclonedds_cpp",
+        "on_subscription_matched: failed to start deferred-match thread for '%s': %s, "
+        "giving up on this match", private_name.c_str(), e.what());
+      rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+      rmw_cyclonedds_cpp::end_async_retry(sub->buffer_discovery);
+    }
+    return;
+  }
+
+  // Mirrors on_publication_matched's own deferred-retry mechanism -- see
+  // its comment for the full reasoning.
+  rmw_topic_endpoint_info_fini(&endpoint_info, &allocator);
+  rmw_reset_error();
+  // Mirrors on_publication_matched's own guard -- begin_async_retry()
+  // refuses once destroy_subscription() has called begin_shutdown().
+  if (!rmw_cyclonedds_cpp::begin_async_retry(sub->buffer_discovery)) {
+    return;
+  }
+  // Mirrors on_publication_matched's own guard -- std::thread's
+  // constructor can throw std::system_error; uncaught, that would
+  // propagate out of this CycloneDDS C listener callback and leave
+  // pending_async_retries incremented forever, hanging every future
+  // destroy_subscription() on this subscription.
+  try {
+    std::thread(
+      [sub, reader, peer_handle, peer_guid, private_name, common_backend_types]()
+      {
+        constexpr int kMaxAttempts = 4;
+        constexpr auto kRetryDelay = std::chrono::milliseconds(20);
+        rcutils_allocator_t retry_allocator = rcutils_get_default_allocator();
+        rmw_topic_endpoint_info_t retry_info = rmw_get_zero_initialized_topic_endpoint_info();
+        rmw_ret_t ret = RMW_RET_ERROR;
+        for (int attempt = 0; attempt < kMaxAttempts; attempt++) {
+          std::this_thread::sleep_for(kRetryDelay);
+          dds_builtintopic_endpoint_t * retry_ep =
+          dds_get_matched_publication_data(reader, peer_handle);
+          if (retry_ep == nullptr) {
+            ret = RMW_RET_ERROR;
+            break;
+          }
+          ret = build_endpoint_info_from_match(
+            sub->node, retry_ep, /*peer_is_reader=*/ false, &retry_info);
+          dds_builtintopic_free_endpoint(retry_ep);
+          if (RMW_RET_OK == ret) {
+            break;
+          }
+          rmw_topic_endpoint_info_fini(&retry_info, &retry_allocator);
+          retry_info = rmw_get_zero_initialized_topic_endpoint_info();
+          rmw_reset_error();
+        }
+        if (RMW_RET_OK == ret) {
+          finish_subscription_match(
+            sub, reader, peer_guid, private_name, common_backend_types, retry_info);
+        } else {
+          RCUTILS_LOG_ERROR_NAMED(
+            "rmw_cyclonedds_cpp",
+            "on_subscription_matched: failed to build endpoint info for '%s' after "
+            "backgrounded retries", private_name.c_str());
+          rmw_topic_endpoint_info_fini(&retry_info, &retry_allocator);
+        }
+        rmw_cyclonedds_cpp::end_async_retry(sub->buffer_discovery);
+      }).detach();
+  } catch (const std::exception & e) {
+    // See on_publication_matched's own comment: catching only
+    // std::system_error missed that constructing std::thread also
+    // decay-copies the lambda's captures, which can throw a plain
+    // std::exception (e.g. std::bad_alloc), not necessarily a
+    // system_error.
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp",
+      "on_subscription_matched: failed to start background retry thread for '%s': %s, "
+      "giving up on this match", private_name.c_str(), e.what());
+    rmw_cyclonedds_cpp::end_async_retry(sub->buffer_discovery);
+  }
+}
+
 static CddsSubscription * create_cdds_subscription(
-  dds_entity_t dds_ppant, dds_entity_t dds_sub,
+  const rmw_node_t * node, dds_entity_t dds_ppant, dds_entity_t dds_sub,
   const rosidl_message_type_support_t * type_supports, const char * topic_name,
   const rmw_qos_profile_t * qos_policies, bool ignore_local_publications)
 {
@@ -3021,6 +4495,10 @@ static CddsSubscription * create_cdds_subscription(
   std::string fqtopic_name = make_fqtopic(ROS_TOPIC_PREFIX, topic_name, "", qos_policies);
   auto message_type_support = rmw_cyclonedds_cpp::make_message_value_type(type_supports);
   bool is_self_contained = message_type_support->is_self_contained();
+  // Computed before the std::move below, which invalidates
+  // message_type_support.
+  const bool has_buffer_fields =
+    rmw_cyclonedds_cpp::has_buffer_backed_fields(message_type_support.get());
 
   auto sertype = create_sertype(
     type_name,
@@ -3029,25 +4507,37 @@ static CddsSubscription * create_cdds_subscription(
   create_msg_dds_dynamic_type(
     type_support->typesupport_identifier, type_support->data, dds_ppant,
     sertype);
-  topic = create_topic(dds_ppant, fqtopic_name.c_str(), sertype);
+  struct ddsi_sertype * stact = nullptr;
+  topic = create_topic(dds_ppant, fqtopic_name.c_str(), sertype, &stact);
+  // Set before dds_create_reader below, same reasoning as the
+  // publisher side's create_cdds_publisher().
+  sub->base_topic_name = fqtopic_name;
+  sub->node = node;
+  sub->has_buffer_fields = has_buffer_fields;
+  sub->sertype = stact;
 
   dds_listener_t * listener = dds_create_listener(&sub->user_callback_data);
   // Set the callback to listen for new messages
   dds_lset_data_available_arg(listener, dds_listener_callback, &sub->user_callback_data, false);
   // Set the corresponding callbacks to listen for events
   listener_set_event_callbacks(listener, &sub->user_callback_data);
+  if (has_buffer_fields) {
+    dds_lset_subscription_matched_arg(listener, on_subscription_matched, sub, false);
+  }
 
   if (topic < 0) {
     set_error_message_from_create_topic(topic, fqtopic_name);
     goto fail_topic;
   }
   if ((qos = create_readwrite_qos(
-      qos_policies, *type_support->get_type_hash_func(type_support), ignore_local_publications, ""
+      qos_policies, *type_support->get_type_hash_func(type_support), ignore_local_publications, "",
+      has_buffer_fields
     )) == nullptr)
   {
     goto fail_qos;
   }
-  if ((sub->enth = dds_create_reader(dds_sub, topic, qos, listener)) < 0) {
+  sub->enth = dds_create_reader(dds_sub, topic, qos, listener);
+  if (sub->enth < 0) {
     RMW_SET_ERROR_MSG("failed to create reader");
     goto fail_reader;
   }
@@ -3058,6 +4548,12 @@ static CddsSubscription * create_cdds_subscription(
   }
   dds_delete_listener(listener);
   sub->type_supports = *type_support;
+  // Mirrors create_cdds_publisher's own second-build cost and the reason
+  // it is not fixed here -- see that function's own comment.
+  if (has_buffer_fields) {
+    sub->buffer_message_value_type =
+      rmw_cyclonedds_cpp::make_message_value_type(&sub->type_supports);
+  }
 #if CDDS_VERSION == CDDS_VERSION_0_10
   sub->is_loaning_available = is_self_contained && dds_is_loan_available(sub->enth);
 #else
@@ -3072,9 +4568,24 @@ static CddsSubscription * create_cdds_subscription(
 
   return sub;
 fail_readcond:
+  // dds_create_reader() above already made sub->enth and its
+  // on_subscription_matched listener live, so a concurrent match in this
+  // window can spawn a detached async-retry thread capturing raw
+  // `sub`/`sub->enth` before this label ever runs -- the identical
+  // use-after-free class destroy_subscription()/create_subscription()'s
+  // own scope_exit close for their own failure paths, needed again here
+  // because this is a different, deeper failure path inside
+  // create_cdds_subscription() itself.
+  rmw_cyclonedds_cpp::begin_shutdown(sub->buffer_discovery);
+  rmw_cyclonedds_cpp::wait_for_async_retries(sub->buffer_discovery);
   if (dds_delete(sub->enth) < 0) {
     RCUTILS_LOG_ERROR_NAMED("rmw_cyclonedds_cpp", "failed to delete reader during error handling");
   }
+  // Mirrors create_cdds_publisher's fail_instance_handle drain -- a
+  // synchronous match completed before this failure path ran can have
+  // inserted a private reader into this map, and the sequence above does
+  // not drain it on its own.
+  rmw_cyclonedds_cpp::drain_private_endpoints(sub->buffer_discovery);
 fail_reader:
   dds_delete_qos(qos);
 fail_qos:
@@ -3104,7 +4615,7 @@ extern "C" rmw_ret_t rmw_fini_subscription_allocation(rmw_subscription_allocatio
 }
 
 static rmw_subscription_t * create_subscription(
-  dds_entity_t dds_ppant, dds_entity_t dds_sub,
+  const rmw_node_t * node, dds_entity_t dds_ppant, dds_entity_t dds_sub,
   const rosidl_message_type_support_t * type_supports,
   const char * topic_name, const rmw_qos_profile_t * qos_policies,
   const rmw_subscription_options_t * subscription_options)
@@ -3113,13 +4624,22 @@ static rmw_subscription_t * create_subscription(
   rmw_subscription_t * rmw_subscription;
   if (
     (sub = create_cdds_subscription(
-      dds_ppant, dds_sub, type_supports, topic_name, qos_policies,
+      node, dds_ppant, dds_sub, type_supports, topic_name, qos_policies,
       subscription_options->ignore_local_publications)) == nullptr)
   {
     return nullptr;
   }
   auto cleanup_subscription = rcpputils::make_scope_exit(
     [sub]() {
+      // on_subscription_matched can fire (and spawn a detached async-retry
+      // thread capturing `sub`/`sub->enth`) the instant
+      // create_cdds_subscription() returns, before this scope_exit ever
+      // runs -- the same race destroy_subscription()'s
+      // begin_shutdown()/wait_for_async_retries() ordering exists to
+      // close. This construction-failure path must use that same pair,
+      // or `sub` is deleted into the identical use-after-free window.
+      rmw_cyclonedds_cpp::begin_shutdown(sub->buffer_discovery);
+      rmw_cyclonedds_cpp::wait_for_async_retries(sub->buffer_discovery);
       if (dds_delete(sub->rdcondh) < 0) {
         RMW_SAFE_FWRITE_TO_STDERR(
           "failed to delete readcondition during '"
@@ -3130,6 +4650,11 @@ static rmw_subscription_t * create_subscription(
           "failed to delete reader during '"
           RCUTILS_STRINGIFY(__function__) "' cleanup\n");
       }
+      // Mirrors create_publisher's cleanup_cdds_publisher drain -- a
+      // synchronous match completed before this scope_exit runs can have
+      // inserted a private reader into this map, and the sequence above
+      // does not drain it on its own.
+      rmw_cyclonedds_cpp::drain_private_endpoints(sub->buffer_discovery);
       delete sub;
     });
   rmw_subscription = rmw_subscription_allocate();
@@ -3200,7 +4725,7 @@ extern "C" rmw_subscription_t * rmw_create_subscription(
   }
 
   rmw_subscription_t * sub = create_subscription(
-    node->context->impl->ppant, node->context->impl->dds_sub,
+    node, node->context->impl->ppant, node->context->impl->dds_sub,
     type_supports, topic_name, &adapted_qos_policies,
     subscription_options);
   if (sub == nullptr) {
@@ -3298,6 +4823,25 @@ static rmw_ret_t destroy_subscription(rmw_subscription_t * subscription)
   rmw_ret_t ret = RMW_RET_OK;
   auto sub = static_cast<CddsSubscription *>(subscription->data);
   clean_waitset_caches();
+  // Mirrors destroy_publisher's own ordering -- dds_delete's "blocks
+  // until any invocation already executing has returned" guarantee only
+  // covers the SYNCHRONOUS listener callback, not a std::thread a PRIOR
+  // match already detached
+  // and returned from. That thread, still sleeping in its retry loop,
+  // holds `reader` (== sub->enth) regardless of when sub->enth is deleted.
+  //
+  // begin_shutdown() (stops new spawns) THEN wait_for_async_retries()
+  // (drains every retry thread already spawned, from this match or an
+  // earlier one) THEN the deletes: by the time sub->enth is actually
+  // deleted, no thread can still be touching it.
+  //
+  // The deletes stay in their ORIGINAL relative order (rdcondh, a
+  // condition derived from sub->enth, before the reader itself --
+  // reversing that broke ordinary, non-buffer-backed subscription
+  // teardown, caught by rcl-tested-rmw-cyclonedds-cpp dropping from
+  // 30/30 to 19/30 on an earlier attempt that deleted sub->enth first).
+  rmw_cyclonedds_cpp::begin_shutdown(sub->buffer_discovery);
+  rmw_cyclonedds_cpp::wait_for_async_retries(sub->buffer_discovery);
   if (dds_delete(sub->rdcondh) < 0) {
     RMW_SET_ERROR_MSG("failed to delete readcondition");
     ret = RMW_RET_ERROR;
@@ -3310,6 +4854,13 @@ static rmw_ret_t destroy_subscription(rmw_subscription_t * subscription)
       RMW_SAFE_FWRITE_TO_STDERR("failed to delete reader\n");
     }
   }
+  // Mirrors destroy_publisher()'s own cleanup above.
+  //
+  // Mirrors destroy_publisher's own drain -- must be exclusive, not
+  // shared, since on_subscription_matched/finish_subscription_match's own
+  // shared_lock reads of this map must not overlap this drain's mutation.
+  // drain_private_endpoints() takes that lock itself.
+  rmw_cyclonedds_cpp::drain_private_endpoints(sub->buffer_discovery);
   delete sub;
   rmw_free(const_cast<char *>(subscription->topic_name));
   rmw_subscription_free(subscription);
@@ -3372,6 +4923,226 @@ static void message_info_from_sample_info(
   message_info->reception_sequence_number = RMW_MESSAGE_INFO_SEQUENCE_NUMBER_UNSUPPORTED;
 }
 
+// rmw_take_int()'s consumer of the publish-side descriptor protocol --
+// the receive-side mirror of rmw_publish()'s own has_buffer_fields block
+// above. Reads the descriptor sample PAIRED WITH `ros_message` (see the
+// correlation paragraph below) from the private reader belonging to the
+// peer that actually published it, converts it via backend->
+// from_descriptor_with_endpoint(), and installs the result into the first
+// buffer-backed field found in `ros_message` (install_first_buffer_impl(),
+// TypeSupport2.hpp -- same scope boundary find_buffer_impl() already has
+// on the publish side: one descriptor per matched peer).
+//
+// The peer is identified from `info`'s own publication_handle --
+// dds_get_matched_publication_data() resolves that to the peer's real
+// 16-byte GUID, the same key on_subscription_matched() used to create the
+// buffer_discovery entry -- rather than assumed to be whichever peer most
+// recently matched, which would silently misattribute a descriptor on any
+// subscription with more than one matched publisher.
+//
+// CORRELATION: a bare "take whatever is next in the private reader's
+// queue" is not safe on its own. rmw_publish() can legitimately
+// skip writing a descriptor for one specific message (create_descriptor_
+// with_endpoint() returning nullptr is documented CPU-fallback, not an
+// error) while the shared-topic write for that SAME message still goes
+// out -- so the private-topic stream is a sparse subset of the shared-topic
+// stream, with nothing marking which messages were skipped. Taking
+// "whatever is next" would then hand a LATER message's descriptor to an
+// EARLIER message's buffer field: silent cross-message misattribution, not
+// the disclosed "stays on CPU" miss case. Fixed by correlating on the exact
+// dds_write_ts() timestamp both writes share (rmw_publish() passes the
+// identical `tstamp` to both calls) -- a descriptor is only ever installed
+// when its own timestamp equals `info.source_timestamp`, never merely
+// because it was the next thing in the queue. A descriptor drained early
+// (its message hasn't been taken yet) or one whose message's descriptor
+// write was skipped and will therefore never be claimed is cached on the
+// PrivateEndpoint (bounded, see its own comment), not discarded and not
+// blindly installed.
+//
+// KNOWN, DISCLOSED LIMITATION: the shared-topic message and its paired
+// private-topic descriptor are still two independent DDS writes with no
+// ordering guarantee reaching this process, so the exact match this
+// function requires may simply not have arrived yet. On that genuine miss,
+// `ros_message`'s buffer-backed field stays on whatever backend it was
+// constructed with (the ordinary default CPU one) rather than blocking
+// rmw_take() or retrying, logged at DEBUG rather than ERROR -- a benign,
+// expected race under load, not a defect; this project's own gtest suite
+// is what measures its actual hit rate.
+//
+// One condition worth naming explicitly: no buffer backend plugin
+// registered locally for anything the peer advertised is already a
+// disclosed, logged (ERROR) condition, not a silent downgrade --
+// finish_subscription_match()'s existing "no buffer backend plugin
+// registered for any of the common set" log already covers it. Nothing
+// here needs to duplicate that -- a peer with no matching entry in
+// buffer_discovery is exactly the case that log already covers.
+static void consume_buffer_descriptor(
+  CddsSubscription * sub, const dds_sample_info_t & info, void * ros_message)
+{
+  dds_builtintopic_endpoint_t * ep =
+    dds_get_matched_publication_data(sub->enth, info.publication_handle);
+  if (ep == nullptr) {
+    return;
+  }
+  rmw_cyclonedds_cpp::PeerGuid peer_guid;
+  memcpy(peer_guid.data(), ep->key.v, peer_guid.size());
+  dds_builtintopic_free_endpoint(ep);
+
+  // Mirrors rmw_publish()'s own shared_lock reasoning exactly -- see
+  // BufferEndpointDiscovery.hpp's comment on the mutex. Held for the rest
+  // of this function's body, across every backend call below -- the
+  // identical shape rmw_publish()'s own shared_lock takes across its own
+  // for-loop of backend calls, not a difference between the two paths.
+  // This pattern can in principle starve a pending exclusive-lock writer
+  // (a new match's emplace()) on Linux, where std::shared_mutex has no
+  // default writer-priority guarantee. Not fixed here -- a narrower lock
+  // needs either copying the map entry's contents out first or a
+  // different container with stable element addresses, both real
+  // redesigns of code that took several rounds to get correct the first
+  // time.
+  std::shared_lock<std::shared_mutex> lock(sub->buffer_discovery.mutex);
+  auto it = sub->buffer_discovery.private_writers_or_readers.find(peer_guid);
+  if (it == sub->buffer_discovery.private_writers_or_readers.end() || !it->second.backend) {
+    // No common backend was negotiated with this peer (or negotiation is
+    // still in flight, or this peer never advertised one at all) -- the
+    // shared-topic message's field keeps its ordinary default CPU buffer.
+    return;
+  }
+  auto & priv = it->second;
+
+  // The catch handlers below must NOT re-invoke
+  // priv.backend->get_backend_type() to build their own log message -- if
+  // get_backend_type() itself is what threw, that second call throws
+  // again, uncaught, escaping this function and rmw_take_int() across the
+  // extern "C" rmw_take() ABI boundary (the exact hazard
+  // finish_publication_match()/finish_subscription_match() already avoid
+  // by using a pre-captured backend_type string instead of re-calling
+  // get_backend_type()). Captured once, guarded, and reused for every
+  // subsequent log/lock-key use in this function.
+  std::string backend_type;
+  try {
+    backend_type = priv.backend->get_backend_type();
+  } catch (const std::exception & e) {
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp", "rmw_take: backend get_backend_type threw: %s", e.what());
+    return;
+  }
+
+  // Guards ONLY this peer's own private reader and its
+  // pending_descriptors/pending_order cache -- see PrivateEndpoint's own
+  // comment on reader_cache_mutex. It does NOT serialize calls into
+  // `backend` itself; backend_instance_mutex() below does that.
+  std::shared_ptr<void> matched_descriptor;
+  {
+    std::lock_guard<std::mutex> cache_lock(priv.reader_cache_mutex);
+    auto cached = priv.pending_descriptors.find(info.source_timestamp);
+    if (cached != priv.pending_descriptors.end()) {
+      matched_descriptor = cached->second;
+      priv.pending_descriptors.erase(cached);
+      priv.pending_order.erase(
+        std::remove(
+          priv.pending_order.begin(), priv.pending_order.end(),
+          info.source_timestamp), priv.pending_order.end());
+    } else {
+      // Drain whatever is currently available on the private reader,
+      // looking for the exact timestamp match; anything else drained along
+      // the way is cached (bounded) rather than discarded, since it likely
+      // belongs to a message this subscription hasn't taken yet.
+      for (size_t i = 0;
+        i < rmw_cyclonedds_cpp::PrivateEndpoint::kMaxPendingDescriptors && !matched_descriptor;
+        ++i)
+      {
+        // create_empty_descriptor() and from_descriptor_with_endpoint()
+        // (below) are direct virtual calls into plugin code with no
+        // noexcept guarantee -- the same hazard rmw_publish()'s
+        // create_descriptor_with_endpoint() call is guarded for, and this
+        // function is reached from the identical kind of boundary:
+        // rmw_take_int() via the extern "C" rmw_take() entry point, on
+        // every take for a buffer-backed subscription. An exception is
+        // treated exactly like the documented null return.
+        std::shared_ptr<void> descriptor;
+        try {
+          std::lock_guard<std::mutex> backend_lock(
+            rmw_cyclonedds_cpp::backend_instance_mutex(backend_type));
+          descriptor = priv.backend->create_empty_descriptor();
+        } catch (const std::exception & e) {
+          RCUTILS_LOG_ERROR_NAMED(
+            "rmw_cyclonedds_cpp",
+            "rmw_take: backend '%s' create_empty_descriptor threw: %s",
+            backend_type.c_str(), e.what());
+          break;
+        }
+        if (!descriptor) {
+          RCUTILS_LOG_ERROR_NAMED(
+            "rmw_cyclonedds_cpp",
+            "rmw_take: backend '%s' failed to allocate an empty descriptor",
+            backend_type.c_str());
+          break;
+        }
+        void * descriptor_raw = descriptor.get();
+        dds_sample_info_t descriptor_info;
+        int rc = dds_take(priv.entity, &descriptor_raw, &descriptor_info, 1, 1);
+        if (rc != 1 || !descriptor_info.valid_data) {
+          // Nothing more available right now -- stop draining.
+          break;
+        }
+        if (descriptor_info.source_timestamp == info.source_timestamp) {
+          matched_descriptor = descriptor;
+          break;
+        }
+        if (priv.pending_order.size() >=
+          rmw_cyclonedds_cpp::PrivateEndpoint::kMaxPendingDescriptors)
+        {
+          dds_time_t oldest = priv.pending_order.front();
+          priv.pending_order.pop_front();
+          priv.pending_descriptors.erase(oldest);
+        }
+        priv.pending_descriptors[descriptor_info.source_timestamp] = descriptor;
+        priv.pending_order.push_back(descriptor_info.source_timestamp);
+      }
+    }
+  }
+  if (!matched_descriptor) {
+    RCUTILS_LOG_DEBUG_NAMED(
+      "rmw_cyclonedds_cpp",
+      "rmw_take: no paired descriptor yet on private reader for backend '%s' -- "
+      "field stays on its current backend for this sample",
+      backend_type.c_str());
+    return;
+  }
+
+  std::unique_ptr<void, void (*)(void *)> impl(nullptr, nullptr);
+  try {
+    std::lock_guard<std::mutex> backend_lock(
+      rmw_cyclonedds_cpp::backend_instance_mutex(backend_type));
+    impl = priv.backend->from_descriptor_with_endpoint(
+      matched_descriptor.get(), priv.endpoint_info);
+  } catch (const std::exception & e) {
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp",
+      "rmw_take: backend '%s' from_descriptor_with_endpoint threw: %s",
+      backend_type.c_str(), e.what());
+    return;
+  }
+  if (!impl) {
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp",
+      "rmw_take: backend '%s' from_descriptor_with_endpoint() returned null -- "
+      "field stays on its current backend for this sample",
+      backend_type.c_str());
+    return;
+  }
+  if (!sub->buffer_message_value_type ||
+    !rmw_cyclonedds_cpp::install_first_buffer_impl(
+      sub->buffer_message_value_type.get(), ros_message, impl))
+  {
+    RCUTILS_LOG_ERROR_NAMED(
+      "rmw_cyclonedds_cpp",
+      "rmw_take: received a '%s' backend descriptor but found no buffer-backed "
+      "field to install it into", backend_type.c_str());
+  }
+}
+
 static rmw_ret_t rmw_take_int(
   const rmw_subscription_t * subscription, void * ros_message,
   bool * taken, rmw_message_info_t * message_info)
@@ -3396,6 +5167,15 @@ static rmw_ret_t rmw_take_int(
       *taken = true;
       if (message_info) {
         message_info_from_sample_info(info, message_info);
+      }
+      // Consume this sample's paired descriptor, if any -- see
+      // consume_buffer_descriptor()'s own comment.
+      // has_buffer_fields is checked BEFORE touching buffer_discovery at
+      // all -- same reasoning as rmw_publish()'s own gate; see
+      // CddsPublisher::has_buffer_fields's comment for the full argument
+      // and the naming collision it's careful to rule out.
+      if (sub->has_buffer_fields) {
+        consume_buffer_descriptor(sub, info, ros_message);
       }
 #if REPORT_LATE_MESSAGES > 0
       dds_time_t tnow = dds_time();
