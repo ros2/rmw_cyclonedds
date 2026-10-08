@@ -78,7 +78,9 @@
 #include "rmw_dds_common/qos.hpp"
 #include "rmw_dds_common/security.hpp"
 
+#include "rosidl_runtime_c/message_initialization.h"
 #include "rosidl_runtime_c/type_hash.h"
+#include "rosidl_runtime_cpp/message_initialization.hpp"
 
 #include "rosidl_typesupport_cpp/message_type_support.hpp"
 
@@ -354,6 +356,7 @@ struct CddsSubscription : CddsEntity
   rmw_gid_t gid;
   dds_entity_t rdcondh;
   rosidl_message_type_support_t type_supports;
+  std::function<void(void *)> refini_message;
   dds_data_allocator_t data_allocator;
   bool is_loaning_available;
   user_callback_data_t user_callback_data;
@@ -4612,6 +4615,30 @@ static const std::string csid_to_string(const client_service_id_t & id)
   return os.str();
 }
 
+static std::function<void(void *)> make_refini_message(
+  const rosidl_message_type_support_t * type_supports)
+{
+  const rosidl_message_type_support_t * ts = get_typesupport(type_supports);
+  if (ts == nullptr) {
+    return nullptr;
+  }
+  if (strcmp(ts->typesupport_identifier, rosidl_typesupport_introspection_c__identifier) == 0) {
+    auto members =
+      static_cast<const rosidl_typesupport_introspection_c__MessageMembers *>(ts->data);
+    return [members](void * message) {
+        members->fini_function(message);
+        members->init_function(message, ROSIDL_RUNTIME_C_MSG_INIT_ALL);
+      };
+  } else {
+    auto members =
+      static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(ts->data);
+    return [members](void * message) {
+        members->fini_function(message);
+        members->init_function(message, rosidl_runtime_cpp::MessageInitialization::ALL);
+      };
+  }
+}
+
 static rmw_ret_t rmw_take_response_request(
   CddsCS * cs, rmw_service_info_t * request_header,
   void * ros_data, bool * taken, dds_time_t * source_timestamp,
@@ -4648,6 +4675,7 @@ static rmw_ret_t rmw_take_response_request(
         *taken = true;
         return RMW_RET_OK;
       }
+      cs->sub->refini_message(ros_data);
     }
   }
   *taken = false;
@@ -4952,6 +4980,11 @@ static rmw_ret_t rmw_init_cs(
 
   auto pub = std::make_unique<CddsPublisher>();
   auto sub = std::make_unique<CddsSubscription>();
+  sub->refini_message = make_refini_message(
+    is_service ? type_supports->request_typesupport : type_supports->response_typesupport);
+  if (!sub->refini_message) {
+    return RMW_RET_ERROR;
+  }
   std::string subtopic_name, pubtopic_name;
   void * pub_type_support, * sub_type_support;
   dds_qos_t * pub_qos, * sub_qos;
