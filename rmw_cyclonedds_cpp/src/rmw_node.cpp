@@ -4427,10 +4427,17 @@ static void waitset_detach(CddsWaitset * ws)
   for (auto && x : ws->cls) {
     dds_waitset_detach(ws->waitseth, x->client.sub->rdcondh);
   }
+  std::unordered_set<dds_entity_t> event_entities;
+  for (auto && x : ws->evs) {
+    if (event_entities.insert(x.enth).second) {
+      dds_waitset_detach(ws->waitseth, x.enth);
+    }
+  }
   ws->subs.resize(0);
   ws->gcs.resize(0);
   ws->srvs.resize(0);
   ws->cls.resize(0);
+  ws->evs.resize(0);
   ws->nelems = 0;
 }
 
