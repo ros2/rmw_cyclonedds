@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "rcutils/error_handling.h"
+#include "rosidl_buffer/buffer.hpp"
 #include "rosidl_runtime_c/message_type_support_struct.h"
 #include "rosidl_runtime_c/service_type_support_struct.h"
 
@@ -26,6 +27,45 @@ namespace rmw_cyclonedds_cpp
 {
 const PrimitiveValueType primitive_value_type_boolean =
   PrimitiveValueType(ROSIDL_TypeKind::BOOLEAN);
+
+// install_buffer_impl's write-side lambdas take care not to
+// `impl.release()` and rewrap the raw pointer in
+// `std::unique_ptr<rosidl::BufferImplBase<uint8_t>>` (default_delete),
+// which would discard the custom deleter that BufferBackend::
+// from_descriptor_with_endpoint() attaches -- rosidl_buffer_backend/
+// buffer_backend.hpp's own doc comment says that deleter's whole purpose
+// is "correct destruction across the plugin boundary". rosidl::Buffer<T>'s
+// constructor only accepts a unique_ptr<BufferImplBase<T>> with the
+// default deleter, so the original deleter cannot be handed to it
+// directly; this adapter keeps the descriptor-provided unique_ptr (and its
+// real deleter) alive as a member and forwards every BufferImplBase call
+// to the wrapped object, so destroying the adapter (which Buffer<T> does
+// via its own default_delete) invokes the backend's own deleter rather
+// than a bare `delete`.
+class DeleterPreservingBufferImpl final : public rosidl::BufferImplBase<uint8_t>
+{
+public:
+  explicit DeleterPreservingBufferImpl(std::unique_ptr<void, void (*)(void *)> owned)
+  : owned_(std::move(owned)),
+    real_(static_cast<rosidl::BufferImplBase<uint8_t> *>(owned_.get()))
+  {}
+
+  std::string get_backend_type() const override {return real_->get_backend_type();}
+  size_t size() const override {return real_->size();}
+  std::unique_ptr<rosidl::BufferImplBase<uint8_t>> to_cpu() const override
+  {
+    return real_->to_cpu();
+  }
+  std::unique_ptr<rosidl::BufferImplBase<uint8_t>> clone() const override
+  {
+    return real_->clone();
+  }
+  const void * descriptor() const override {return real_->descriptor();}
+
+private:
+  std::unique_ptr<void, void (*)(void *)> owned_;
+  rosidl::BufferImplBase<uint8_t> * real_;
+};
 
 class ROSIDLC_StructValueType : public StructValueType
 {
@@ -203,7 +243,54 @@ ROSIDLC_StructValueType::ROSIDLC_StructValueType(
         member_impl.get_function,
         [member_impl](void * p, size_t s){
           if (!member_impl.resize_function(p, s)) {throw std::bad_alloc();}
-        });
+        },
+        member_impl.is_rosidl_buffer_,
+        member_impl.is_rosidl_buffer_ ?
+        std::function<const void * (const void *)>(
+          [](const void * p) -> const void * {
+            // The generated rosidl_runtime_c__..._Sequence struct's `data`
+            // field IS an rosidl::Buffer<uint8_t>* value (not a raw array
+            // pointer) whenever is_rosidl_buffer_ is true -- see
+            // rosidl_runtime_c/primitives_sequence.h. Reading it directly
+            // needs no new accessor on the C side; get_impl() (public,
+            // non-throwing) normalizes it to the same BufferImplBase<T>*
+            // contract the C++ introspection path's get_buffer_impl_
+            // function already returns, so Serialization.cpp can treat
+            // both uniformly.
+            struct BufferBackedSequenceView {void * data; size_t size; size_t capacity;};
+            auto * buf = static_cast<rosidl::Buffer<uint8_t> *>(
+              static_cast<const BufferBackedSequenceView *>(p)->data);
+            return buf->get_impl();
+          }) :
+        std::function<const void * (const void *)>(nullptr),
+        member_impl.is_rosidl_buffer_ ?
+        std::function<void(void *, std::unique_ptr<void, void (*)(void *)>)>(
+          [](void * p, std::unique_ptr<void, void (*)(void *)> impl) {
+            // Mirrors the getter lambda above exactly -- same `data`-field
+            // convention, other direction. `impl`'s own deleter is
+            // preserved via DeleterPreservingBufferImpl (see its
+            // definition above) rather than dropped, since
+            // from_descriptor_with_endpoint()'s deleter is not guaranteed
+            // to be a plain `delete` for every backend.
+            //
+            // The move-assignment below is a post-construction backend
+            // replacement, which rosidl_buffer/buffer.hpp's own
+            // constructor doc says has "no post-construction setter,
+            // which avoids race conditions with concurrent reads" --
+            // that guarantee is about Buffer<T>'s own public surface
+            // (there is no `set_impl()`), not something this call site
+            // can restore; `operator=` is itself public API on Buffer<T>
+            // and this line does not add a new hole. It is safe HERE
+            // specifically because it runs inside rmw_take_int(), before
+            // the message is handed to the caller -- no other thread can
+            // hold a reference to `buf` yet.
+            struct BufferBackedSequenceView {void * data; size_t size; size_t capacity;};
+            auto * buf = static_cast<rosidl::Buffer<uint8_t> *>(
+              static_cast<BufferBackedSequenceView *>(p)->data);
+            *buf = rosidl::Buffer<uint8_t>(
+              std::make_unique<DeleterPreservingBufferImpl>(std::move(impl)));
+          }) :
+        std::function<void(void *, std::unique_ptr<void, void (*)(void *)>)>(nullptr));
     } else {
       member_value_type = make_value_type<ROSIDLC_SpanSequenceValueType>(
         element_value_type,
@@ -276,7 +363,35 @@ ROSIDLCPP_StructValueType::ROSIDLCPP_StructValueType(
       member_value_type = make_value_type<CallbackSpanSequenceValueType>(
         element_value_type, bound,
         member_impl.size_function, member_impl.get_const_function, member_impl.get_function,
-        member_impl.resize_function);
+        member_impl.resize_function,
+        member_impl.is_rosidl_buffer_,
+        std::function<const void * (const void *)>(member_impl.get_buffer_impl_function),
+        member_impl.is_rosidl_buffer_ ?
+        std::function<void(void *, std::unique_ptr<void, void (*)(void *)>)>(
+          [](void * untyped_member, std::unique_ptr<void, void (*)(void *)> impl) {
+            // The write-side mirror of get_buffer_impl_function__*,
+            // generated per-member in msg__type_support.cpp.em -- but
+            // this direction needs no per-member codegen at all, because
+            // the operation it performs (reinterpret_cast the member's
+            // own address to rosidl::Buffer<uint8_t>*, then replace its
+            // backend) does not depend on which message or member this
+            // is, unlike the getter, which the .em template also could
+            // have written this way. `untyped_member` is the exact same
+            // pointer get_buffer_impl_function__*(untyped_member)
+            // receives -- the address of the rosidl::Buffer<uint8_t>
+            // member itself, per that generated function's own body
+            // (`reinterpret_cast<const rosidl::Buffer<uint8_t> *>
+            // (untyped_member)`). See the C-introspection lambda above
+            // for why `impl`'s own deleter is preserved via
+            // DeleterPreservingBufferImpl rather than dropped, and for
+            // why the move-assignment below is safe despite Buffer<T>'s
+            // constructor doc describing "no post-construction setter" --
+            // same reasoning, same rmw_take_int() call site.
+            auto * buf = reinterpret_cast<rosidl::Buffer<uint8_t> *>(untyped_member);
+            *buf = rosidl::Buffer<uint8_t>(
+              std::make_unique<DeleterPreservingBufferImpl>(std::move(impl)));
+          }) :
+        std::function<void(void *, std::unique_ptr<void, void (*)(void *)>)>(nullptr));
     }
     if (member_impl.is_key_) {
       has_keys = true;

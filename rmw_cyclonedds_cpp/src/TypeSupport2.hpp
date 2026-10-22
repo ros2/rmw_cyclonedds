@@ -32,6 +32,8 @@
 #include "rosidl_typesupport_introspection_cpp/message_introspection.hpp"
 #include "rosidl_typesupport_introspection_cpp/service_introspection.hpp"
 
+#include "bytewise.hpp"
+
 namespace rmw_cyclonedds_cpp
 {
 /// Stub for code that should never be reachable by design.
@@ -265,7 +267,152 @@ public:
   virtual void resize(void * ptr_to_sequence, size_t size) const = 0;
   uint32_t sequence_bound() const {return m_bound;}
   EValueType e_value_type() const final {return EValueType::SpanSequenceValueType;}
+
+  /// True if this member is an rosidl::Buffer<T> field. False for every
+  /// ordinary sequence -- the default here covers ArrayValueType-adjacent
+  /// and non-buffer sequence subclasses without each needing to override.
+  virtual bool is_rosidl_buffer() const {return false;}
+  /// Non-throwing: the member's underlying rosidl::BufferImplBase<T>*, as
+  /// a type-erased const void*, or nullptr if is_rosidl_buffer() is false.
+  /// Callers check get_backend_type() (also non-throwing) on the result
+  /// before deciding whether the ordinary CPU-only sequence_contents()
+  /// path (which throws for non-CPU) is safe to take.
+  virtual const void * buffer_impl(const void *) const {return nullptr;}
+  /// The write-side counterpart of buffer_impl() above -- installs a NEW
+  /// backend implementation into the member's underlying rosidl::Buffer<T>,
+  /// replacing whatever backend it had (a freshly-constructed message's
+  /// default CPU one, ordinarily). `impl` is a type-erased
+  /// rosidl::BufferImplBase<uint8_t>* with its own deleter, exactly the
+  /// shape rosidl::BufferBackend::from_descriptor_with_endpoint() returns
+  /// -- kept type-erased here for the same reason buffer_impl()'s return
+  /// is: this header does not otherwise depend on rosidl_buffer_backend's
+  /// headers. No-op (drops `impl`, running its deleter) if
+  /// is_rosidl_buffer() is false.
+  virtual void install_buffer_impl(void *, std::unique_ptr<void, void (*)(void *)>) const {}
 };
+
+/// True if `vt` is, or contains (recursively, through nested structs), any
+/// member that is a rosidl::Buffer<T> field. Used at endpoint creation to
+/// decide whether to advertise buffer-backend capability in the DDS QoS
+/// user_data -- see create_readwrite_qos() in rmw_node.cpp. Reused here
+/// rather than duplicated, since a second is_rosidl_buffer() walk would
+/// disagree with Serialization.cpp's own SpanSequenceValueType handling the
+/// moment either one changed without the other.
+inline bool has_buffer_backed_fields(const AnyValueType * vt)
+{
+  switch (vt->e_value_type()) {
+    case EValueType::StructValueType:
+      {
+        const auto * s = static_cast<const StructValueType *>(vt);
+        for (size_t i = 0; i < s->n_members(); i++) {
+          if (has_buffer_backed_fields(s->get_member(i)->value_type)) {
+            return true;
+          }
+        }
+        return false;
+      }
+    case EValueType::SpanSequenceValueType:
+      return static_cast<const SpanSequenceValueType *>(vt)->is_rosidl_buffer();
+    default:
+      return false;
+  }
+}
+
+/// The first rosidl::BufferImplBase<uint8_t>* found, recursively, in `msg`
+/// -- or nullptr if `vt` has no buffer-backed field at all. rmw_publish()
+/// needs the actual impl pointer of a live message instance to call a
+/// backend's create_descriptor_with_endpoint(), which
+/// has_buffer_backed_fields() above cannot give (it only walks the type
+/// tree, never an instance). Walks the identical two cases that function
+/// does, plus msg's own byte offset per struct member, so the two can
+/// never independently drift on which fields count as buffer-backed.
+///
+/// DELIBERATE SCOPE BOUNDARY: a first attempt at this (collecting every
+/// impl instead of the first) does not actually fix anything.
+/// PrivateEndpoint::entity is ONE DDS writer per PEER, negotiated for ONE
+/// descriptor wire type from ONE backend (endpoint_info/backend are
+/// per-peer, not per-field) -- writing N different fields' descriptors
+/// through that one writer produces N unlabeled samples on one topic with
+/// no way for a reader to tell which field a given sample is. Collecting
+/// the impls in C++ would make the compile succeed without making the
+/// wire protocol correct. A real fix needs a field-correlation mechanism
+/// (one private topic per field, or a multi-field descriptor container)
+/// that does not exist yet -- larger scope than this function. Every
+/// message this project has exercised so far has at most one
+/// buffer-backed field, so returning only the first remains correct for
+/// every case measured so far.
+inline const void * find_buffer_impl(const AnyValueType * vt, const void * msg)
+{
+  switch (vt->e_value_type()) {
+    case EValueType::StructValueType:
+      {
+        const auto * s = static_cast<const StructValueType *>(vt);
+        for (size_t i = 0; i < s->n_members(); i++) {
+          const Member * member = s->get_member(i);
+          const void * member_ptr = byte_offset(msg, member->member_offset);
+          if (const void * impl = find_buffer_impl(member->value_type, member_ptr)) {
+            return impl;
+          }
+        }
+        return nullptr;
+      }
+    case EValueType::SpanSequenceValueType:
+      {
+        const auto * seq = static_cast<const SpanSequenceValueType *>(vt);
+        return seq->is_rosidl_buffer() ? seq->buffer_impl(msg) : nullptr;
+      }
+    default:
+      return nullptr;
+  }
+}
+
+/// The write-side mirror of find_buffer_impl() above -- installs `impl` into
+/// the FIRST buffer-backed field found in `msg`, returning true, or returns
+/// false (dropping `impl`, running its deleter) if `vt` has none.
+/// rmw_take()'s consumer of the descriptor protocol uses this to install a
+/// backend-aware buffer produced by BufferBackend::
+/// from_descriptor_with_endpoint() into an already-deserialized destination
+/// message.
+///
+/// SAME DELIBERATE SCOPE BOUNDARY as find_buffer_impl(): one descriptor per
+/// matched peer, so only the first buffer-backed field is ever a candidate.
+/// Walks the identical two cases, for the identical reason -- the publish
+/// and receive sides must never independently drift on which fields count
+/// as buffer-backed.
+inline bool install_first_buffer_impl(
+  const AnyValueType * vt, void * msg, std::unique_ptr<void, void (*)(void *)> & impl)
+{
+  // `impl` is taken by REFERENCE, not by value: a struct with the
+  // buffer-backed field past its first member would otherwise move `impl`
+  // into the first (non-matching) recursive call, leaving it null for every
+  // sibling tried afterward. Only the terminal, matching call ever moves
+  // out of it.
+  switch (vt->e_value_type()) {
+    case EValueType::StructValueType:
+      {
+        const auto * s = static_cast<const StructValueType *>(vt);
+        for (size_t i = 0; i < s->n_members(); i++) {
+          const Member * member = s->get_member(i);
+          void * member_ptr = byte_offset(msg, member->member_offset);
+          if (install_first_buffer_impl(member->value_type, member_ptr, impl)) {
+            return true;
+          }
+        }
+        return false;
+      }
+    case EValueType::SpanSequenceValueType:
+      {
+        const auto * seq = static_cast<const SpanSequenceValueType *>(vt);
+        if (!seq->is_rosidl_buffer()) {
+          return false;
+        }
+        seq->install_buffer_impl(msg, std::move(impl));
+        return true;
+      }
+    default:
+      return false;
+  }
+}
 
 class CallbackSpanSequenceValueType : public SpanSequenceValueType
 {
@@ -275,25 +422,56 @@ protected:
   std::function<const void * (const void *, size_t index)> m_get_const_function;
   std::function<void * (void *, size_t index)> m_get_function;
   std::function<void(void *, size_t size)> m_resize_function;
+  bool m_is_rosidl_buffer;
+  std::function<const void * (const void *)> m_get_buffer_impl_function;
+  // The write-side counterpart, populated only where
+  // m_get_buffer_impl_function is -- see install_buffer_impl() below.
+  std::function<void(void *, std::unique_ptr<void, void (*)(void *)>)>
+  m_install_buffer_impl_function;
 
 public:
   CallbackSpanSequenceValueType(
     const AnyValueType * element_value_type, uint32_t bound,
     decltype(m_size_function) size_function,
     decltype(m_get_const_function) get_const_function, decltype(m_get_function) get_function,
-    decltype(m_resize_function) resize_function)
+    decltype(m_resize_function) resize_function,
+    bool is_rosidl_buffer = false,
+    decltype(m_get_buffer_impl_function) get_buffer_impl_function = nullptr,
+    decltype(m_install_buffer_impl_function) install_buffer_impl_function = nullptr)
   : SpanSequenceValueType(bound),
     m_element_value_type(element_value_type),
     m_size_function(size_function),
     m_get_const_function(get_const_function),
     m_get_function(get_function),
-    m_resize_function(resize_function)
+    m_resize_function(resize_function),
+    m_is_rosidl_buffer(is_rosidl_buffer),
+    m_get_buffer_impl_function(get_buffer_impl_function),
+    m_install_buffer_impl_function(install_buffer_impl_function)
   {
     assert(m_element_value_type);
     assert(size_function);
     assert(get_const_function);
     assert(get_function);
     assert(resize_function);
+    assert(!m_is_rosidl_buffer || m_get_buffer_impl_function);
+    assert(!m_is_rosidl_buffer || m_install_buffer_impl_function);
+  }
+
+  bool is_rosidl_buffer() const override {return m_is_rosidl_buffer;}
+  const void * buffer_impl(const void * ptr_to_sequence) const override
+  {
+    if (!m_is_rosidl_buffer) {
+      return nullptr;
+    }
+    return m_get_buffer_impl_function(ptr_to_sequence);
+  }
+  void install_buffer_impl(
+    void * ptr_to_sequence, std::unique_ptr<void, void (*)(void *)> impl) const override
+  {
+    if (!m_is_rosidl_buffer) {
+      return;
+    }
+    m_install_buffer_impl_function(ptr_to_sequence, std::move(impl));
   }
 
   size_t sizeof_type() const override {throw std::logic_error("not implemented");}
