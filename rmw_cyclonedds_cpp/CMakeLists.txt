@@ -128,7 +128,36 @@ register_rmw_implementation(
   "cpp:rosidl_typesupport_introspection_cpp")
 
 if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_lint_auto REQUIRED)
+  find_package(std_msgs REQUIRED)
+
+  idlc_generate(
+    TARGET xtypes_member_name_idl
+    FILES "${CMAKE_CURRENT_SOURCE_DIR}/test/UInt32_.idl"
+    WARNINGS no-implicit-extensibility)
+
+  ament_add_gtest(test_xtypes_member_names
+    test/test_xtypes_member_names.cpp
+    src/dyntype.cpp
+    src/dyntype_helper.c
+    src/type_name.cpp)
+  target_include_directories(test_xtypes_member_names PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    "${CMAKE_CURRENT_BINARY_DIR}/src"
+    "${CMAKE_CURRENT_BINARY_DIR}")
+  target_link_libraries(test_xtypes_member_names
+    rmw_cyclonedds_cpp
+    xtypes_member_name_idl
+    CycloneDDS::ddsc
+    rcutils::rcutils
+    rmw::rmw
+    rosidl_runtime_c::rosidl_runtime_c
+    rosidl_typesupport_introspection_c::rosidl_typesupport_introspection_c
+    rosidl_typesupport_introspection_cpp::rosidl_typesupport_introspection_cpp
+    std_msgs::std_msgs__rosidl_typesupport_introspection_c
+    std_msgs::std_msgs__rosidl_typesupport_introspection_cpp)
+
   ament_lint_auto_find_test_dependencies()
 endif()
 
