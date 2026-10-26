@@ -1255,10 +1255,6 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * di
     if ((get_env_error = rcutils_get_env("CYCLONEDDS_URI", &config_from_env)) == nullptr) {
       config += std::string(config_from_env);
     } else {
-      RCUTILS_LOG_ERROR_NAMED(
-        "rmw_cyclonedds_cpp",
-        "rmw_create_node: failed to retrieve CYCLONEDDS_URI environment variable, error %s",
-        get_env_error);
       RMW_SET_ERROR_MSG_WITH_FORMAT_STRING(
         "rmw_create_node: failed to retrieve CYCLONEDDS_URI environment variable, error %s",
         get_env_error);
@@ -1269,9 +1265,6 @@ static bool check_create_domain(dds_domainid_t did, rmw_discovery_options_t * di
     RCUTILS_LOG_DEBUG_NAMED("rmw_cyclonedds_cpp", "Config XML is %s", config.c_str());
 
     if ((dom.domain_handle = dds_create_domain(did, config.c_str())) < 0) {
-      RCUTILS_LOG_ERROR_NAMED(
-        "rmw_cyclonedds_cpp",
-        "rmw_create_node: failed to create domain, error %s", dds_strretcode(dom.domain_handle));
       RMW_SET_ERROR_MSG_WITH_FORMAT_STRING(
         "rmw_create_node: failed to create domain, error %s", dds_strretcode(dom.domain_handle));
       gcdds().domains.erase(did);
@@ -1448,8 +1441,6 @@ rmw_context_impl_s::init(rmw_init_options_t * options, size_t domain_id)
   this->ppant = dds_create_participant(this->domain_id, ppant_qos.get(), nullptr);
   if (this->ppant < 0) {
     this->clean_up();
-    RCUTILS_LOG_ERROR_NAMED(
-      "rmw_cyclonedds_cpp", "rmw_create_node: failed to create DDS participant");
     RMW_SET_ERROR_MSG("rmw_create_node: failed to create DDS participant");
     return RMW_RET_ERROR;
   }
@@ -1460,8 +1451,6 @@ rmw_context_impl_s::init(rmw_init_options_t * options, size_t domain_id)
     dds_create_reader(this->ppant, DDS_BUILTIN_TOPIC_DCPSPARTICIPANT, nullptr, nullptr)) < 0)
   {
     this->clean_up();
-    RCUTILS_LOG_ERROR_NAMED(
-      "rmw_cyclonedds_cpp", "rmw_create_node: failed to create DCPSParticipant reader");
     RMW_SET_ERROR_MSG("rmw_create_node: failed to create DCPSParticipant reader");
     return RMW_RET_ERROR;
   }
@@ -1469,8 +1458,6 @@ rmw_context_impl_s::init(rmw_init_options_t * options, size_t domain_id)
     dds_create_reader(this->ppant, DDS_BUILTIN_TOPIC_DCPSSUBSCRIPTION, nullptr, nullptr)) < 0)
   {
     this->clean_up();
-    RCUTILS_LOG_ERROR_NAMED(
-      "rmw_cyclonedds_cpp", "rmw_create_node: failed to create DCPSSubscription reader");
     RMW_SET_ERROR_MSG("rmw_create_node: failed to create DCPSSubscription reader");
     return RMW_RET_ERROR;
   }
@@ -1478,8 +1465,6 @@ rmw_context_impl_s::init(rmw_init_options_t * options, size_t domain_id)
     dds_create_reader(this->ppant, DDS_BUILTIN_TOPIC_DCPSPUBLICATION, nullptr, nullptr)) < 0)
   {
     this->clean_up();
-    RCUTILS_LOG_ERROR_NAMED(
-      "rmw_cyclonedds_cpp", "rmw_create_node: failed to create DCPSPublication reader");
     RMW_SET_ERROR_MSG("rmw_create_node: failed to create DCPSPublication reader");
     return RMW_RET_ERROR;
   }
@@ -1487,15 +1472,11 @@ rmw_context_impl_s::init(rmw_init_options_t * options, size_t domain_id)
     to be created for RMW publishers/subscriptions. */
   if ((this->dds_pub = dds_create_publisher(this->ppant, nullptr, nullptr)) < 0) {
     this->clean_up();
-    RCUTILS_LOG_ERROR_NAMED(
-      "rmw_cyclonedds_cpp", "rmw_create_node: failed to create DDS publisher");
     RMW_SET_ERROR_MSG("rmw_create_node: failed to create DDS publisher");
     return RMW_RET_ERROR;
   }
   if ((this->dds_sub = dds_create_subscriber(this->ppant, nullptr, nullptr)) < 0) {
     this->clean_up();
-    RCUTILS_LOG_ERROR_NAMED(
-      "rmw_cyclonedds_cpp", "rmw_create_node: failed to create DDS subscriber");
     RMW_SET_ERROR_MSG("rmw_create_node: failed to create DDS subscriber");
     return RMW_RET_ERROR;
   }
