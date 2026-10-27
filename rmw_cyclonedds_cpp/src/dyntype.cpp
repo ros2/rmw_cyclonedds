@@ -71,7 +71,9 @@ static bool type_information_enabled()
   std::transform(
     setting.begin(), setting.end(), setting.begin(),
     [](unsigned char c) {return static_cast<char>(std::tolower(c));});
-  if (setting.empty() || setting == "1" || setting == "true" || setting == "on" || setting == "yes") {
+  if (setting.empty() || setting == "1" || setting == "true" || setting == "on" ||
+    setting == "yes")
+  {
     return true;
   }
   if (setting == "0" || setting == "false" || setting == "off" || setting == "no") {
