@@ -144,7 +144,7 @@ static void serdata_rmw_set_key_from_ser(serdata_rmw * d)
   }
 }
 
-static void serdata_rmw_serialize_into(serdata_rmw * d, const void * sample)
+static bool serdata_rmw_serialize_into(serdata_rmw * d, const void * sample)
 {
   auto type = static_cast<const struct sertype_rmw *>(d->type);
   try {
@@ -153,8 +153,11 @@ static void serdata_rmw_serialize_into(serdata_rmw * d, const void * sample)
     size_t sz = type->cdr_writer->get_serialized_size(sample, cdrmode);
     d->resize(sz);
     type->cdr_writer->serialize(d->data(), sample, cdrmode);
+    return true;
   } catch (std::exception & e) {
+    d->resize(0);
     RMW_SET_ERROR_MSG(e.what());
+    return false;
   }
 }
 
@@ -169,7 +172,7 @@ static void serdata_rmw_serialize_into_on_demand(serdata_rmw * d)
         d->resize(d->loan->metadata->sample_size);
         memcpy(d->data(), d->loan->sample_ptr, d->loan->metadata->sample_size);
       } else if (d->loan->metadata->sample_state == DDS_LOANED_SAMPLE_STATE_RAW_DATA) {
-        serdata_rmw_serialize_into(d, d->loan->sample_ptr);
+        (void)serdata_rmw_serialize_into(d, d->loan->sample_ptr);
       } else {
         RMW_SET_ERROR_MSG("Received iox chunk is uninitialized");
       }
@@ -186,7 +189,7 @@ static void serdata_rmw_serialize_into_on_demand(serdata_rmw * d)
         d->resize(iox_header->data_size);
         memcpy(d->data(), d->iox_chunk, iox_header->data_size);
       } else if (iox_header->shm_data_state == IOX_CHUNK_CONTAINS_RAW_DATA) {
-        serdata_rmw_serialize_into(d, d->iox_chunk);
+        (void)serdata_rmw_serialize_into(d, d->iox_chunk);
       } else {
         RMW_SET_ERROR_MSG("Received iox chunk is uninitialized");
       }
@@ -299,7 +302,9 @@ static std::unique_ptr<serdata_rmw> serdata_rmw_from_sample_unique(
     auto type = static_cast<const struct sertype_rmw *>(typecmn);
     auto d = std::make_unique<serdata_rmw>(type, kind);
     serdata_rmw_set_key_from_sample(d.get(), sample);
-    serdata_rmw_serialize_into(d.get(), sample);
+    if (!serdata_rmw_serialize_into(d.get(), sample)) {
+      return nullptr;
+    }
     return d;
   } catch (std::exception & e) {
     RMW_SET_ERROR_MSG(e.what());
@@ -727,6 +732,7 @@ static bool sertype_serialize_into_impl(
     type->cdr_writer->serialize(dst_buffer, sample, rmw_cyclonedds_cpp::SampleOrKey::Sample);
   } catch (std::exception & e) {
     RMW_SET_ERROR_MSG(e.what());
+    return false;
   }
   return true;
 }

@@ -511,8 +511,15 @@ protected:
   {
     size_t count = value_type.sequence_size(src);
     serialize_u32(dst, count);
+    std::vector<uint8_t> cpu_storage;
+    const bool data_required = !dst.ignores_data();
+    const void * contents =
+      value_type.serialization_contents(src, cpu_storage, data_required);
+    if (data_required && contents == cpu_storage.data() && cpu_storage.size() != count) {
+      throw std::runtime_error("rosidl buffer size changed during CPU fallback conversion");
+    }
     serialize_many(
-      dst, value_type.sequence_contents(src), count, value_type.element_value_type(), what);
+      dst, contents, count, value_type.element_value_type(), what);
   }
 
   template<typename WriteCursor>
