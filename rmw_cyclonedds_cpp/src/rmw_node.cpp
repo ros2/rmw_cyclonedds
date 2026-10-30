@@ -932,6 +932,96 @@ static void handle_DCPSParticipant(dds_entity_t reader, void * arg)
   }
 }
 
+static void add_endpoint_to_graph_cache(
+  rmw_context_impl_t * impl, const rmw_gid_t & gid, const rmw_gid_t & ppgid,
+  const char * topic_name, const char * type_name, const dds_qos_t * qos, bool is_reader)
+{
+  rmw_qos_profile_t qos_profile = rmw_qos_profile_unknown;
+  dds_qos_to_rmw_qos(qos, &qos_profile);
+
+  rosidl_type_hash_t type_hash = rosidl_get_zero_initialized_type_hash();
+  rosidl_type_hash_t ser_type_hash = rosidl_get_zero_initialized_type_hash();
+  rosidl_type_hash_t * ser_type_hash_ptr = nullptr;
+  void * userdata;
+  size_t userdata_size;
+  if (dds_qget_userdata(qos, &userdata, &userdata_size)) {
+    RCPPUTILS_SCOPE_EXIT(dds_free(userdata));
+    if (RMW_RET_OK != rmw_dds_common::parse_type_hash_from_user_data(
+        reinterpret_cast<const uint8_t *>(userdata), userdata_size, type_hash))
+    {
+      RCUTILS_LOG_DEBUG_NAMED(
+        "rmw_cyclonedds_cpp",
+        "Failed to parse type hash for topic '%s' with type '%s' from USER_DATA '%*s'.",
+        topic_name, type_name,
+        static_cast<int>(userdata_size), reinterpret_cast<char *>(userdata));
+      type_hash = rosidl_get_zero_initialized_type_hash();
+      // We've handled the error, so clear it out.
+      rmw_reset_error();
+    }
+    if (RMW_RET_OK == rmw_dds_common::parse_sertype_hash_from_user_data(
+        reinterpret_cast<const uint8_t *>(userdata), userdata_size, ser_type_hash))
+    {
+      ser_type_hash_ptr = &ser_type_hash;
+    }
+  }
+
+  impl->common.graph_cache.add_entity(
+    gid,
+    std::string(topic_name),
+    std::string(type_name),
+    type_hash,
+    ppgid,
+    qos_profile,
+    is_reader,
+    ser_type_hash_ptr);
+}
+
+static bool get_topic_string(
+  dds_return_t (* getter)(dds_entity_t, char *, size_t), dds_entity_t topic, std::string & out)
+{
+  std::string buf(128, '\0');
+  dds_return_t n = getter(topic, buf.data(), buf.size());
+  if (n >= 0 && static_cast<size_t>(n) >= buf.size()) {
+    buf.resize(static_cast<size_t>(n) + 1);
+    n = getter(topic, buf.data(), buf.size());
+  }
+  if (n < 0) {
+    return false;
+  }
+  buf.resize(static_cast<size_t>(n));
+  out = std::move(buf);
+  return true;
+}
+
+// Add a reader or writer created by this context to the graph cache.  The
+// discovery thread adds it as well once it processes the corresponding
+// DCPSPublication/DCPSSubscription sample, but that happens asynchronously,
+// so without this an endpoint may be missing from graph queries made right
+// after it was created.  GraphCache::add_entity ignores duplicates, so the
+// later add from the discovery thread is harmless.
+static rmw_ret_t add_local_endpoint_to_graph_cache(
+  rmw_context_impl_t * impl, dds_entity_t endpoint, const rmw_gid_t & gid, bool is_reader)
+{
+  const dds_entity_t topic = dds_get_topic(endpoint);
+  std::string topic_name, type_name;
+  if (topic < 0 ||
+    !get_topic_string(dds_get_name, topic, topic_name) ||
+    !get_topic_string(dds_get_type_name, topic, type_name))
+  {
+    RMW_SET_ERROR_MSG("failed to get topic name and type for graph cache");
+    return RMW_RET_ERROR;
+  }
+  dds_qos_t * qos = dds_create_qos();
+  RCPPUTILS_SCOPE_EXIT(dds_delete_qos(qos));
+  if (dds_get_qos(endpoint, qos) < 0) {
+    RMW_SET_ERROR_MSG("failed to get qos for graph cache");
+    return RMW_RET_ERROR;
+  }
+  add_endpoint_to_graph_cache(
+    impl, gid, impl->common.gid, topic_name.c_str(), type_name.c_str(), qos, is_reader);
+  return RMW_RET_OK;
+}
+
 static void handle_builtintopic_endpoint(
   dds_entity_t reader, rmw_context_impl_t * impl,
   bool is_reader)
@@ -945,46 +1035,10 @@ static void handle_builtintopic_endpoint(
     if (si.instance_state != DDS_ALIVE_INSTANCE_STATE) {
       impl->common.graph_cache.remove_entity(gid, is_reader);
     } else if (si.valid_data && strncmp(s->topic_name, "DCPS", 4) != 0) {
-      rmw_qos_profile_t qos_profile = rmw_qos_profile_unknown;
       rmw_gid_t ppgid;
-      dds_qos_to_rmw_qos(s->qos, &qos_profile);
       convert_guid_to_gid(s->participant_key, ppgid);
-
-      rosidl_type_hash_t type_hash = rosidl_get_zero_initialized_type_hash();
-      rosidl_type_hash_t ser_type_hash = rosidl_get_zero_initialized_type_hash();
-      rosidl_type_hash_t * ser_type_hash_ptr = nullptr;
-      void * userdata;
-      size_t userdata_size;
-      if (dds_qget_userdata(s->qos, &userdata, &userdata_size)) {
-        RCPPUTILS_SCOPE_EXIT(dds_free(userdata));
-        if (RMW_RET_OK != rmw_dds_common::parse_type_hash_from_user_data(
-            reinterpret_cast<const uint8_t *>(userdata), userdata_size, type_hash))
-        {
-          RCUTILS_LOG_DEBUG_NAMED(
-            "rmw_cyclonedds_cpp",
-            "Failed to parse type hash for topic '%s' with type '%s' from USER_DATA '%*s'.",
-            s->topic_name, s->type_name,
-            static_cast<int>(userdata_size), reinterpret_cast<char *>(userdata));
-          type_hash = rosidl_get_zero_initialized_type_hash();
-          // We've handled the error, so clear it out.
-          rmw_reset_error();
-        }
-        if (RMW_RET_OK == rmw_dds_common::parse_sertype_hash_from_user_data(
-            reinterpret_cast<const uint8_t *>(userdata), userdata_size, ser_type_hash))
-        {
-          ser_type_hash_ptr = &ser_type_hash;
-        }
-      }
-
-      impl->common.graph_cache.add_entity(
-        gid,
-        std::string(s->topic_name),
-        std::string(s->type_name),
-        type_hash,
-        ppgid,
-        qos_profile,
-        is_reader,
-        ser_type_hash_ptr);
+      add_endpoint_to_graph_cache(
+        impl, gid, ppgid, s->topic_name, s->type_name, s->qos, is_reader);
     }
     dds_return_loan(reader, &raw, 1);
   }
@@ -2705,10 +2759,16 @@ extern "C" rmw_publisher_t * rmw_create_publisher(
   // Update graph
   auto common = &node->context->impl->common;
   const auto cddspub = static_cast<const CddsPublisher *>(pub->data);
+  if (RMW_RET_OK != add_local_endpoint_to_graph_cache(
+      node->context->impl, cddspub->enth, cddspub->gid, false))
+  {
+    return nullptr;
+  }
   if (RMW_RET_OK != common->add_publisher_graph(
       cddspub->gid,
       node->name, node->namespace_))
   {
+    common->graph_cache.remove_entity(cddspub->gid, false);
     return nullptr;
   }
 
@@ -2964,7 +3024,14 @@ extern "C" rmw_ret_t rmw_destroy_publisher(rmw_node_t * node, rmw_publisher_t * 
     rmw_reset_error();
   }
 
+  // Copy the gid; destroy_publisher frees cddspub.
+  const rmw_gid_t gid = cddspub->gid;
   rmw_ret_t inner_ret = destroy_publisher(publisher);
+  // Remove the writer from the graph cache now rather than waiting for the
+  // discovery thread to see it disposed.  If the discovery thread still has an
+  // unprocessed sample for it, it may briefly re-add it, but the dispose that
+  // Cyclone publishes once the writer is gone removes it again.
+  common->graph_cache.remove_entity(gid, false);
   if (RMW_RET_OK != inner_ret) {
     if (RMW_RET_OK != ret) {
       RMW_SAFE_FWRITE_TO_STDERR(rmw_get_error_string().str);
@@ -3213,10 +3280,16 @@ extern "C" rmw_subscription_t * rmw_create_subscription(
   // Update graph
   auto common = &node->context->impl->common;
   const auto cddssub = static_cast<const CddsSubscription *>(sub->data);
+  if (RMW_RET_OK != add_local_endpoint_to_graph_cache(
+      node->context->impl, cddssub->enth, cddssub->gid, true))
+  {
+    return nullptr;
+  }
   if (RMW_RET_OK != common->add_subscriber_graph(
       cddssub->gid,
       node->name, node->namespace_))
   {
+    common->graph_cache.remove_entity(cddssub->gid, true);
     return nullptr;
   }
 
@@ -3333,7 +3406,14 @@ extern "C" rmw_ret_t rmw_destroy_subscription(rmw_node_t * node, rmw_subscriptio
     rmw_reset_error();
   }
 
+  // Copy the gid; destroy_subscription frees cddssub.
+  const rmw_gid_t gid = cddssub->gid;
   rmw_ret_t local_ret = destroy_subscription(subscription);
+  // Remove the reader from the graph cache now rather than waiting for the
+  // discovery thread to see it disposed.  If the discovery thread still has an
+  // unprocessed sample for it, it may briefly re-add it, but the dispose that
+  // Cyclone publishes once the reader is gone removes it again.
+  common->graph_cache.remove_entity(gid, true);
   if (RMW_RET_OK != local_ret) {
     if (RMW_RET_OK != ret) {
       RMW_SAFE_FWRITE_TO_STDERR(error_string.str);
