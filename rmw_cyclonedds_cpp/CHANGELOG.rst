@@ -2,6 +2,15 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.2.2 (2026-11-03)
+------------------
+* Set rmw error message on node/domain creation failures (`#624 <https://github.com/ros2/rmw_cyclonedds/issues/624>`_)
+* Detach event entities when the waitset is rebuilt (`#621 <https://github.com/ros2/rmw_cyclonedds/issues/621>`_)
+* Return an empty string instead of nullptr for unknown typesupports (`#615 <https://github.com/ros2/rmw_cyclonedds/issues/615>`_)
+* Avoid consuming matched events in count queries (`#607 <https://github.com/ros2/rmw_cyclonedds/issues/607>`_)
+* Use the SPDX identifier Apache-2.0 in package.xml license tags (`#608 <https://github.com/ros2/rmw_cyclonedds/issues/608>`_)
+* Contributors: Maurice Alexander Purnawan, Michael Carroll
+
 4.2.1 (2026-08-21)
 ------------------
 * print rmem warning per-process, and adjust the output filter. (`#602 <https://github.com/ros2/rmw_cyclonedds/issues/602>`_)
