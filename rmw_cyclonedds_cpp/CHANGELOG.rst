@@ -2,6 +2,12 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.3.6 (2026-11-03)
+------------------
+* Detach event entities when the waitset is rebuilt (`#621 <https://github.com/ros2/rmw_cyclonedds/issues/621>`_) (`#633 <https://github.com/ros2/rmw_cyclonedds/issues/633>`_)
+* Avoid consuming matched events in count queries (`#607 <https://github.com/ros2/rmw_cyclonedds/issues/607>`_) (`#614 <https://github.com/ros2/rmw_cyclonedds/issues/614>`_)
+* Contributors: mergify[bot]
+
 1.3.5 (2026-08-21)
 ------------------
 * improve MessageTypeSupport performance. (`#562 <https://github.com/ros2/rmw_cyclonedds/issues/562>`_) (`#571 <https://github.com/ros2/rmw_cyclonedds/issues/571>`_)
