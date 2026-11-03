@@ -2,6 +2,11 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.1.6 (2026-11-03)
+------------------
+* Avoid consuming matched events in count queries (`#607 <https://github.com/ros2/rmw_cyclonedds/issues/607>`_) (`#611 <https://github.com/ros2/rmw_cyclonedds/issues/611>`_)
+* Contributors: mergify[bot]
+
 4.1.5 (2026-08-21)
 ------------------
 * Fix subscription graph cleanup on destruction (`#594 <https://github.com/ros2/rmw_cyclonedds/issues/594>`_) (`#598 <https://github.com/ros2/rmw_cyclonedds/issues/598>`_)
