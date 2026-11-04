@@ -1,0 +1,10 @@
+<library path="rmw_cyclonedds_cpp_test_buffer_backend_plugin">
+  <class type="rmw_cyclonedds_cpp::test::CyclonddsTestBufferBackend" base_class_type="rosidl::BufferBackend">
+    <description>
+      Throwaway rosidl::BufferBackend used only by rmw_cyclonedds_cpp's own
+      gtest suite. Distinct backend type ("cyclonedds_test") from
+      cuda_buffer_backend's ("cuda") so the two can coexist in one
+      process-wide BufferBackendRegistry without colliding.
+    </description>
+  </class>
+</library>

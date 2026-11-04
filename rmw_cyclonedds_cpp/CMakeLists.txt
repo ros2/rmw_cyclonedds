@@ -48,9 +48,19 @@ endif()
 find_package(rmw REQUIRED)
 find_package(rmw_dds_common REQUIRED)
 find_package(rmw_security_common REQUIRED)
+find_package(rosidl_buffer REQUIRED)
+find_package(rosidl_buffer_backend REQUIRED)
+find_package(rosidl_buffer_backend_registry REQUIRED)
 find_package(rosidl_runtime_c REQUIRED)
 find_package(rosidl_typesupport_introspection_c REQUIRED)
 find_package(rosidl_typesupport_introspection_cpp REQUIRED)
+# rmw_node.cpp spawns std::thread in two places -- its own
+# discovery_thread_start(), and the discovery-retry threads the
+# buffer-backend mechanism adds -- so this package needs pthread symbols
+# for both. Nothing here previously guaranteed they were linked; they
+# happened to come in transitively from another dependency. Made explicit
+# here so that stops being an assumption.
+find_package(Threads REQUIRED)
 
 if(_cyclonedds_has_shm)
   ament_export_dependencies(iceoryx_binding_c)
@@ -59,6 +69,9 @@ ament_export_dependencies(CycloneDDS)
 ament_export_dependencies(rcutils)
 ament_export_dependencies(rcpputils)
 ament_export_dependencies(rmw)
+ament_export_dependencies(rosidl_buffer)
+ament_export_dependencies(rosidl_buffer_backend)
+ament_export_dependencies(rosidl_buffer_backend_registry)
 ament_export_dependencies(rosidl_runtime_c)
 ament_export_dependencies(rmw_dds_common)
 ament_export_dependencies(rmw_security_common)
@@ -74,6 +87,7 @@ add_library(rmw_cyclonedds_cpp
   src/demangle.cpp
   src/Serialization.cpp
   src/TypeSupport2.cpp
+  src/BufferEndpointDiscovery.cpp
   src/type_name.cpp
   src/dyntype.cpp
   src/dyntype_helper.c)
@@ -91,10 +105,14 @@ target_link_libraries(rmw_cyclonedds_cpp PRIVATE
   rcpputils::rcpputils
   rmw_dds_common::rmw_dds_common_library
   rmw_security_common::rmw_security_common_library
+  rosidl_buffer::rosidl_buffer
+  rosidl_buffer_backend::rosidl_buffer_backend
+  rosidl_buffer_backend_registry::rosidl_buffer_backend_registry
   rosidl_typesupport_introspection_c::rosidl_typesupport_introspection_c
   rosidl_typesupport_introspection_cpp::rosidl_typesupport_introspection_cpp
   rosidl_runtime_c::rosidl_runtime_c
   tracetools::tracetools
+  Threads::Threads
 )
 
 if(_cyclonedds_has_shm)
@@ -130,6 +148,55 @@ register_rmw_implementation(
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
+
+  # First-time gtest coverage for this package -- see test/CMakeLists.txt's
+  # own header comment for the shape.
+  #
+  # The test plugin's pluginlib_export_plugin_description_file() call lives
+  # HERE, at top level, rather than inside test/CMakeLists.txt's own
+  # add_subdirectory(test) below -- measured live: called from the
+  # subdirectory, the resulting shared library and plugins.xml both
+  # installed correctly, but the ament index resource
+  # (share/ament_index/resource_index/rosidl_buffer_backend__pluginlib__
+  # plugin/...) that pluginlib::ClassLoader actually scans at runtime never
+  # appeared, and backend_locally_available()'s own gtest failed
+  # ("Actual: false, Expected: true") even after install. ament_cmake's
+  # resource registration macros queue into a directory-scoped variable
+  # that ament_package() reads back from ITS OWN (top-level) scope, not
+  # from a child added via add_subdirectory() -- so the call has to happen
+  # before ament_package() runs, in the same directory scope it runs in.
+  find_package(pluginlib REQUIRED)
+  find_package(rosidl_typesupport_cpp REQUIRED)
+  find_package(std_msgs REQUIRED)
+
+  add_library(rmw_cyclonedds_cpp_test_buffer_backend_plugin SHARED
+    test/cyclonedds_test_buffer_backend.cpp
+  )
+  target_include_directories(rmw_cyclonedds_cpp_test_buffer_backend_plugin PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/test
+  )
+  target_link_libraries(rmw_cyclonedds_cpp_test_buffer_backend_plugin
+    ament_cmake_ros_core::ament_ros_cxx_standard
+    pluginlib::pluginlib
+    rmw::rmw
+    rosidl_buffer::rosidl_buffer
+    rosidl_buffer_backend::rosidl_buffer_backend
+    rosidl_typesupport_cpp::rosidl_typesupport_cpp
+    ${std_msgs_TARGETS}
+  )
+  install(TARGETS rmw_cyclonedds_cpp_test_buffer_backend_plugin
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin
+  )
+  # The plugin_category ("rosidl_buffer_backend") MUST match the first
+  # argument BufferBackendRegistry's constructor passes to
+  # pluginlib::ClassLoader<rosidl::BufferBackend> -- same requirement
+  # cuda_buffer_backend's own CMakeLists.txt documents.
+  pluginlib_export_plugin_description_file(
+    rosidl_buffer_backend test/cyclonedds_test_buffer_plugin.xml)
+
+  add_subdirectory(test)
 endif()
 
 ament_package()
