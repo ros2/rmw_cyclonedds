@@ -30,6 +30,14 @@ With large samples (100s of kilobytes), excessive latency can be caused by runni
 * Temporarily (until reboot): `sudo sysctl -w net.core.rmem_max=8388608 net.core.rmem_default=8388608`
 * Permanently: `echo "net.core.rmem_max=8388608\nnet.core.rmem_default=8388608\n" | sudo tee /etc/sysctl.d/60-cyclonedds.conf`
 
+## Interoperability with Cyclone DDS 0.10
+
+This RMW announces XTypes type information for every topic. Peers on Cyclone DDS 0.10 whose endpoints also carry type information, such as firmware built with idlc, request the type objects for type identifiers they do not know and can crash on the reply. To announce only the type name, as the Jazzy RMW does, set:
+
+  `export RMW_CYCLONEDDS_TYPE_INFORMATION=0`
+
+It accepts `0`/`false`/`off`/`no` and `1`/`true`/`on`/`yes`; unset means `1`.
+
 ## Debugging
 
 So Cyclone isn't playing nice or not giving you the performance you had hoped for? That's not good... Please [file an issue against this repository](https://github.com/ros2/rmw_cyclonedds/issues/new)!
