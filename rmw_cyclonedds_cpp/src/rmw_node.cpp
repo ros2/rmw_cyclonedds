@@ -4960,7 +4960,7 @@ static client_present_t check_for_response_reader(
 
 extern "C" rmw_ret_t rmw_send_response(
   const rmw_service_t * service,
-  rmw_request_id_t * request_header, void * ros_response)
+  rmw_request_id_t * request_header, const void * ros_response)
 {
   RMW_CHECK_ARGUMENT_FOR_NULL(service, RMW_RET_INVALID_ARGUMENT);
   RMW_CHECK_TYPE_IDENTIFIERS_MATCH(
