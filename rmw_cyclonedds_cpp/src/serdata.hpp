@@ -68,6 +68,14 @@ public:
   void resize(size_t requested_size);
   size_t size() const {return m_size;}
   void * data() const {return m_data.get();}
+  bool has_sample_sequence_number {false};
+  int64_t sample_sequence_number {0};
+  bool has_related_sample_identity {false};
+  struct
+  {
+    uint8_t writer_guid[16];
+    int64_t seq;
+  } related_sample_identity {};
 };
 
 typedef struct cdds_request_header
