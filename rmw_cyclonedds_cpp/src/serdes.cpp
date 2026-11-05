@@ -22,6 +22,12 @@ cycdeserbase::cycdeserbase(const char * data_, size_t size_)
   lim(size_),
   swap_bytes(false)
 {
+  /* The data must at least contain the 4-byte encapsulation header, otherwise reading it
+     overruns the buffer and "lim -= 4" wraps around, which disables all later size checks */
+  if (size_ < 4) {
+    throw DeserializationException("invalid data size");
+  }
+
   /* Get the endianness byte (skip unused first byte in data[0]) */
   uint32_t data_endianness = (data[1] == 0x01) ? DDSRT_LITTLE_ENDIAN : DDSRT_BIG_ENDIAN;
 
