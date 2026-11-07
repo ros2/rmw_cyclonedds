@@ -155,6 +155,17 @@ public:
     validate_size(sz, el_sz);
     return sz;
   }
+  // A lower bound for variable-size elements, including nested messages,
+  // need not be one of the primitive widths accepted by validate_size().
+  inline uint32_t deserialize_len_minimum(size_t minimum_element_bytes)
+  {
+    assert(minimum_element_bytes > 0);
+    const uint32_t sz = deserialize_len(1);
+    if (sz > (lim - pos) / minimum_element_bytes) {
+      throw DeserializationException("invalid data size");
+    }
+    return sz;
+  }
   inline void deserialize(std::string & x)
   {
     const uint32_t sz = deserialize_len(sizeof(char));
@@ -224,7 +235,14 @@ public:
   template<class T>
   inline void deserialize(std::vector<T> & x)
   {
-    const uint32_t sz = deserialize_len(1);
+    // A sequence count must be feasible within the remaining CDR bytes
+    // before allocating storage. Scalars occupy their wire width, while a
+    // string/wstring occupies at least its four-byte length field.
+    // Unknown custom types retain the historical conservative one-byte floor.
+    constexpr size_t min_item_bytes = std::is_arithmetic<T>::value ? sizeof(T) :
+      (std::is_same<T, std::string>::value || std::is_same<T, std::wstring>::value ?
+      sizeof(uint32_t) : 1);
+    const uint32_t sz = deserialize_len(min_item_bytes);
     x.resize(sz);
     deserializeA(x.data(), sz);
   }
