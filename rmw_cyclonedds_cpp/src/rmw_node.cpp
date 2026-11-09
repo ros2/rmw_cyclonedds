@@ -993,12 +993,9 @@ static bool get_topic_string(
   return true;
 }
 
-// Add a reader or writer created by this context to the graph cache.  The
-// discovery thread adds it as well once it processes the corresponding
-// DCPSPublication/DCPSSubscription sample, but that happens asynchronously,
-// so without this an endpoint may be missing from graph queries made right
-// after it was created.  GraphCache::add_entity ignores duplicates, so the
-// later add from the discovery thread is harmless.
+// Add a local reader/writer to the graph cache synchronously, so it is visible
+// to graph queries as soon as it is created.  The later add from the discovery
+// thread is a no-op.
 static rmw_ret_t add_local_endpoint_to_graph_cache(
   rmw_context_impl_t * impl, dds_entity_t endpoint, const rmw_gid_t & gid, bool is_reader)
 {
@@ -3024,13 +3021,11 @@ extern "C" rmw_ret_t rmw_destroy_publisher(rmw_node_t * node, rmw_publisher_t * 
     rmw_reset_error();
   }
 
-  // Copy the gid; destroy_publisher frees cddspub.
+  // destroy_publisher frees cddspub.
   const rmw_gid_t gid = cddspub->gid;
   rmw_ret_t inner_ret = destroy_publisher(publisher);
-  // Remove the writer from the graph cache now rather than waiting for the
-  // discovery thread to see it disposed.  If the discovery thread still has an
-  // unprocessed sample for it, it may briefly re-add it, but the dispose that
-  // Cyclone publishes once the writer is gone removes it again.
+  // Remove synchronously; a pending discovery sample may briefly re-add it
+  // until the dispose arrives.
   common->graph_cache.remove_entity(gid, false);
   if (RMW_RET_OK != inner_ret) {
     if (RMW_RET_OK != ret) {
@@ -3406,13 +3401,11 @@ extern "C" rmw_ret_t rmw_destroy_subscription(rmw_node_t * node, rmw_subscriptio
     rmw_reset_error();
   }
 
-  // Copy the gid; destroy_subscription frees cddssub.
+  // destroy_subscription frees cddssub.
   const rmw_gid_t gid = cddssub->gid;
   rmw_ret_t local_ret = destroy_subscription(subscription);
-  // Remove the reader from the graph cache now rather than waiting for the
-  // discovery thread to see it disposed.  If the discovery thread still has an
-  // unprocessed sample for it, it may briefly re-add it, but the dispose that
-  // Cyclone publishes once the reader is gone removes it again.
+  // Remove synchronously; a pending discovery sample may briefly re-add it
+  // until the dispose arrives.
   common->graph_cache.remove_entity(gid, true);
   if (RMW_RET_OK != local_ret) {
     if (RMW_RET_OK != ret) {
