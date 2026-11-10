@@ -38,6 +38,7 @@
 #include "TypeSupport2.hpp"
 #include "trivsercache.hpp"
 #include "bytewise.hpp"
+#include "rosidl_buffer/buffer_impl_base.hpp"
 
 namespace rmw_cyclonedds_cpp
 {
@@ -511,6 +512,26 @@ protected:
   {
     size_t count = value_type.sequence_size(src);
     serialize_u32(dst, count);
+    if (value_type.is_rosidl_buffer()) {
+      const auto * impl = static_cast<const rosidl::BufferImplBase<uint8_t> *>(
+        value_type.buffer_impl(src));
+      // The shared-topic writer -- every writer there is -- keeps the
+      // original safe fallback unchanged: sequence_contents() throws for a
+      // non-CPU backend, so force a CPU copy here instead, matching
+      // rmw_fastrtps_cpp's own existing behavior rather than crashing. The
+      // private per-endpoint topic created by on_publication_matched/
+      // on_subscription_matched carries the descriptor directly via its
+      // own, separate sertype (its backend's own descriptor type support,
+      // not this message type with a flag set) -- see rmw_node.cpp's
+      // on_publication_matched for why this writer never needs a second
+      // behavior of its own.
+      if (impl->get_backend_type() != "cpu") {
+        auto cpu_copy = impl->to_cpu();
+        serialize_many(
+          dst, cpu_copy->descriptor(), count, value_type.element_value_type(), what);
+        return;
+      }
+    }
     serialize_many(
       dst, value_type.sequence_contents(src), count, value_type.element_value_type(), what);
   }
