@@ -261,6 +261,14 @@ public:
   virtual const AnyValueType * element_value_type() const = 0;
   virtual size_t sequence_size(const void * ptr_to_sequence) const = 0;
   virtual const void * sequence_contents(const void * ptr_to_sequence) const = 0;
+  virtual const void * serialization_contents(
+    const void * ptr_to_sequence, std::vector<uint8_t> & cpu_storage,
+    bool data_required) const
+  {
+    (void)cpu_storage;
+    (void)data_required;
+    return sequence_contents(ptr_to_sequence);
+  }
   virtual void * sequence_contents(void * ptr_to_sequence) const = 0;
   virtual void resize(void * ptr_to_sequence, size_t size) const = 0;
   uint32_t sequence_bound() const {return m_bound;}
