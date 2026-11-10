@@ -412,18 +412,18 @@ static struct ddsi_serdata * serdata_rmw_from_psmx(
       // sertype_serialize_into and serdata_default_from_psmx).  Rebuild the full CDR blob
       // (header followed by payload) so the rest of serdata_rmw, which expects a complete
       // CDR, works unchanged.
-      unsigned char hdr[4];
-      std::memcpy(hdr, &md->cdr_identifier, sizeof(md->cdr_identifier));
-      std::memcpy(
+        unsigned char hdr[4];
+        std::memcpy(hdr, &md->cdr_identifier, sizeof(md->cdr_identifier));
+        std::memcpy(
         hdr + sizeof(md->cdr_identifier), &md->cdr_options, sizeof(md->cdr_options));
-      ddsrt_iovec_t iov[2];
-      iov[0].iov_base = hdr;
-      iov[0].iov_len = sizeof(hdr);
-      iov[1].iov_base = loaned_sample->sample_ptr;
-      iov[1].iov_len = static_cast<ddsrt_iov_len_t>(md->sample_size);
-      return serdata_rmw_from_ser_iov(
+        ddsrt_iovec_t iov[2];
+        iov[0].iov_base = hdr;
+        iov[0].iov_len = sizeof(hdr);
+        iov[1].iov_base = loaned_sample->sample_ptr;
+        iov[1].iov_len = static_cast<ddsrt_iov_len_t>(md->sample_size);
+        return serdata_rmw_from_ser_iov(
         typecmn, kind, 2, iov, sizeof(hdr) + md->sample_size);
-    }
+      }
     case DDS_LOANED_SAMPLE_STATE_RAW_KEY:
     case DDS_LOANED_SAMPLE_STATE_RAW_DATA:
       try {
