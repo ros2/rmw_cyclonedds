@@ -2,6 +2,13 @@
 Changelog for package rmw_cyclonedds_cpp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+4.0.4 (2026-11-03)
+------------------
+* Detach event entities when the waitset is rebuilt (`#621 <https://github.com/ros2/rmw_cyclonedds/issues/621>`_) (`#631 <https://github.com/ros2/rmw_cyclonedds/issues/631>`_)
+* Fix subscription graph cleanup on destruction (`#594 <https://github.com/ros2/rmw_cyclonedds/issues/594>`_) (`#616 <https://github.com/ros2/rmw_cyclonedds/issues/616>`_)
+* Avoid consuming matched events in count queries (`#607 <https://github.com/ros2/rmw_cyclonedds/issues/607>`_) (`#612 <https://github.com/ros2/rmw_cyclonedds/issues/612>`_)
+* Contributors: mergify[bot]
+
 4.0.3 (2026-08-21)
 ------------------
 * Downgrade 'Failed to parse type hash' log from WARN to DEBUG (`#591 <https://github.com/ros2/rmw_cyclonedds/issues/591>`_) (`#596 <https://github.com/ros2/rmw_cyclonedds/issues/596>`_)
