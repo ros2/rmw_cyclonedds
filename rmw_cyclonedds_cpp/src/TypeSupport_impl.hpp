@@ -177,9 +177,7 @@ void deserialize_field(
     auto & data = *reinterpret_cast<typename GenericCSequence<T>::type *>(field);
     int32_t dsize = 0;
     deser >> dsize;
-    if (!GenericCSequence<T>::init(&data, dsize)) {
-      throw std::runtime_error("unable initialize generic sequence");
-    }
+    resize_field(member, field, dsize);
     deser.deserializeA(reinterpret_cast<T *>(data.data), dsize);
   }
 }
@@ -210,12 +208,7 @@ inline void deserialize_field<std::string>(
       deser >> cpp_string_vector;
 
       auto & string_array_field = *reinterpret_cast<rosidl_runtime_c__String__Sequence *>(field);
-      if (
-        !rosidl_runtime_c__String__Sequence__init(
-          &string_array_field, cpp_string_vector.size()))
-      {
-        throw std::runtime_error("unable to initialize rosidl_runtime_c__String array");
-      }
+      resize_field(member, field, cpp_string_vector.size());
 
       for (size_t i = 0; i < cpp_string_vector.size(); ++i) {
         if (
@@ -250,9 +243,7 @@ inline void deserialize_field<std::wstring>(
     uint32_t size;
     deser >> size;
     auto sequence = static_cast<rosidl_runtime_c__U16String__Sequence *>(field);
-    if (!rosidl_runtime_c__U16String__Sequence__init(sequence, size)) {
-      throw std::runtime_error("unable to initialize rosidl_runtime_c__U16String sequence");
-    }
+    resize_field(member, field, size);
     for (size_t i = 0; i < sequence->size; ++i) {
       deser >> wstr;
       wstring_to_u16string(wstr, sequence->data[i]);
