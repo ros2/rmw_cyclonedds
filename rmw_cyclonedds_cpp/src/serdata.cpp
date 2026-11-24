@@ -783,6 +783,9 @@ static ddsi_typeid_t * sertype_rmw_typeid(const struct ddsi_sertype * d, ddsi_ty
 {
   assert(d);
   auto tp = static_cast<const struct sertype_rmw *>(d);
+  if (tp->type_information.data == nullptr || tp->type_information.sz == 0) {
+    return nullptr;
+  }
   ddsi_typeinfo_t * type_info = ddsi_typeinfo_deser(
     tp->type_information.data, tp->type_information.sz);
   if (type_info == nullptr) {
@@ -799,6 +802,9 @@ static ddsi_typemap_t * sertype_rmw_typemap(const struct ddsi_sertype * d)
 {
   assert(d);
   auto tp = static_cast<const struct sertype_rmw *>(d);
+  if (tp->type_mapping.data == nullptr || tp->type_mapping.sz == 0) {
+    return nullptr;
+  }
   return ddsi_typemap_deser(tp->type_mapping.data, tp->type_mapping.sz);
 }
 
@@ -806,6 +812,9 @@ static ddsi_typeinfo_t * sertype_rmw_typeinfo(const struct ddsi_sertype * d)
 {
   assert(d);
   auto tp = static_cast<const struct sertype_rmw *>(d);
+  if (tp->type_information.data == nullptr || tp->type_information.sz == 0) {
+    return nullptr;
+  }
   return ddsi_typeinfo_deser(tp->type_information.data, tp->type_information.sz);
 }
 
