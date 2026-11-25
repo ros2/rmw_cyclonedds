@@ -783,6 +783,9 @@ static ddsi_typeid_t * sertype_rmw_typeid(const struct ddsi_sertype * d, ddsi_ty
 {
   assert(d);
   auto tp = static_cast<const struct sertype_rmw *>(d);
+  if (tp->type_information.sz == 0) {
+    return nullptr;
+  }
   ddsi_typeinfo_t * type_info = ddsi_typeinfo_deser(
     tp->type_information.data, tp->type_information.sz);
   if (type_info == nullptr) {
@@ -799,6 +802,9 @@ static ddsi_typemap_t * sertype_rmw_typemap(const struct ddsi_sertype * d)
 {
   assert(d);
   auto tp = static_cast<const struct sertype_rmw *>(d);
+  if (tp->type_mapping.sz == 0) {
+    return nullptr;
+  }
   return ddsi_typemap_deser(tp->type_mapping.data, tp->type_mapping.sz);
 }
 
@@ -806,6 +812,9 @@ static ddsi_typeinfo_t * sertype_rmw_typeinfo(const struct ddsi_sertype * d)
 {
   assert(d);
   auto tp = static_cast<const struct sertype_rmw *>(d);
+  if (tp->type_information.sz == 0) {
+    return nullptr;
+  }
   return ddsi_typeinfo_deser(tp->type_information.data, tp->type_information.sz);
 }
 
@@ -855,6 +864,11 @@ struct sertype_rmw * create_sertype(
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> message_type)
 {
   struct sertype_rmw * st = new struct sertype_rmw;
+#if DDS_HAS_TYPELIB
+  // Stays empty when no type information is registered; see create_msg_dds_dynamic_type.
+  st->type_information = {nullptr, 0};
+  st->type_mapping = {nullptr, 0};
+#endif
   const uint32_t sample_size = message_type->sizeof_type();
   const bool is_self_contained = message_type->is_self_contained();
   const bool is_keyed_type = message_type->has_keys();

@@ -13,16 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <string>
 #include <regex>
 #include <sstream>
+#include <stdexcept>
 
 #include "dds/dds.h"
 #include "dyntype.hpp"
 #include "serdata.hpp"
 #include "type_name.hpp"
 
+#include "rcutils/env.h"
 #include "rcutils/macros.h"
 #include "rmw/error_handling.h"
 
@@ -51,6 +55,34 @@ std::string create_type_name(const void * untyped_members)
 }
 
 #if DDS_HAS_TYPELIB
+
+// RMW_CYCLONEDDS_TYPE_INFORMATION=0 announces no XTypes type information, only the type
+// name. Peers on Cyclone DDS 0.10 request the type objects for type information they do not
+// know and fail on what Cyclone DDS 11 sends back.
+static bool type_information_enabled()
+{
+  const char * value = nullptr;
+  if (rcutils_get_env("RMW_CYCLONEDDS_TYPE_INFORMATION", &value) != nullptr) {
+    throw std::runtime_error("failed to read RMW_CYCLONEDDS_TYPE_INFORMATION");
+  }
+  std::string setting(value != nullptr ? value : "");
+  setting.erase(0, setting.find_first_not_of(" \t"));
+  setting.erase(setting.find_last_not_of(" \t") + 1);
+  std::transform(
+    setting.begin(), setting.end(), setting.begin(),
+    [](unsigned char c) {return static_cast<char>(std::tolower(c));});
+  if (setting.empty() || setting == "1" || setting == "true" || setting == "on" ||
+    setting == "yes")
+  {
+    return true;
+  }
+  if (setting == "0" || setting == "false" || setting == "off" || setting == "no") {
+    return false;
+  }
+  throw std::runtime_error(
+          "RMW_CYCLONEDDS_TYPE_INFORMATION must be 0/false/off/no or 1/true/on/yes, not '" +
+          std::string(value) + "'");
+}
 
 static bool using_introspection_c_typesupport(const char * typesupport_identifier)
 {
@@ -347,6 +379,9 @@ void create_msg_dds_dynamic_type(
   dds_entity_t dds_ppant, struct sertype_rmw * st)
 {
 #if DDS_HAS_TYPELIB
+  if (!type_information_enabled()) {
+    return;
+  }
   if (using_introspection_c_typesupport(type_support_identifier)) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_c__MessageMembers_s *>(untyped_members);
@@ -401,6 +436,9 @@ void create_req_dds_dynamic_type(
   dds_entity_t dds_ppant, struct sertype_rmw * st)
 {
 #if DDS_HAS_TYPELIB
+  if (!type_information_enabled()) {
+    return;
+  }
   if (using_introspection_c_typesupport(type_support_identifier)) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_c__ServiceMembers_s *>(untyped_members);
@@ -455,6 +493,9 @@ void create_res_dds_dynamic_type(
   dds_entity_t dds_ppant, struct sertype_rmw * st)
 {
 #if DDS_HAS_TYPELIB
+  if (!type_information_enabled()) {
+    return;
+  }
   if (using_introspection_c_typesupport(type_support_identifier)) {
     auto members =
       static_cast<const rosidl_typesupport_introspection_c__ServiceMembers_s *>(untyped_members);
