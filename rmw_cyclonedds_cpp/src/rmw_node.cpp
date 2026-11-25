@@ -1954,24 +1954,78 @@ extern "C" rmw_ret_t rmw_get_serialized_message_size(
   return RMW_RET_UNSUPPORTED;
 }
 
+namespace
+{
+// Building the value type and the CDR writer/reader from the introspection type support costs
+// far more than serializing a small message, so rmw_serialize/rmw_deserialize keep them per type
+// support.  They are immutable once built: each thread keeps its own copies, with no locking.
+// The fields of the type support used to resolve it are kept as well, so that a type support
+// changed in place, or a different one later placed at the same address (e.g. after its library
+// was unloaded), is resolved again instead of being served from the cache.
+struct CachedSerialization
+{
+  const char * ts_identifier;
+  const void * ts_data;
+  rosidl_message_typesupport_handle_function ts_func;
+  std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> value_type;
+  std::unique_ptr<rmw_cyclonedds_cpp::BaseCDRWriter> writer;
+  std::unique_ptr<rmw_cyclonedds_cpp::BaseCDRReader> reader;
+};
+
+CachedSerialization & get_cached_serialization(const rosidl_message_type_support_t * type_support)
+{
+  thread_local std::unordered_map<const rosidl_message_type_support_t *, CachedSerialization>
+  cache;
+  auto it = cache.find(type_support);
+  if (it == cache.end() || it->second.ts_identifier != type_support->typesupport_identifier ||
+    it->second.ts_data != type_support->data || it->second.ts_func != type_support->func)
+  {
+    CachedSerialization entry{type_support->typesupport_identifier, type_support->data,
+      type_support->func, rmw_cyclonedds_cpp::make_message_value_type(type_support), nullptr,
+      nullptr};
+    it = cache.insert_or_assign(type_support, std::move(entry)).first;
+  }
+  return it->second;
+}
+
+const rmw_cyclonedds_cpp::BaseCDRWriter & get_cached_writer(
+  const rosidl_message_type_support_t * type_support)
+{
+  auto & entry = get_cached_serialization(type_support);
+  if (!entry.writer) {
+    entry.writer = rmw_cyclonedds_cpp::make_cdr_writer(
+      entry.value_type.get(), rmw_cyclonedds_cpp::SampleOrRequest::Sample);
+  }
+  return *entry.writer;
+}
+
+const rmw_cyclonedds_cpp::BaseCDRReader & get_cached_reader(
+  const rosidl_message_type_support_t * type_support)
+{
+  auto & entry = get_cached_serialization(type_support);
+  if (!entry.reader) {
+    entry.reader = rmw_cyclonedds_cpp::make_cdr_reader(
+      entry.value_type.get(), rmw_cyclonedds_cpp::SampleOrRequest::Sample);
+  }
+  return *entry.reader;
+}
+}  // namespace
+
 extern "C" rmw_ret_t rmw_serialize(
   const void * ros_message,
   const rosidl_message_type_support_t * type_support,
   rmw_serialized_message_t * serialized_message)
 {
   try {
-    auto message_value_type = rmw_cyclonedds_cpp::make_message_value_type(type_support);
-    auto writer = rmw_cyclonedds_cpp::make_cdr_writer(
-      message_value_type.get(),
-      rmw_cyclonedds_cpp::SampleOrRequest::Sample);
-    auto size = writer->get_serialized_size(ros_message, rmw_cyclonedds_cpp::SampleOrKey::Sample);
+    const auto & writer = get_cached_writer(type_support);
+    auto size = writer.get_serialized_size(ros_message, rmw_cyclonedds_cpp::SampleOrKey::Sample);
     rmw_ret_t ret = rmw_serialized_message_resize(serialized_message, size);
     if (RMW_RET_OK != ret) {
       rmw_reset_error();
       RMW_SET_ERROR_MSG("rmw_serialize: failed to allocate space for message");
       return ret;
     }
-    writer->serialize(
+    writer.serialize(
       serialized_message->buffer, ros_message,
       rmw_cyclonedds_cpp::SampleOrKey::Sample);
     serialized_message->buffer_length = size;
@@ -1988,11 +2042,8 @@ extern "C" rmw_ret_t rmw_deserialize(
   void * ros_message)
 {
   try {
-    auto message_value_type = rmw_cyclonedds_cpp::make_message_value_type(type_support);
-    auto reader = rmw_cyclonedds_cpp::make_cdr_reader(
-      message_value_type.get(),
-      rmw_cyclonedds_cpp::SampleOrRequest::Sample);
-    reader->deserialize(
+    const auto & reader = get_cached_reader(type_support);
+    reader.deserialize(
       ros_message, serialized_message->buffer, serialized_message->buffer_length,
       rmw_cyclonedds_cpp::SampleOrKey::Sample);
     return RMW_RET_OK;
