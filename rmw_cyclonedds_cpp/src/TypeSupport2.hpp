@@ -230,7 +230,8 @@ protected:
 
 public:
   ArrayValueType(const AnyValueType * element_value_type, size_t size)
-  : m_element_value_type(element_value_type), m_size(size)
+  : m_element_value_type(element_value_type), m_size(size),
+    m_is_self_contained(element_value_type->is_self_contained())
   {
   }
   const AnyValueType * element_value_type() const {return m_element_value_type;}
