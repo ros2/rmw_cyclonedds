@@ -22,6 +22,9 @@
   <depend>rmw</depend>
   <depend>rmw_dds_common</depend>
   <depend>rmw_security_common</depend>
+  <depend>rosidl_buffer</depend>
+  <depend>rosidl_buffer_backend</depend>
+  <depend>rosidl_buffer_backend_registry</depend>
   <depend>rosidl_runtime_c</depend>
   <depend>rosidl_typesupport_introspection_c</depend>
   <depend>rosidl_typesupport_introspection_cpp</depend>
@@ -29,6 +32,20 @@
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
+  <!-- First-time gtest coverage for the buffer-backend descriptor path.
+       See test/CMakeLists.txt. -->
+  <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>pluginlib</test_depend>
+  <test_depend>rclcpp</test_depend>
+  <test_depend>rosidl_typesupport_cpp</test_depend>
+  <test_depend>std_msgs</test_depend>
+  <!-- test_rosidl_buffer (test/CMakeLists.txt's find_package(test_rosidl_
+       buffer REQUIRED), for its ByteArray message) is deliberately NOT
+       declared here as a test_depend: that package's own build
+       test-depends on rmw_cyclonedds_cpp in turn, so declaring it here too
+       would be a circular test_depend in the rosdep/colcon dependency
+       graph. The test target obtains it directly rather than through
+       package.xml. -->
 
   <member_of_group>rmw_implementation_packages</member_of_group>
 
