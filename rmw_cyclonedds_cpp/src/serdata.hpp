@@ -45,8 +45,9 @@ struct sertype_rmw : ddsi_sertype
   bool is_fixed;
   std::mutex serialize_lock;
 #if DDS_HAS_TYPELIB
-  struct dds_type_meta_ser type_information;
-  struct dds_type_meta_ser type_mapping;
+  // Stay empty unless the dynamic type registration succeeds, see dynamic_type_register().
+  struct dds_type_meta_ser type_information {nullptr, 0};
+  struct dds_type_meta_ser type_mapping {nullptr, 0};
 #endif
 };
 
