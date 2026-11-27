@@ -1959,30 +1959,45 @@ namespace
 // Building the value type and the CDR writer/reader from the introspection type support costs
 // far more than serializing a small message, so rmw_serialize/rmw_deserialize keep them per type
 // support.  They are immutable once built: each thread keeps its own copies, with no locking.
-// The fields of the type support used to resolve it are kept as well, so that a type support
-// changed in place, or a different one later placed at the same address (e.g. after its library
-// was unloaded), is resolved again instead of being served from the cache.
+//
+// Entries are keyed by type support address, which can be reused for another type after the
+// library holding the type support is unloaded.  The typesupport identifier and handle function
+// are shared by all types of a type support library, so they cannot tell types apart; the type
+// hash, derived from the message definition, can.  An entry is reused only if the type support
+// still has the same identifier (it can be changed in place), the same data and the same type
+// hash.  A type support without a type hash is never served from the cache.
+// The value type points into the introspection library, which the typesupport dispatcher keeps
+// loaded once it has loaded it, so an entry whose type hash matches is still valid.
 struct CachedSerialization
 {
   const char * ts_identifier;
   const void * ts_data;
-  rosidl_message_typesupport_handle_function ts_func;
+  rosidl_type_hash_t ts_hash;
+  bool has_hash;
   std::unique_ptr<rmw_cyclonedds_cpp::StructValueType> value_type;
   std::unique_ptr<rmw_cyclonedds_cpp::BaseCDRWriter> writer;
   std::unique_ptr<rmw_cyclonedds_cpp::BaseCDRReader> reader;
 };
 
+bool same_type_hash(const rosidl_type_hash_t & a, const rosidl_type_hash_t & b)
+{
+  return a.version == b.version && std::memcmp(a.value, b.value, sizeof(a.value)) == 0;
+}
+
 CachedSerialization & get_cached_serialization(const rosidl_message_type_support_t * type_support)
 {
   thread_local std::unordered_map<const rosidl_message_type_support_t *, CachedSerialization>
   cache;
+  const rosidl_type_hash_t * hash = type_support->get_type_hash_func ?
+    type_support->get_type_hash_func(type_support) : nullptr;
   auto it = cache.find(type_support);
-  if (it == cache.end() || it->second.ts_identifier != type_support->typesupport_identifier ||
-    it->second.ts_data != type_support->data || it->second.ts_func != type_support->func)
+  if (it == cache.end() || hash == nullptr || !it->second.has_hash ||
+    it->second.ts_identifier != type_support->typesupport_identifier ||
+    it->second.ts_data != type_support->data || !same_type_hash(it->second.ts_hash, *hash))
   {
     CachedSerialization entry{type_support->typesupport_identifier, type_support->data,
-      type_support->func, rmw_cyclonedds_cpp::make_message_value_type(type_support), nullptr,
-      nullptr};
+      hash ? *hash : rosidl_get_zero_initialized_type_hash(), hash != nullptr,
+      rmw_cyclonedds_cpp::make_message_value_type(type_support), nullptr, nullptr};
     it = cache.insert_or_assign(type_support, std::move(entry)).first;
   }
   return it->second;
